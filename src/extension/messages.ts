@@ -79,6 +79,52 @@ export interface CaptureStatsMessage {
   elapsedSec: number;
 }
 
+export type ModelState = 'idle' | 'loading' | 'ready' | 'error';
+
+/** Offscreen → panel: listening-mode status for the captured tab (about 2 Hz). */
+export interface ListenStateMessage {
+  type: 'listen-state';
+  tabId: number;
+  /** "source:id" of the recording being listened to, or null. */
+  recordingKey: string | null;
+  modelState: ModelState;
+  /** e.g. "wasm" or "webgpu". */
+  backend: string;
+  modelError?: string;
+  /** Audio is being stored for the auto chart right now. */
+  recordingAudio: boolean;
+  /** Why audio is not being stored (paused, ad, playback rate, …). */
+  idleReason?: string;
+  /** Current chord while listening ("인식 중"); not for play-along. */
+  live: { chord: string; confidence: number; atSec: number } | null;
+  coverage: CoverageRange[];
+  durationSec: number;
+  coveredFraction: number;
+  analyzing: boolean;
+  lastAnalysis?: { at: string; events: number; ms: number; recordingKey: string; error?: string };
+}
+
+/** Panel → offscreen: build the auto chart from what was heard so far. */
+export interface ListenAnalyzeMessage {
+  type: 'listen-analyze';
+  target: 'offscreen';
+}
+
+/** Offscreen → service worker: a finished auto chart to store. */
+export interface AutoChartMessage {
+  type: 'auto-chart';
+  chart: Chart;
+}
+
+/** Service worker → panel: where the auto chart was stored. */
+export interface AutoChartSavedMessage {
+  type: 'auto-chart-saved';
+  recordingKey: string;
+  /** 'main': in use by the play view. 'pending': a manual chart exists; waiting for the user's confirm. */
+  savedAs: 'main' | 'pending';
+  error?: string;
+}
+
 export interface CommandMessage {
   type: 'command';
   command: 'stamp-chord' | 'tap-tempo';
@@ -91,7 +137,11 @@ export type ExtensionMessage =
   | CaptureStopMessage
   | CaptureStatusMessage
   | CaptureStatsMessage
-  | CommandMessage;
+  | CommandMessage
+  | ListenStateMessage
+  | ListenAnalyzeMessage
+  | AutoChartMessage
+  | AutoChartSavedMessage;
 
 /** sendMessage that ignores "no receiver" errors (side panel closed). */
 export function sendQuietly(msg: ExtensionMessage): void {

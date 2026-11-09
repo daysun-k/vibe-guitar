@@ -70,3 +70,49 @@ export async function listCharts(): Promise<Chart[]> {
     .filter(([k]) => k.startsWith('chart:'))
     .map(([, v]) => v as Chart);
 }
+
+/** Key of the latest auto chart for a recording (kept even when a manual chart is in use). */
+export function autoChartKey(source: RecordingSource, id: string): string {
+  return `autochart:${source}:${id}`;
+}
+
+/**
+ * Stores an auto chart. It becomes the chart in use only when the recording has no
+ * chart yet or only an older auto chart; a manual or edited chart is never overwritten
+ * here (the panel asks the user first, see adoptAutoChart).
+ */
+export async function saveAutoChart(chart: Chart): Promise<'main' | 'pending'> {
+  const v = validateChart(chart);
+  if (!v.ok) throw new Error(v.errors.join('; '));
+  const { source, id } = chart.recording;
+  await chrome.storage.local.set({ [autoChartKey(source, id)]: chart });
+  const existing = await loadChart(source, id);
+  if (!existing || existing.provenance.createdBy === 'recognizer') {
+    await chrome.storage.local.set({ [chartStorageKey(source, id)]: chart });
+    return 'main';
+  }
+  return 'pending';
+}
+
+export async function loadAutoChart(source: RecordingSource, id: string): Promise<Chart | null> {
+  const keys = lookupKeys(source, id).map((k) => k.replace(/^chart:/, 'autochart:'));
+  const r = await chrome.storage.local.get(keys);
+  for (const k of keys) {
+    const v = r[k];
+    if (v && validateChart(v).ok) return v as Chart;
+  }
+  return null;
+}
+
+/** Replaces the chart in use by the stored auto chart (call only after the user confirmed). */
+export async function adoptAutoChart(source: RecordingSource, id: string): Promise<Chart | null> {
+  const auto = await loadAutoChart(source, id);
+  if (!auto) return null;
+  const current = await loadChart(source, id);
+  if (current && current.provenance.createdBy !== 'recognizer') {
+    // Keep the replaced hand-made chart recoverable.
+    await chrome.storage.local.set({ [`chartbackup:${source}:${id}`]: current });
+  }
+  await chrome.storage.local.set({ [chartStorageKey(source, id)]: { ...auto, recording: { ...auto.recording, source, id } } });
+  return auto;
+}

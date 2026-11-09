@@ -9,6 +9,7 @@ import { EXAMPLE_CHARTS } from '../../chart/examples';
 import { previousDownbeat } from '../../chart/timing';
 import type { Chart, Recording, Timing } from '../../chart/types';
 import { validateChart } from '../../chart/validate';
+import { compareCharts } from '../../eval/metrics';
 import {
   addTap,
   attachChartToRecording,
@@ -24,15 +25,17 @@ import {
 } from '../../editor/core';
 import { DraftBook, checkSaveTarget, isDraftEmpty, reattachDraft, recordingKeyOf, type EditorDraft } from '../../editor/drafts';
 import type {
+  AutoChartSavedMessage,
   CaptureStatsMessage,
   CaptureStatusMessage,
   ExtensionMessage,
+  ListenStateMessage,
   PlayerControlMessage,
   PlayerControlResult,
   PlayerStateMessage,
 } from '../messages';
 import { computePlayView, estimatePosition, type PlayerSnapshot } from '../playview';
-import { loadChart, loadSettings, saveChart, saveSettings, type Settings } from '../storage';
+import { adoptAutoChart, loadAutoChart, loadChart, loadSettings, saveChart, saveSettings, type Settings } from '../storage';
 import { escapeHtml, renderChordDiagram } from './diagram';
 
 // ---------- DOM helpers ----------
@@ -71,6 +74,11 @@ let draftRecording: Recording | null = null;
 const draftBook = new DraftBook();
 /** Most recent non-empty draft left behind by navigation; can be reattached explicitly. */
 let leftDraft: EditorDraft | null = null;
+/** Latest listening-mode status for the active tab, and when it arrived. */
+let listen: ListenStateMessage | null = null;
+let listenAt = 0;
+/** Auto chart waiting for the user's confirm (a manual chart is in use). */
+let pendingAuto: Chart | null = null;
 
 // ---------- player sync ----------
 function snapshot(): PlayerSnapshot | null {
@@ -108,6 +116,34 @@ async function reloadChart(): Promise<void> {
   const r = player?.recording;
   chart = r ? await loadChart(r.source, r.id) : null;
   recompute();
+  await refreshPendingAuto();
+}
+
+async function refreshPendingAuto(): Promise<void> {
+  const r = player?.recording;
+  pendingAuto = null;
+  if (r && chart && chart.provenance.createdBy !== 'recognizer') {
+    const auto = await loadAutoChart(r.source, r.id);
+    if (auto) pendingAuto = auto;
+  }
+  renderPending();
+}
+
+function renderPending(): void {
+  const box = $('listen-pending');
+  if (!pendingAuto || !chart) {
+    box.hidden = true;
+    return;
+  }
+  box.hidden = false;
+  const c = compareCharts(chart, pendingAuto);
+  const pct = (x: number) => (Number.isFinite(x) ? `${Math.round(x * 100)}%` : '–');
+  setText(
+    'listen-compare',
+    c.overlapSec > 0
+      ? `직접 만든 코드표와의 일치율(겹친 ${formatTime(c.overlapSec)}): 장·단 ${pct(c.majmin.score)} · 근음 ${pct(c.root.score)} · 7th 포함 ${pct(c.sevenths.score)}${c.beatF ? ` · 박 F ${c.beatF.f.toFixed(2)}` : ''}`
+      : '두 코드표가 겹치는 구간이 없습니다.',
+  );
 }
 
 function recompute(): void {
@@ -137,6 +173,17 @@ function renderHeader(): void {
   const via = player.via !== 'video-element' ? ` · ${player.via}` : '';
   setText('rec-meta', `${player.adapter}${r ? ` · ${r.id}` : ''} · ${state}${rate}${via} · ${formatTime(positionNow(false))}`);
   $('ad-banner').hidden = !player.isAd;
+  const idWarn = $('id-warning');
+  const fallback = player.adapter === 'ytmusic' && player.idSource && player.idSource !== 'player';
+  idWarn.hidden = !fallback && !player.urlIdMismatch;
+  setText(
+    'id-warning',
+    player.urlIdMismatch
+      ? `주소의 v=${player.urlIdMismatch}와 다른 녹음이 재생 중입니다. 코드표는 실제 재생 중인 ${r?.id ?? ''}에 연결합니다.`
+      : fallback
+        ? '플레이어에서 재생 중인 곡 ID를 확인하지 못해 주소의 ID를 씁니다. 실제 재생 곡과 다를 수 있습니다.'
+        : '',
+  );
 }
 
 function formatTime(sec: number): string {
@@ -247,7 +294,7 @@ function renderLive(): void {
   const bpb = chart.timing.beatsPerBar;
   const dots = Array.from({ length: bpb }, (_, i) => `<span class="${i <= view.beatInBar ? 'on' : ''}"></span>`).join('');
   setHtml($('beat-dots'), view.inLookAhead ? dots : '');
-  setText('bar-pos', `${view.bar + 1}마디 ${view.beatInBar + 1}박 · ${formatTime(pos)}${chart.provenance.example ? ' · 예시 코드표(가짜 타이밍)' : ''}`);
+  setText('bar-pos', `${view.bar + 1}마디 ${view.beatInBar + 1}박 · ${formatTime(pos)}${chart.provenance.example ? ' · 예시 코드표(가짜 타이밍)' : ''}${chart.provenance.createdBy === 'recognizer' ? ' · 자동 코드표(사람이 확인하지 않음)' : ''}`);
 
   const count = countInOverride ?? (settings.countIn ? view.countIn : null);
   const ci = $('countin');
@@ -266,10 +313,73 @@ function safeToneNames(sym: string): string {
 function loop(): void {
   try {
     renderLive();
+    if (listen && !$('listen-card').hidden && Date.now() - listenAt > 3000) renderListen();
   } catch (e) {
     console.error(e);
   }
   requestAnimationFrame(loop);
+}
+
+// ---------- listening mode ----------
+function onListenState(msg: ListenStateMessage): void {
+  if (playerTabId !== null && msg.tabId !== playerTabId) return;
+  listen = msg;
+  listenAt = Date.now();
+  const model = { idle: '대기', loading: '불러오는 중', ready: '준비됨', error: '오류' }[msg.modelState];
+  setText('cap-model', `${model}${msg.modelError ? `: ${msg.modelError}` : ''}`);
+  setText('cap-backend', msg.backend || '–');
+  renderListen();
+}
+
+function renderListen(): void {
+  const card = $('listen-card');
+  const fresh = listen && Date.now() - listenAt < 3000;
+  const key = player?.recording ? `${player.recording.source}:${player.recording.id}` : null;
+  if (!fresh || !listen || (listen.recordingKey && key && listen.recordingKey !== key)) {
+    card.hidden = true;
+    return;
+  }
+  card.hidden = false;
+  const l = listen;
+  if (l.modelState !== 'ready') {
+    setText('listen-chord', '–');
+    setText('listen-conf', l.modelState === 'error' ? `모델 오류: ${l.modelError ?? ''}` : '모델을 불러오는 중…');
+  } else if (l.live) {
+    setText('listen-chord', l.live.chord === 'N' ? 'N.C.' : l.live.chord);
+    setText('listen-conf', `신뢰도 ${Math.round(l.live.confidence * 100)}% · ${formatTime(l.live.atSec)} 부근`);
+  } else {
+    setText('listen-chord', '–');
+    setText('listen-conf', '');
+  }
+  const pct = Math.round(l.coveredFraction * 100);
+  ($('listen-coverage-fill') as HTMLElement).style.width = `${pct}%`;
+  const heard = l.coverage.reduce((s, r) => s + r.toSec - r.fromSec, 0);
+  setText('listen-coverage', l.durationSec > 0 ? `들은 구간 ${pct}% (${formatTime(heard)} / ${formatTime(l.durationSec)}, 구간 ${l.coverage.length}개) · 90% 이상 듣고 끝까지 재생하면 자동으로 코드표를 만듭니다.` : '곡 길이를 기다리는 중');
+  setText('listen-status', l.analyzing ? '분석 중… (곡 길이에 따라 수 초)' : l.recordingAudio ? '기록 중' : `기록 멈춤: ${l.idleReason ?? '오디오 대기'}`);
+  $<HTMLButtonElement>('listen-analyze').disabled = l.analyzing || l.modelState !== 'ready' || l.coverage.length === 0;
+  const a = l.lastAnalysis;
+  if (a && a.recordingKey === key) {
+    $('listen-result').className = `small ${a.error ? 'err' : 'ok'}`;
+    setText('listen-result', a.error ? `자동 코드표 실패: ${a.error}` : `자동 코드표: 코드 ${a.events}개, 분석 ${(a.ms / 1000).toFixed(1)}초`);
+  } else setText('listen-result', '');
+}
+
+function onAutoChartSaved(msg: AutoChartSavedMessage): void {
+  const key = player?.recording ? `${player.recording.source}:${player.recording.id}` : null;
+  if (msg.recordingKey !== key) return;
+  if (msg.error) {
+    $('listen-result').className = 'small err';
+    setText('listen-result', `자동 코드표 저장 실패: ${msg.error}`);
+  }
+  void reloadChart();
+}
+
+async function doAdoptAuto(): Promise<void> {
+  const r = player?.recording;
+  if (!r || !pendingAuto) return;
+  if (!confirm('직접 만든 코드표를 자동 코드표로 바꿀까요?\n직접 만든 코드표는 chartbackup 키에 보관됩니다(편집 탭의 JSON 내보내기로도 백업할 수 있습니다).')) return;
+  await adoptAutoChart(r.source, r.id);
+  await reloadChart();
 }
 
 // ---------- capture readout ----------
@@ -694,6 +804,10 @@ function bindEditor(): void {
   sel.innerHTML = EXAMPLE_CHARTS.map((c, i) => `<option value="${i}">${escapeHtml(c.recording.title)}</option>`).join('');
   $('example-attach').onclick = () => void attachExample();
   $('countin-play').onclick = () => void countInAndPlay();
+  $('listen-analyze').onclick = () => {
+    chrome.runtime.sendMessage({ type: 'listen-analyze', target: 'offscreen' } satisfies ExtensionMessage).catch(() => setText('listen-status', '캡처 중이 아닙니다'));
+  };
+  $('listen-adopt').onclick = () => void doAdoptAuto();
   $('cap-stop').onclick = () => {
     chrome.runtime.sendMessage({ type: 'capture-stop', target: 'offscreen' } satisfies ExtensionMessage).catch(() => setText('cap-state', '캡처 중이 아닙니다'));
   };
@@ -739,6 +853,12 @@ function onMessage(msg: ExtensionMessage, sender: chrome.runtime.MessageSender):
       break;
     case 'capture-stats':
       renderCaptureStats(msg);
+      break;
+    case 'listen-state':
+      onListenState(msg);
+      break;
+    case 'auto-chart-saved':
+      onAutoChartSaved(msg);
       break;
     case 'command':
       if (msg.command === 'stamp-chord') doStamp();

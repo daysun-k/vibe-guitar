@@ -63,6 +63,11 @@ export function buildAutoChart(input: AutoChartInput): Chart {
   }
   beats.sort((a, b) => a - b);
   downbeats.sort((a, b) => a - b);
+  // Adjacent segments can each contribute a beat near their shared boundary: keep one.
+  const roughPeriod = 60 / (estimateBpm(beats) ?? 120);
+  const deduped = beats.filter((b, i) => i === 0 || b - beats[i - 1] > 0.35 * roughPeriod);
+  beats.length = 0;
+  beats.push(...deduped);
   const bpm = estimateBpm(beats) ?? 120;
   const beatsPerBar = estimateBeatsPerBar(beats, downbeats);
 
