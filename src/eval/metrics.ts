@@ -94,26 +94,24 @@ export interface FMeasure {
   recall: number;
 }
 
-/** One-to-one greedy matching within ±tol seconds. */
+/**
+ * Maximum one-to-one matching within ±tol seconds. Every reference beat's window has the
+ * same width, so the windows are ordered by both ends; matching each reference (in time
+ * order) to the earliest unused estimate inside its window is then a maximum matching.
+ */
 export function beatFMeasure(ref: number[], est: number[], tol = 0.07): FMeasure {
   if (!ref.length && !est.length) return { f: 1, precision: 1, recall: 1 };
   if (!ref.length || !est.length) return { f: 0, precision: 0, recall: 0 };
-  const used = new Uint8Array(est.length);
+  const r = [...ref].sort((a, b) => a - b);
+  const e = [...est].sort((a, b) => a - b);
+  const eps = 1e-9;
   let hits = 0;
-  for (const r of ref) {
-    let best = -1;
-    let bestD = tol + 1e-9;
-    for (let j = 0; j < est.length; j++) {
-      if (used[j]) continue;
-      const d = Math.abs(est[j] - r);
-      if (d <= bestD) {
-        best = j;
-        bestD = d;
-      }
-    }
-    if (best >= 0) {
-      used[best] = 1;
+  let j = 0;
+  for (const t of r) {
+    while (j < e.length && e[j] < t - tol - eps) j++;
+    if (j < e.length && e[j] <= t + tol + eps) {
       hits++;
+      j++;
     }
   }
   const precision = hits / est.length;

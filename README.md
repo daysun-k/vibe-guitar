@@ -67,7 +67,9 @@ After the toolbar click starts capture, the offscreen document also runs listeni
 
 - **연주** tab → card **듣기 모드 · 인식 중**: the chord the model hears now (about 1 s late; for "what is
   this chord?", not for play-along), the heard coverage of the song, and whether audio is being recorded.
-  Audio is stored only while the song plays at 1x with no ad; pauses and seeks start a new segment.
+  Audio is stored only while the song plays at 1x with no ad; pauses and seeks start a new segment. Each
+  captured block is placed by its AudioContext sample time (player reports are mapped to that clock), so late
+  message delivery does not move audio on the timeline.
 - When at least 90 % of the song was heard and playback reaches the end, an **auto chart** is built with full
   context (Beat This! beats/downbeats, BTC chords smoothed per beat). Or press
   **들은 구간으로 자동 코드표 만들기** at any time. Auto charts have `source: auto` events with per-event
@@ -76,6 +78,10 @@ After the toolbar click starts capture, the offscreen document also runs listeni
   chart. If you made a chart by hand, it is kept; the card then shows the agreement between your chart and the
   auto chart and a **자동 코드표로 바꾸기** button (asks first; the replaced chart is kept under
   `chartbackup:<source>:<id>`). The latest auto chart is always kept under `autochart:<source>:<id>`.
+  A new auto chart is merged with the stored one: it wins where it has coverage, the earlier chart keeps the
+  ranges only it heard, so a short re-analysis never shrinks coverage. All chart writes (editor save, import,
+  auto chart, adopt) run one at a time in the service worker, so an auto chart cannot overwrite a chart you
+  saved while it was being stored.
 - YouTube Music: the adapter reports the id of what the player is actually playing
   (`movie_player.getVideoData()`), which can differ from the URL `v=`; a yellow notice shows when it differs or
   when only the URL id was available.

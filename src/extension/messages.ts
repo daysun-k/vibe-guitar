@@ -125,6 +125,17 @@ export interface AutoChartSavedMessage {
   error?: string;
 }
 
+/**
+ * Side panel → service worker: a chart write. All chart writes run in the service worker
+ * one at a time (ChartStore), so they cannot interleave with auto chart saves.
+ */
+export type ChartWriteMessage =
+  | { type: 'chart-write'; op: 'save'; chart: Chart }
+  | { type: 'chart-write'; op: 'adopt-auto'; source: RecordingSource; id: string };
+
+/** Service worker → side panel: reply to a ChartWriteMessage. */
+export type ChartWriteResult = { ok: true; chart?: Chart | null } | { ok: false; error: string };
+
 export interface CommandMessage {
   type: 'command';
   command: 'stamp-chord' | 'tap-tempo';
@@ -141,7 +152,8 @@ export type ExtensionMessage =
   | ListenStateMessage
   | ListenAnalyzeMessage
   | AutoChartMessage
-  | AutoChartSavedMessage;
+  | AutoChartSavedMessage
+  | ChartWriteMessage;
 
 /** sendMessage that ignores "no receiver" errors (side panel closed). */
 export function sendQuietly(msg: ExtensionMessage): void {

@@ -43,6 +43,8 @@ export class Segment {
   cqtFrames = 0;
   /** Beat model outputs keyed by chunk start frame (only full, final-position chunks). */
   readonly beatChunks = new Map<number, BeatLogits>();
+  /** Set when the segment was closed; a closed segment never grows again. */
+  closed = false;
   constructor(readonly startSec: number) {}
 
   get durationSec(): number {
@@ -88,6 +90,7 @@ export class ListeningSession {
     const dur = samples.length / MODEL_SAMPLE_RATE;
     const cur = this.current;
     if (!cur || Math.abs(cur.endSec + dur - positionAtEndSec) > CONTINUITY_TOLERANCE_SEC) {
+      if (cur) cur.closed = true;
       const start = Math.max(0, positionAtEndSec - dur);
       this.current = new Segment(start);
       this.segments.push(this.current);
@@ -97,6 +100,7 @@ export class ListeningSession {
 
   /** Pause, seek, ad, rate change, recording change: the next audio opens a new segment. */
   breakSegment(): void {
+    if (this.current) this.current.closed = true;
     this.current = null;
   }
 
@@ -153,6 +157,33 @@ export class ListeningSession {
     const heard = this.coverage().reduce((s, r) => s + Math.min(r.toSec, this.durationSec) - Math.max(0, r.fromSec), 0);
     return Math.max(0, Math.min(1, heard / this.durationSec));
   }
+}
+
+/**
+ * Analyses what was heard so far: closes the open segment, then analyses a snapshot of
+ * the segments that are closed at this moment. Audio that arrives during the awaits goes
+ * to new segments, which this call neither iterates nor caches. Only closed (immutable)
+ * segments are cached, so a cached result always covers its whole segment.
+ */
+export async function analyzeClosedSegments<T>(
+  session: ListeningSession,
+  cache: WeakMap<Segment, T>,
+  analyze: (seg: Segment) => Promise<T>,
+  minSec = 1,
+): Promise<T[]> {
+  session.breakSegment();
+  session.extractReady(Number.MAX_SAFE_INTEGER, true);
+  const snapshot = session.segments.filter((seg) => seg.closed && seg.durationSec >= minSec);
+  const out: T[] = [];
+  for (const seg of snapshot) {
+    let a = cache.get(seg);
+    if (!a) {
+      a = await analyze(seg);
+      cache.set(seg, a);
+    }
+    out.push(a);
+  }
+  return out;
 }
 
 /** One Beat This! chunk starting at frame `start` (may be negative), with border padding. */

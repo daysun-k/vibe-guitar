@@ -25,7 +25,11 @@ function send(msg: ExtensionMessage): void {
   chrome.runtime.sendMessage(msg).catch(() => undefined);
 }
 
-const listener = new ListeningController((m) => send(m as ExtensionMessage));
+const listener = new ListeningController(
+  (m) => send(m as ExtensionMessage),
+  // AudioContext time and wall clock read together: maps player reports to sample time.
+  () => (ctx ? { ctxTime: ctx.currentTime, epochMs: Date.now() } : null),
+);
 
 async function stop(reason?: string): Promise<void> {
   if (timer) clearInterval(timer);
@@ -64,7 +68,8 @@ async function start(streamId: string, id: number, url?: string): Promise<void> 
     try {
       await ctx.audioWorklet.addModule(chrome.runtime.getURL('capture-worklet.js'));
       tap = new AudioWorkletNode(ctx, 'vibe-mono-tap', { numberOfOutputs: 0 });
-      tap.port.onmessage = (e: MessageEvent<{ samples: Float32Array; sampleRate: number }>) => listener.onAudio(e.data.samples, e.data.sampleRate);
+      tap.port.onmessage = (e: MessageEvent<{ samples: Float32Array; sampleRate: number; endFrame: number }>) =>
+        listener.onAudio(e.data.samples, e.data.sampleRate, e.data.endFrame);
       source.connect(tap);
       listener.start(id);
     } catch (e) {

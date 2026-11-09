@@ -38,6 +38,16 @@ describe('beat F-measure', () => {
     expect(f.precision).toBeCloseTo(2 / 5, 9);
     expect(f.recall).toBeCloseTo(2 / 4, 9);
   });
+
+  it('uses a maximum matching, not greedy nearest (review finding 5)', () => {
+    // Greedy nearest gives 1 → 1.04 and leaves 1.1 unmatched (F = 0.5); both can match.
+    const f = beatFMeasure([1, 1.1], [0.94, 1.04], 0.07);
+    expect(f.f).toBeCloseTo(1, 9);
+    expect(f.precision).toBeCloseTo(1, 9);
+    expect(f.recall).toBeCloseTo(1, 9);
+    // Order of the inputs does not matter.
+    expect(beatFMeasure([1.1, 1], [1.04, 0.94], 0.07).f).toBeCloseTo(1, 9);
+  });
 });
 
 describe('compareCharts (user chart vs auto chart)', () => {

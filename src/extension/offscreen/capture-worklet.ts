@@ -1,7 +1,8 @@
 /**
  * AudioWorklet processor for listening mode: downmixes the captured tab audio to mono
  * (mean of channels, as Beat This! expects) and posts 4096-frame blocks to the
- * offscreen document. Audio stays inside the browser.
+ * offscreen document, each stamped with the AudioContext frame just after its last
+ * sample so the receiver can place it by sample time. Audio stays inside the browser.
  */
 
 declare const sampleRate: number;
@@ -26,7 +27,8 @@ class MonoTapProcessor extends AudioWorkletProcessor {
       for (let c = 0; c < ch; c++) s += input[c][i];
       this.buf[this.fill++] = s / ch;
       if (this.fill === BLOCK) {
-        this.port.postMessage({ samples: this.buf, sampleRate, frameTime: currentFrameTime() }, [this.buf.buffer]);
+        const endFrame = currentFrame + i + 1;
+        this.port.postMessage({ samples: this.buf, sampleRate, endFrame }, [this.buf.buffer]);
         this.buf = new Float32Array(BLOCK);
         this.fill = 0;
       }
@@ -35,9 +37,7 @@ class MonoTapProcessor extends AudioWorkletProcessor {
   }
 }
 
+/** AudioContext frame of the first sample of the current render quantum. */
 declare const currentFrame: number;
-function currentFrameTime(): number {
-  return currentFrame / sampleRate;
-}
 
 registerProcessor('vibe-mono-tap', MonoTapProcessor);

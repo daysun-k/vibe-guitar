@@ -6,14 +6,14 @@
  * audio never leaves this document.
  */
 import * as ort from 'onnxruntime-web';
-import { CQT_FRAME_SEC, MODEL_SAMPLE_RATE } from '../../audio/features';
-import { StreamingResampler } from '../../audio/resample';
+import { CQT_FRAME_SEC } from '../../audio/features';
 import type { Recording } from '../../chart/types';
 import { buildAutoChart } from '../../recognize/autochart';
 import type { BtcMeta } from '../../recognize/chords';
 import { Recognizer, type SegmentAnalysis } from '../../recognize/recognizer';
 import { MODEL_FILES, ortRunner, type ModelRunner } from '../../recognize/runner';
-import { ListeningSession, type Segment } from '../../recognize/session';
+import { anchorFromPlayerState, AudioPlacer } from '../../recognize/placement';
+import { analyzeClosedSegments, ListeningSession, type Segment } from '../../recognize/session';
 import type { ListenStateMessage, ModelState, PlayerStateMessage } from '../messages';
 
 /** Rough delay from the media element's currentTime to the captured sample (uncalibrated). */
@@ -34,16 +34,9 @@ function positionNow(p: PlayerStateMessage, nowMs: number): number {
   return p.paused ? p.currentTime : p.currentTime + ((nowMs - p.sampledAt) / 1000) * p.playbackRate;
 }
 
-/** Why audio should not be stored right now (null = store it). */
-export function idleReasonFor(p: PlayerStateMessage | null, nowMs: number): string | null {
-  if (!p) return '플레이어 정보를 기다리는 중';
-  if (!p.recording) return '곡 ID를 찾지 못함';
-  if (nowMs - p.sampledAt > 3000) return '플레이어 정보가 끊김';
-  if (p.isAd) return '광고 중';
-  if (p.paused) return '일시정지';
-  if (p.playbackRate !== 1) return `재생 속도 ${p.playbackRate}x (1x에서만 기록)`;
-  return null;
-}
+/** AudioContext time and wall clock read together (null = no capture running). */
+export type AudioClock = () => { ctxTime: number; epochMs: number } | null;
+
 
 interface Models {
   recognizer: Recognizer;
@@ -85,7 +78,7 @@ export class ListeningController {
   private player: PlayerStateMessage | null = null;
   private session: ListeningSession | null = null;
   private recording: Recording | null = null;
-  private resampler: StreamingResampler | null = null;
+  private readonly placer = new AudioPlacer(CAPTURE_LATENCY_SEC);
   private models: Models | null = null;
   private modelState: ModelState = 'idle';
   private modelError: string | undefined;
@@ -93,7 +86,6 @@ export class ListeningController {
   private live: ListenStateMessage['live'] = null;
   private liveFrames = 0;
   private lastLiveAt = 0;
-  private idleReason: string | null = null;
   private analyzing = false;
   private lastAnalysis: ListenStateMessage['lastAnalysis'];
   private readonly autoDone = new Set<string>();
@@ -101,7 +93,21 @@ export class ListeningController {
   private timer: ReturnType<typeof setInterval> | null = null;
   private busy = false;
 
-  constructor(private readonly send: (msg: unknown) => void) {}
+  constructor(
+    private readonly send: (msg: unknown) => void,
+    private readonly clock: AudioClock,
+  ) {}
+
+  private get idleReason(): string | null {
+    return this.placer.idleReason;
+  }
+
+  private readonly sessionFor = (key: string): ListeningSession | null => (this.session?.key === key ? this.session : null);
+
+  private drain(): void {
+    const c = this.clock();
+    if (c) this.placer.drain(c.ctxTime, this.sessionFor);
+  }
 
   start(tabId: number): void {
     this.tabId = tabId;
@@ -114,7 +120,7 @@ export class ListeningController {
     this.timer = null;
     this.tabId = -1;
     this.session = null;
-    this.resampler = null;
+    this.placer.reset();
     this.live = null;
   }
 
@@ -134,6 +140,12 @@ export class ListeningController {
   onPlayerState(msg: PlayerStateMessage, senderTabId: number | undefined): void {
     if (senderTabId !== this.tabId) return;
     this.player = msg;
+    const c = this.clock();
+    if (c) {
+      this.placer.addAnchor(anchorFromPlayerState(msg, recordingKeyOf(msg.recording), c));
+      // Audio captured before this report goes to the session it belongs to, before any switch.
+      this.placer.drain(c.ctxTime, this.sessionFor);
+    }
     const key = recordingKeyOf(msg.recording);
     if (!key || msg.isAd) return;
     if (this.session && this.session.key !== key) {
@@ -144,7 +156,6 @@ export class ListeningController {
     }
     if (!this.session) {
       this.session = new ListeningSession(key, msg.duration);
-      this.resampler = null;
       this.live = null;
       this.liveFrames = 0;
     }
@@ -152,23 +163,13 @@ export class ListeningController {
     this.recording = msg.recording;
   }
 
-  onAudio(samples: Float32Array, rate: number): void {
-    const s = this.session;
-    const p = this.player;
-    const now = Date.now();
-    this.idleReason = idleReasonFor(p, now);
-    if (!s || !p || this.idleReason || recordingKeyOf(p.recording) !== s.key) {
-      s?.breakSegment();
-      this.resampler = null;
-      return;
-    }
-    if (!this.resampler || this.resampler.fromRate !== rate) {
-      s.breakSegment();
-      this.resampler = new StreamingResampler(rate, MODEL_SAMPLE_RATE);
-    }
-    const out = this.resampler.push(samples);
-    s.append(out, positionNow(p, now) - CAPTURE_LATENCY_SEC);
-    if (s.full) this.idleReason = '저장 한도(20분)에 도달';
+  /**
+   * A captured block; `endFrame` is the AudioContext frame just after its last sample.
+   * Placement uses that sample time, not the arrival time of this message.
+   */
+  onAudio(samples: Float32Array, rate: number, endFrame: number): void {
+    this.placer.pushBlock(samples, rate, endFrame);
+    this.drain();
   }
 
   /** Builds the auto chart from what was heard (manual request). */
@@ -187,20 +188,9 @@ export class ListeningController {
     this.pushState();
     const t0 = performance.now();
     try {
-      // Close the open segment so its last frames can be padded; new audio opens a new one.
-      session.breakSegment();
-      this.resampler = null;
-      session.extractReady(Number.MAX_SAFE_INTEGER, true);
-      const analyses: SegmentAnalysis[] = [];
-      for (const seg of session.segments) {
-        if (seg.durationSec < 1) continue;
-        let a = this.analysisCache.get(seg);
-        if (!a) {
-          a = await models.recognizer.analyzeSessionSegment(seg);
-          this.analysisCache.set(seg, a);
-        }
-        analyses.push(a);
-      }
+      // Closes the open segment (new audio opens a new one) and analyses only the
+      // segments closed at this point; audio arriving during the awaits is left for later.
+      const analyses = await analyzeClosedSegments(session, this.analysisCache, (seg) => models.recognizer.analyzeSessionSegment(seg));
       if (!analyses.length) throw new Error('들은 구간이 없습니다');
       const chart = buildAutoChart({ recording: { ...recording }, segments: analyses, tool: TOOL, durationSec: session.durationSec });
       this.send({ type: 'auto-chart', chart });
@@ -218,6 +208,7 @@ export class ListeningController {
     if (this.busy) return;
     this.busy = true;
     try {
+      this.drain();
       const s = this.session;
       if (s) {
         s.extractReady(48);

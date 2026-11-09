@@ -45,6 +45,11 @@ runs each 30 s beat chunk as soon as it is complete, so only the last chunk rema
 | Tempo within 4 % | 62.5 % | 62.5 % | – |
 | Meter correct | 66.7 % | 66.7 % | – |
 
+Beat F uses a maximum one-to-one matching within ±70 ms (fixed after review; the first run used greedy
+nearest matching). Rerunning `npm run bench` and `npm run bench -- --runtime web` with the fix gave the same
+numbers to all printed digits (beat F 0.8378972468992273, downbeat F 0.8897616468574271 in both). The browser
+column was not rerun and still comes from the greedy matcher.
+
 Ablations (majmin, Node): frame-wise argmax without beat sync 96.46 %; Viterbi on fixed 0.5 s units without
 beats 89.38 %; BTC 25-class majmin model with the same pipeline 97.05 %. Beat-synchronous smoothing adds
 about 0.6 points over frame argmax; using beats instead of fixed units adds about 7.7 points.
