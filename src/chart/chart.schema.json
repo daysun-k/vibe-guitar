@@ -1,0 +1,77 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://vibe-guitar.local/chart.schema.json",
+  "title": "Vibe Guitar chord chart v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "recording", "timing", "events", "coverage", "provenance"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "recording": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "id", "title", "artist"],
+      "properties": {
+        "source": { "enum": ["youtube", "ytmusic", "applemusic"] },
+        "id": { "type": "string", "minLength": 1 },
+        "title": { "type": "string" },
+        "artist": { "type": "string" }
+      }
+    },
+    "timing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bpm", "beatsPerBar", "firstDownbeatSec"],
+      "properties": {
+        "bpm": { "type": "number", "exclusiveMinimum": 0, "maximum": 400 },
+        "beatsPerBar": { "type": "integer", "minimum": 1, "maximum": 16 },
+        "beatUnit": { "enum": [4, 8] },
+        "firstDownbeatSec": { "type": "number", "minimum": 0 },
+        "beatTimes": {
+          "type": "array",
+          "items": { "type": "number", "minimum": 0 }
+        },
+        "feel": { "enum": ["straight", "shuffle"] }
+      }
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["startSec", "chord", "confidence", "source"],
+        "properties": {
+          "startSec": { "type": "number", "minimum": 0 },
+          "chord": { "type": "string", "minLength": 1 },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+          "source": { "enum": ["manual", "auto"] }
+        }
+      }
+    },
+    "coverage": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["fromSec", "toSec"],
+        "properties": {
+          "fromSec": { "type": "number", "minimum": 0 },
+          "toSec": { "type": "number", "minimum": 0 }
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["createdBy", "createdAt"],
+      "properties": {
+        "createdBy": { "enum": ["manual", "recognizer", "edited"] },
+        "createdAt": { "type": "string", "minLength": 1 },
+        "updatedAt": { "type": "string" },
+        "tool": { "type": "string" },
+        "note": { "type": "string" },
+        "example": { "type": "boolean" }
+      }
+    }
+  }
+}

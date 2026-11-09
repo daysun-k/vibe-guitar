@@ -1,0 +1,127 @@
+{
+  "schemaVersion": 1,
+  "recording": {
+    "source": "ytmusic",
+    "id": "EXAMPLE-WALTZ-SLASH",
+    "title": "[EXAMPLE – fake timings] 3/4 waltz with a descending bass line",
+    "artist": "Example (not a real recording)"
+  },
+  "timing": {
+    "bpm": 120,
+    "beatsPerBar": 3,
+    "beatUnit": 4,
+    "firstDownbeatSec": 1.5,
+    "feel": "straight"
+  },
+  "events": [
+    {
+      "startSec": 1.5,
+      "chord": "C",
+      "confidence": 1,
+      "source": "manual"
+    },
+    {
+      "startSec": 3,
+      "chord": "C/B",
+      "confidence": 1,
+      "source": "manual"
+    },
+    {
+      "startSec": 4.5,
+      "chord": "Am",
+      "confidence": 1,
+      "source": "manual"
+    },
+    {
+      "startSec": 6,
+      "chord": "Am/G",
+      "confidence": 1,
+      "source": "manual"
+    },
+    {
+      "startSec": 7.5,
+      "chord": "F",
+      "confidence": 1,
+      "source": "manual"
+    },
+    {
+      "startSec": 9,
+      "chord": "G",
+      "confidence": 1,
+      "source": "manual"
+    },
+    {
+      "startSec": 10.5,
+      "chord": "Csus4",
+      "confidence": 1,
+      "source": "manual"
+    },
+    {
+      "startSec": 12,
+      "chord": "C",
+      "confidence": 1,
+      "source": "manual"
+    },
+    {
+      "startSec": 13.5,
+      "chord": "Cmaj7",
+      "confidence": 1,
+      "source": "manual"
+    },
+    {
+      "startSec": 15,
+      "chord": "Dm9",
+      "confidence": 1,
+      "source": "manual"
+    },
+    {
+      "startSec": 16.5,
+      "chord": "G7",
+      "confidence": 1,
+      "source": "manual"
+    },
+    {
+      "startSec": 18,
+      "chord": "C",
+      "confidence": 1,
+      "source": "manual"
+    },
+    {
+      "startSec": 19.5,
+      "chord": "F",
+      "confidence": 1,
+      "source": "manual"
+    },
+    {
+      "startSec": 21,
+      "chord": "Bm7b5",
+      "confidence": 1,
+      "source": "manual"
+    },
+    {
+      "startSec": 22.5,
+      "chord": "E7",
+      "confidence": 1,
+      "source": "manual"
+    },
+    {
+      "startSec": 24,
+      "chord": "Am",
+      "confidence": 1,
+      "source": "manual"
+    }
+  ],
+  "coverage": [
+    {
+      "fromSec": 0,
+      "toSec": 25.5
+    }
+  ],
+  "provenance": {
+    "createdBy": "manual",
+    "createdAt": "2026-11-09T00:00:00Z",
+    "tool": "hand-written example",
+    "note": "EXAMPLE ONLY: timings are fake (uniform 1 chord per bar at 120 bpm, 3/4). Shows structural slash bass (C–C/B–Am–Am/G), a sus resolution and chords that get simplified per level.",
+    "example": true
+  }
+}
