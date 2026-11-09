@@ -6,6 +6,9 @@
 import type { Recording } from '../../chart/types';
 import { sendQuietly, type ExtensionMessage, type PlayerControlResult, type PlayerStateMessage } from '../messages';
 import { chooseRecordingId, isVideoId, type PlayerVideoData, type RecordingIdChoice } from './recording-id';
+import { claimInstance, onRuntimeMessage } from './instance';
+
+const instanceSignal = claimInstance('__vibeGuitarYouTube');
 
 const adapter: 'youtube' | 'ytmusic' = location.hostname === 'music.youtube.com' ? 'ytmusic' : 'youtube';
 const TICK_MS = 250;
@@ -45,7 +48,7 @@ window.addEventListener('message', (e: MessageEvent) => {
     p && isVideoId(p.videoId)
       ? { videoId: p.videoId, title: String(p.title ?? ''), author: String(p.author ?? ''), sampledAt: Number(p.sampledAt) || Date.now() }
       : null;
-});
+}, { signal: instanceSignal });
 
 function text(sel: string): string {
   return document.querySelector(sel)?.textContent?.trim() ?? '';
@@ -121,20 +124,24 @@ const timer = setInterval(() => {
   }
   report();
 }, TICK_MS);
+instanceSignal.addEventListener('abort', () => {
+  stopped = true;
+  clearInterval(timer);
+});
 
 // Media events do not bubble, but capture-phase listeners on document see them.
 for (const ev of ['play', 'pause', 'seeked', 'ratechange', 'loadedmetadata', 'emptied']) {
   document.addEventListener(ev, (e) => {
     if (e.target instanceof HTMLVideoElement) report(ev);
-  }, true);
+  }, { capture: true, signal: instanceSignal });
 }
 // YouTube SPA navigation events.
 for (const ev of ['yt-navigate-finish', 'yt-page-data-updated']) {
-  window.addEventListener(ev, () => report('navigation'));
-  document.addEventListener(ev, () => report('navigation'));
+  window.addEventListener(ev, () => report('navigation'), { signal: instanceSignal });
+  document.addEventListener(ev, () => report('navigation'), { signal: instanceSignal });
 }
 
-chrome.runtime.onMessage.addListener((msg: ExtensionMessage, _sender, sendResponse) => {
+onRuntimeMessage(instanceSignal, (msg: ExtensionMessage, _sender, sendResponse) => {
   if (msg.type !== 'player-control') return;
   const video = getVideo();
   if (!video) {
