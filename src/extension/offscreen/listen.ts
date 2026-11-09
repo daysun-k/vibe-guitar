@@ -22,6 +22,8 @@ export const CAPTURE_LATENCY_SEC = 0.05;
 export const AUTO_CHART_FRACTION = 0.9;
 const TICK_MS = 250;
 const LIVE_EVERY_MS = 500;
+/** Off by default: the 24-clip browser bench gave lower beat/downbeat F on WebGPU than WASM (docs/phase0-benchmark.md). */
+const USE_WEBGPU = false;
 const TOOL = 'vibe-guitar listening mode: Beat This! small0 + BTC large-voca (onnxruntime-web)';
 
 export function recordingKeyOf(r: Recording | null | undefined): string | null {
@@ -60,7 +62,7 @@ async function createModels(): Promise<Models> {
   let beat = beatWasm;
   let backend = 'wasm';
   // WebGPU for the beat model when available, after a numeric check against WASM.
-  if ('gpu' in navigator) {
+  if (USE_WEBGPU && 'gpu' in navigator) {
     try {
       const gpu = ortRunner(await ort.InferenceSession.create(url(MODEL_FILES.beat), { executionProviders: ['webgpu'] }), ort.Tensor);
       const probe = new Float32Array(300 * 128).map((_, i) => 2 + Math.sin(i * 0.37));
