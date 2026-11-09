@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "note": "Model files fetched by scripts/fetch-models.mjs into models/ (gitignored). Pinned by repository revision and sha256. Personal, non-commercial use.",
+  "files": [
+    {
+      "key": "beat",
+      "file": "beat_this_small.onnx",
+      "url": "https://huggingface.co/Andremi/audioweb-models/resolve/953d0a9e46fd364860c9413ee4c7a9aa4fbcae4b/analysis/beat_this_small.onnx",
+      "bytes": 4915083,
+      "sha256": "6d9e1b3ebdb953b0bacf6755e6fa421e04e74709cdbe4abcc6f0e4b432c89f09",
+      "packaged": true,
+      "model": "Beat This! small0 (CPJKU/beat_this, ISMIR 2024), ONNX export by AudioWeb",
+      "upstream": "https://github.com/CPJKU/beat_this",
+      "license": "MIT (code and weights, Copyright (c) 2024 Institute of Computational Perception, JKU Linz)"
+    },
+    {
+      "key": "chords",
+      "file": "btc_large_voca.onnx",
+      "url": "https://huggingface.co/Andremi/audioweb-models/resolve/953d0a9e46fd364860c9413ee4c7a9aa4fbcae4b/analysis/btc_large_voca.onnx",
+      "bytes": 6472890,
+      "sha256": "3576d3a52628e130252af8b70378dbbd2f678efe27c9dd520930d671055bad2a",
+      "packaged": true,
+      "model": "BTC large vocabulary, 170 classes (jayg996/BTC-ISMIR19), fp16 weights, ONNX export by AudioWeb",
+      "upstream": "https://github.com/jayg996/BTC-ISMIR19",
+      "license": "MIT per upstream repository and the AudioWeb notice; another redistributor (cstr/btc-chords-GGUF) labels the weights CC-BY-NC-SA 4.0. Acceptable either way for personal non-commercial use; re-check before any distribution."
+    },
+    {
+      "key": "chords-majmin",
+      "file": "btc_majmin.onnx",
+      "url": "https://huggingface.co/Andremi/audioweb-models/resolve/953d0a9e46fd364860c9413ee4c7a9aa4fbcae4b/analysis/btc_majmin.onnx",
+      "bytes": 6435183,
+      "sha256": "9660ad90d38170d265bf97b6dc0c5f9f04cf7f7f21c507e0b27e18990c88b209",
+      "packaged": false,
+      "model": "BTC major/minor, 25 classes (jayg996/BTC-ISMIR19); benchmark comparison only",
+      "upstream": "https://github.com/jayg996/BTC-ISMIR19",
+      "license": "same as btc_large_voca.onnx"
+    },
+    {
+      "key": "btc-meta",
+      "file": "btc_meta.json",
+      "url": "https://huggingface.co/Andremi/audioweb-models/resolve/953d0a9e46fd364860c9413ee4c7a9aa4fbcae4b/analysis/btc_meta.json",
+      "bytes": 4080,
+      "sha256": "cd56da51912598d0dacd7113dbd93bf03ebc4d96ecd546dd99ecbe6184254add",
+      "packaged": true,
+      "model": "BTC feature normalization (mean/std) and label tables",
+      "upstream": "https://github.com/jayg996/BTC-ISMIR19",
+      "license": "MIT"
+    },
+    {
+      "key": "notices",
+      "file": "THIRD_PARTY_NOTICES.txt",
+      "url": "https://huggingface.co/Andremi/audioweb-models/resolve/953d0a9e46fd364860c9413ee4c7a9aa4fbcae4b/analysis/THIRD_PARTY_NOTICES.txt",
+      "bytes": 3818,
+      "sha256": "230631dc7141ff28aa483df1bb18d101c8a41adfddc70435e59fd787e0bac02c",
+      "packaged": true,
+      "model": "Full license texts for the files above",
+      "upstream": "https://huggingface.co/Andremi/audioweb-models",
+      "license": "n/a"
+    },
+    {
+      "key": "mel-reference",
+      "file": "mel-filterbank.bin",
+      "url": "https://huggingface.co/musetric/beat-this-onnx/resolve/25308706dda545c0d5950065bb0604ad71bcf1f5/mel-filterbank.bin",
+      "bytes": 262656,
+      "sha256": "1ee975d96f44ccf2c3bfe37825c1c1f0b089f5703c7a12a84b1f0a3bce004533",
+      "packaged": false,
+      "model": "torchaudio MelScale.fb for Beat This! (513x128 float32); test reference for src/audio/features.ts only",
+      "upstream": "https://huggingface.co/musetric/beat-this-onnx",
+      "license": "MIT (repository card)"
+    }
+  ]
+}

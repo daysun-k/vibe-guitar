@@ -11,6 +11,7 @@
     "https://music.youtube.com/*",
     "https://music.apple.com/*"
   ],
+  "content_security_policy": { "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'" },
   "background": { "service_worker": "background.js" },
   "action": { "default_title": "Vibe Guitar: open the side panel and start tab-audio capture" },
   "side_panel": { "default_path": "sidepanel.html" },
@@ -19,6 +20,12 @@
       "matches": ["https://www.youtube.com/*", "https://music.youtube.com/*"],
       "js": ["content-youtube.js"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://music.youtube.com/*"],
+      "js": ["youtube-main.js"],
+      "run_at": "document_idle",
+      "world": "MAIN"
     },
     {
       "matches": ["https://music.apple.com/*"],

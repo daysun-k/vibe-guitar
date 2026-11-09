@@ -26,6 +26,26 @@
       <button id="goto-edit" class="link">편집 탭에서 만들기</button>
     </div>
     <div id="ad-banner" class="notice warn" hidden>광고 재생 중: 코드 진행을 멈춥니다.</div>
+    <div id="id-warning" class="notice warn small" hidden></div>
+
+    <div id="listen-card" class="card listen" hidden>
+      <div class="label">듣기 모드 <span class="badge uncertain">인식 중</span></div>
+      <div class="now-row">
+        <div id="listen-chord" class="chord-mid">–</div>
+        <div id="listen-conf" class="muted small"></div>
+      </div>
+      <div class="muted small">따라 치기용이 아닙니다. 지금 들리는 코드를 추정한 값이며 약 1초 늦습니다.</div>
+      <div class="coverage-bar"><div id="listen-coverage-fill"></div></div>
+      <div id="listen-coverage" class="small"></div>
+      <div id="listen-status" class="muted small"></div>
+      <button id="listen-analyze">들은 구간으로 자동 코드표 만들기</button>
+      <div id="listen-result" class="small"></div>
+      <div id="listen-pending" class="notice small" hidden>
+        이 곡의 자동 코드표가 준비됐지만, 직접 만든 코드표가 있어서 바꾸지 않았습니다.
+        <div id="listen-compare" class="muted small"></div>
+        <button id="listen-adopt">자동 코드표로 바꾸기</button>
+      </div>
+    </div>
 
     <div id="countin" class="countin" hidden></div>
 
@@ -165,8 +185,8 @@
   <!-- CAPTURE -->
   <section id="tab-capture" class="tab" hidden>
     <div class="card small">
-      툴바의 Vibe Guitar 아이콘을 누르면 현재 탭의 오디오 캡처를 시작합니다(탭 오디오 캡처 실험).
-      오디오는 브라우저 밖으로 나가지 않으며, 이 단계에는 인식 모델이 없습니다.
+      툴바의 Vibe Guitar 아이콘을 누르면 현재 탭의 오디오 캡처와 듣기 모드(코드·박자 인식)를 시작합니다.
+      오디오와 인식은 모두 브라우저 안에서 처리하며 밖으로 보내지 않습니다.
     </div>
     <div class="card">
       <table class="kv small">
@@ -177,7 +197,10 @@
         <tr><th>샘플레이트</th><td id="cap-rate">–</td></tr>
         <tr><th>트랙</th><td id="cap-track">–</td></tr>
         <tr><th>오류</th><td id="cap-error">–</td></tr>
+        <tr><th>인식 모델</th><td id="cap-model">–</td></tr>
+        <tr><th>실행 방식</th><td id="cap-backend">–</td></tr>
       </table>
+      <div class="muted small">모델: Beat This! small0 (박자·다운비트, MIT) · BTC large-voca (코드 170종, MIT 표기). 성능 측정: <a href="bench.html" target="_blank">벤치 페이지</a></div>
       <div class="label">크로마 (12음)</div>
       <div id="chroma" class="chroma"></div>
       <button id="cap-stop">캡처 중지</button>

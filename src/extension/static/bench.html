@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="ko">
+<head><meta charset="utf-8" /><title>Vibe Guitar bench</title>
+<style>body{font:13px system-ui;margin:16px;max-width:900px}pre{background:#8881;padding:8px;white-space:pre-wrap}button{margin-right:8px}</style></head>
+<body>
+  <h2>Vibe Guitar 인식 모델 벤치 (브라우저 안에서 실행)</h2>
+  <p>합성 테스트 곡을 이 페이지에서 만들어 Beat This! small0와 BTC를 onnxruntime-web으로 돌립니다. 네트워크를 쓰지 않습니다. 합성 음원은 실제 음악이 아니므로 정확도는 상한 확인용입니다.</p>
+  <label>곡 수 <input id="clips" type="number" value="6" min="1" max="24" /></label>
+  <button id="run-wasm">WASM으로 실행</button><button id="run-webgpu">WebGPU로 실행</button>
+  <pre id="out">대기</pre>
+  <script src="bench.js"></script>
+</body>
+</html>

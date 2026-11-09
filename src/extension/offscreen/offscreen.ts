@@ -5,6 +5,7 @@
  */
 import { chromaFromDbSpectrum, rms } from '../../audio/chroma';
 import type { CaptureStatsMessage, ExtensionMessage } from '../messages';
+import { ListeningController } from './listen';
 
 const SILENCE_RMS = 1e-4;
 const REPORT_MS = 100;
@@ -18,10 +19,17 @@ let tabUrl: string | undefined;
 let startedAt = 0;
 let lastAudioAt = 0;
 let everReceived = false;
+let tap: AudioWorkletNode | null = null;
 
 function send(msg: ExtensionMessage): void {
   chrome.runtime.sendMessage(msg).catch(() => undefined);
 }
+
+const listener = new ListeningController(
+  (m) => send(m as ExtensionMessage),
+  // AudioContext time and wall clock read together: maps player reports to sample time.
+  () => (ctx ? { ctxTime: ctx.currentTime, epochMs: Date.now() } : null),
+);
 
 async function stop(reason?: string): Promise<void> {
   if (timer) clearInterval(timer);
@@ -29,6 +37,9 @@ async function stop(reason?: string): Promise<void> {
   stream?.getTracks().forEach((t) => t.stop());
   stream = null;
   analyser = null;
+  tap?.port.close();
+  tap = null;
+  listener.stop();
   if (ctx) await ctx.close().catch(() => undefined);
   ctx = null;
   if (tabId >= 0) send({ type: 'capture-status', state: 'stopped', tabId, url: tabUrl, error: reason });
@@ -53,6 +64,17 @@ async function start(streamId: string, id: number, url?: string): Promise<void> 
     analyser.fftSize = 8192;
     analyser.smoothingTimeConstant = 0.6;
     source.connect(analyser);
+    // Listening mode: mono PCM blocks to the recognizer (never leaves this document).
+    try {
+      await ctx.audioWorklet.addModule(chrome.runtime.getURL('capture-worklet.js'));
+      tap = new AudioWorkletNode(ctx, 'vibe-mono-tap', { numberOfOutputs: 0 });
+      tap.port.onmessage = (e: MessageEvent<{ samples: Float32Array; sampleRate: number; endFrame: number }>) =>
+        listener.onAudio(e.data.samples, e.data.sampleRate, e.data.endFrame);
+      source.connect(tap);
+      listener.start(id);
+    } catch (e) {
+      console.error('listening mode unavailable', e);
+    }
     startedAt = Date.now();
     lastAudioAt = 0;
     everReceived = false;
@@ -95,7 +117,12 @@ function report(): void {
   send(msg);
 }
 
-chrome.runtime.onMessage.addListener((msg: ExtensionMessage, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((msg: ExtensionMessage, sender, sendResponse) => {
+  if (msg.type === 'player-state') listener.onPlayerState(msg, sender.tab?.id);
+  if (msg.type === 'listen-analyze' && msg.target === 'offscreen') {
+    listener.requestAnalysis();
+    sendResponse({ ok: true });
+  }
   if (msg.type === 'capture-start' && msg.target === 'offscreen') {
     void start(msg.streamId, msg.tabId, msg.url);
     sendResponse({ ok: true });

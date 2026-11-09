@@ -2,7 +2,8 @@
  * Service worker: opens the side panel and starts the tab-capture spike on the
  * action click; relays keyboard commands to the side panel.
  */
-import type { CaptureStartMessage, CaptureStatusMessage, CommandMessage, ExtensionMessage } from './messages';
+import type { AutoChartSavedMessage, CaptureStartMessage, CaptureStatusMessage, CommandMessage, ExtensionMessage } from './messages';
+import { handleChartWrite, serviceWorkerChartStore } from './storage';
 
 const OFFSCREEN_URL = 'offscreen.html';
 
@@ -72,4 +73,20 @@ chrome.commands.onCommand.addListener((command) => {
     const msg: CommandMessage = { type: 'command', command };
     broadcast(msg);
   }
+});
+
+// Every chart write runs here, one at a time (ChartStore): manual saves and adoption from
+// the side panel, auto charts from listening mode (the offscreen document cannot use
+// chrome.storage).
+chrome.runtime.onMessage.addListener((msg: ExtensionMessage, _sender, sendResponse) => {
+  if (msg.type === 'chart-write') {
+    void handleChartWrite(serviceWorkerChartStore(), msg).then(sendResponse);
+    return true; // reply asynchronously
+  }
+  if (msg.type !== 'auto-chart') return;
+  const recordingKey = `${msg.chart.recording.source}:${msg.chart.recording.id}`;
+  serviceWorkerChartStore()
+    .saveAuto(msg.chart)
+    .then((savedAs) => broadcast({ type: 'auto-chart-saved', recordingKey, savedAs } satisfies AutoChartSavedMessage))
+    .catch((e: unknown) => broadcast({ type: 'auto-chart-saved', recordingKey, savedAs: 'pending', error: e instanceof Error ? e.message : String(e) }));
 });
