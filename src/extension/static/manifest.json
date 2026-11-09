@@ -1,0 +1,45 @@
+{
+  "manifest_version": 3,
+  "name": "Vibe Guitar (phase 0, personal)",
+  "short_name": "Vibe Guitar",
+  "version": "0.0.1",
+  "description": "Personal prototype: time-synced guitar chords, fingerings and level-based arrangements for YouTube / YouTube Music. Audio never leaves the browser.",
+  "minimum_chrome_version": "116",
+  "permissions": ["sidePanel", "storage", "tabCapture", "offscreen", "activeTab"],
+  "host_permissions": [
+    "https://www.youtube.com/*",
+    "https://music.youtube.com/*",
+    "https://music.apple.com/*"
+  ],
+  "background": { "service_worker": "background.js" },
+  "action": { "default_title": "Vibe Guitar: open the side panel and start tab-audio capture" },
+  "side_panel": { "default_path": "sidepanel.html" },
+  "content_scripts": [
+    {
+      "matches": ["https://www.youtube.com/*", "https://music.youtube.com/*"],
+      "js": ["content-youtube.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://music.apple.com/*"],
+      "js": ["content-applemusic.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://music.apple.com/*"],
+      "js": ["applemusic-main.js"],
+      "run_at": "document_idle",
+      "world": "MAIN"
+    }
+  ],
+  "commands": {
+    "stamp-chord": {
+      "suggested_key": { "default": "Alt+Shift+K" },
+      "description": "Chart editor: stamp the next chord at the current playback time"
+    },
+    "tap-tempo": {
+      "suggested_key": { "default": "Alt+Shift+T" },
+      "description": "Chart editor: tap tempo (first tap on a downbeat, then every beat)"
+    }
+  }
+}

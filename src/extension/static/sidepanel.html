@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Vibe Guitar</title>
+  <link rel="stylesheet" href="sidepanel.css" />
+</head>
+<body>
+  <header>
+    <div id="rec-title" class="rec-title">재생 중인 곡을 찾는 중…</div>
+    <div id="rec-meta" class="muted small"></div>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button data-tab="play" class="active">연주</button>
+    <button data-tab="edit">편집</button>
+    <button data-tab="capture">캡처</button>
+    <button data-tab="settings">설정</button>
+  </nav>
+
+  <!-- PLAY -->
+  <section id="tab-play" class="tab">
+    <div id="no-chart" class="notice" hidden>
+      이 곡의 코드표가 없습니다.
+      <button id="goto-edit" class="link">편집 탭에서 만들기</button>
+    </div>
+    <div id="ad-banner" class="notice warn" hidden>광고 재생 중: 코드 진행을 멈춥니다.</div>
+
+    <div id="countin" class="countin" hidden></div>
+
+    <div class="now card">
+      <div class="label">지금 <span id="cur-badges" class="badges"></span></div>
+      <div class="now-row">
+        <div>
+          <div id="cur-chord" class="chord-big">–</div>
+          <div id="cur-shape" class="shape-line"></div>
+          <div id="cur-notes" class="muted small"></div>
+        </div>
+        <div id="cur-diagram" class="diagram"></div>
+      </div>
+    </div>
+
+    <div class="next card" id="next-card">
+      <div class="label">다음 <span id="next-countdown" class="countdown"></span></div>
+      <div class="now-row">
+        <div>
+          <div id="next-chord" class="chord-mid">–</div>
+          <div id="next-shape" class="shape-line"></div>
+          <div id="next-badges" class="badges"></div>
+        </div>
+        <div id="next-diagram" class="diagram small"></div>
+      </div>
+      <div id="beat-dots" class="beat-dots"></div>
+    </div>
+
+    <div id="bar-pos" class="muted small"></div>
+
+    <div class="controls card">
+      <label>숙련도
+        <select id="level">
+          <option value="beginner">입문</option>
+          <option value="novice">초급</option>
+          <option value="intermediate">중급</option>
+          <option value="advanced">상급</option>
+        </select>
+      </label>
+      <label>카포
+        <select id="capo">
+          <option value="auto">자동</option>
+          <option value="0">없음</option>
+          <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+          <option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option>
+        </select>
+      </label>
+      <div id="capo-suggest" class="muted small"></div>
+      <label>미리 보기
+        <input type="range" id="lookahead" min="0.5" max="4" step="0.5" />
+        <span id="lookahead-val"></span>마디
+      </label>
+      <label><input type="checkbox" id="countin-enable" /> 카운트인 표시</label>
+      <label><input type="checkbox" id="countin-click" /> 카운트인 클릭음</label>
+      <button id="countin-play">이 마디 처음부터 카운트인 후 재생</button>
+      <div id="countin-status" class="small err"></div>
+    </div>
+
+    <div id="strum" class="card small"></div>
+
+    <details class="card">
+      <summary>이 곡에 나오는 코드 (운지 미리 보기)</summary>
+      <p class="muted small">"잡을 수 있음"을 표시하면 그 모양을 우선 고릅니다.</p>
+      <div id="song-chords" class="grid"></div>
+    </details>
+  </section>
+
+  <!-- EDIT -->
+  <section id="tab-edit" class="tab" hidden>
+    <div class="card">
+      <div class="label">대상 곡</div>
+      <div id="edit-target" class="small"></div>
+      <div id="edit-existing" class="muted small"></div>
+      <button id="edit-load-existing">저장된 코드표를 편집기로 불러오기</button>
+      <button id="draft-reattach" hidden>이전 곡의 초안을 이 곡으로 옮기기</button>
+    </div>
+
+    <div class="card">
+      <div class="label">1. 코드 진행 붙여 넣기</div>
+      <textarea id="seq" rows="4" placeholder="C G/B | Am F | N.C. ..."></textarea>
+      <button id="seq-parse">코드 읽기</button>
+      <div id="seq-status" class="small"></div>
+    </div>
+
+    <div class="card">
+      <div class="label">2. 박자</div>
+      <label>BPM <input id="bpm" type="number" min="20" max="400" step="0.1" value="100" /></label>
+      <label>박자표
+        <select id="meter">
+          <option value="4/4">4/4</option>
+          <option value="3/4">3/4</option>
+          <option value="6/8">6/8</option>
+        </select>
+      </label>
+      <label>첫 다운비트(초) <input id="downbeat" type="number" min="0" step="0.001" value="0" /></label>
+      <div class="row">
+        <button id="tap">탭 템포 (T)</button>
+        <button id="downbeat-now">지금 위치 = 첫 다운비트</button>
+      </div>
+      <div id="tap-status" class="muted small">첫 탭은 마디의 첫 박(다운비트)에 맞춰 누르고, 이후 박마다 누릅니다.</div>
+    </div>
+
+    <div class="card">
+      <div class="label">3. 재생하면서 코드가 바뀔 때 찍기</div>
+      <button id="stamp" class="big">다음 코드 찍기 (J)</button>
+      <div class="row">
+        <button id="stamp-undo">되돌리기 (Backspace)</button>
+        <button id="stamp-reset">처음부터</button>
+      </div>
+      <div id="stamp-status" class="small"></div>
+      <div class="muted small">패널을 한 번 클릭해 두면 키보드가 동작합니다. 페이지에 포커스가 있을 때는 Alt+Shift+K(찍기), Alt+Shift+T(탭 템포)를 쓰세요.</div>
+      <ol id="stamp-list" class="stamp-list small"></ol>
+    </div>
+
+    <div class="card">
+      <div class="label">4. 저장</div>
+      <label><input type="checkbox" id="quantize" checked /> 박자 격자에 맞추기 (반 박 단위)</label>
+      <button id="save-chart" class="primary">이 곡에 저장</button>
+      <div id="save-status" class="small"></div>
+    </div>
+
+    <div class="card">
+      <div class="label">JSON 가져오기 · 내보내기 · 예시</div>
+      <div class="row">
+        <button id="export-json">현재 곡 코드표 내보내기</button>
+        <label class="file">JSON 가져오기 <input id="import-json" type="file" accept="application/json,.json" /></label>
+      </div>
+      <label><input type="checkbox" id="import-attach" checked /> 가져온 코드표를 지금 재생 중인 곡에 연결</label>
+      <div class="row">
+        <select id="example-select"></select>
+        <button id="example-attach">예시를 현재 곡에 연결해 저장</button>
+      </div>
+      <div id="io-status" class="small"></div>
+    </div>
+  </section>
+
+  <!-- CAPTURE -->
+  <section id="tab-capture" class="tab" hidden>
+    <div class="card small">
+      툴바의 Vibe Guitar 아이콘을 누르면 현재 탭의 오디오 캡처를 시작합니다(탭 오디오 캡처 실험).
+      오디오는 브라우저 밖으로 나가지 않으며, 이 단계에는 인식 모델이 없습니다.
+    </div>
+    <div class="card">
+      <table class="kv small">
+        <tr><th>상태</th><td id="cap-state">대기</td></tr>
+        <tr><th>대상 탭</th><td id="cap-tab">–</td></tr>
+        <tr><th>오디오 수신</th><td id="cap-received">–</td></tr>
+        <tr><th>RMS</th><td id="cap-rms">–</td></tr>
+        <tr><th>샘플레이트</th><td id="cap-rate">–</td></tr>
+        <tr><th>트랙</th><td id="cap-track">–</td></tr>
+        <tr><th>오류</th><td id="cap-error">–</td></tr>
+      </table>
+      <div class="label">크로마 (12음)</div>
+      <div id="chroma" class="chroma"></div>
+      <button id="cap-stop">캡처 중지</button>
+    </div>
+    <div class="card">
+      <div class="label">Apple Music 어댑터 (실험)</div>
+      <div id="am-status" class="small">music.apple.com 탭을 열면 여기에 결과가 표시됩니다.</div>
+    </div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section id="tab-settings" class="tab" hidden>
+    <div class="card">
+      <div class="label">개인 프로필</div>
+      <label><input type="checkbox" id="can-barre" /> 바레 코드를 잡을 수 있음</label>
+      <label>최대 손 뻗기(프렛 간격)
+        <select id="max-stretch"><option>2</option><option>3</option><option>4</option></select>
+      </label>
+      <label>코드 전환 속도
+        <select id="change-speed">
+          <option value="slow">느림</option>
+          <option value="normal">보통</option>
+          <option value="fast">빠름</option>
+        </select>
+      </label>
+      <label>카포 범위 <input id="capo-min" type="number" min="0" max="7" /> ~ <input id="capo-max" type="number" min="0" max="9" /></label>
+      <div class="row">
+        <span id="known-count" class="small"></span>
+        <button id="known-reset">잡을 수 있는 모양 초기화</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="label">싱크 보정</div>
+      <label>오프셋 <input type="range" id="sync-offset" min="-500" max="500" step="10" /> <span id="sync-offset-val"></span> ms</label>
+      <div class="muted small">양수면 코드가 더 일찍 바뀝니다.</div>
+    </div>
+    <div class="card small muted">
+      개인용 프로토타입입니다. 코드표는 이 브라우저의 chrome.storage.local에만 저장됩니다.
+    </div>
+  </section>
+
+  <script src="sidepanel.js"></script>
+</body>
+</html>

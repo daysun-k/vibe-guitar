@@ -1,0 +1,127 @@
+{
+  "schemaVersion": 1,
+  "recording": {
+    "source": "youtube",
+    "id": "EXAMPLE-AB-POP",
+    "title": "[EXAMPLE – fake timings] I–V–vi–IV pop progression in Ab",
+    "artist": "Example (not a real recording)"
+  },
+  "timing": {
+    "bpm": 96,
+    "beatsPerBar": 4,
+    "beatUnit": 4,
+    "firstDownbeatSec": 2,
+    "feel": "straight"
+  },
+  "events": [
+    {
+      "startSec": 2,
+      "chord": "Ab",
+      "confidence": 1,
+      "source": "manual"
+    },
+    {
+      "startSec": 4.5,
+      "chord": "Eb",
+      "confidence": 1,
+      "source": "manual"
+    },
+    {
+      "startSec": 7,
+      "chord": "Fm",
+      "confidence": 1,
+      "source": "manual"
+    },
+    {
+      "startSec": 9.5,
+      "chord": "Db",
+      "confidence": 1,
+      "source": "manual"
+    },
+    {
+      "startSec": 12,
+      "chord": "Ab",
+      "confidence": 1,
+      "source": "manual"
+    },
+    {
+      "startSec": 14.5,
+      "chord": "Eb",
+      "confidence": 1,
+      "source": "manual"
+    },
+    {
+      "startSec": 17,
+      "chord": "Fm",
+      "confidence": 1,
+      "source": "manual"
+    },
+    {
+      "startSec": 19.5,
+      "chord": "Db",
+      "confidence": 1,
+      "source": "manual"
+    },
+    {
+      "startSec": 22,
+      "chord": "Bbm7",
+      "confidence": 1,
+      "source": "manual"
+    },
+    {
+      "startSec": 24.5,
+      "chord": "Eb7sus4",
+      "confidence": 1,
+      "source": "manual"
+    },
+    {
+      "startSec": 27,
+      "chord": "Eb",
+      "confidence": 1,
+      "source": "manual"
+    },
+    {
+      "startSec": 29.5,
+      "chord": "Ab/C",
+      "confidence": 1,
+      "source": "manual"
+    },
+    {
+      "startSec": 32,
+      "chord": "Db",
+      "confidence": 1,
+      "source": "manual"
+    },
+    {
+      "startSec": 34.5,
+      "chord": "Eb",
+      "confidence": 1,
+      "source": "manual"
+    },
+    {
+      "startSec": 37,
+      "chord": "Ab",
+      "confidence": 1,
+      "source": "manual"
+    },
+    {
+      "startSec": 39.5,
+      "chord": "Ab",
+      "confidence": 1,
+      "source": "manual"
+    }
+  ],
+  "coverage": [
+    {
+      "fromSec": 0,
+      "toSec": 42
+    }
+  ],
+  "provenance": {
+    "createdBy": "manual",
+    "createdAt": "2026-11-09T00:00:00Z",
+    "tool": "hand-written example",
+    "note": "EXAMPLE ONLY: timings are fake (uniform 1 chord per bar at 96 bpm). Use \"attach to current video\" in the editor to try it on any song. Capo 1 gives G–D–Em–C shapes.",
+    "example": true
+  }
+}
