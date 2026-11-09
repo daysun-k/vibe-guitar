@@ -14,7 +14,12 @@ Things only a person with Chrome, a guitar and the real services can check. Reco
 - [ ] **Ads**: when an ad plays, the header shows "광고" and the red banner appears; chords do not advance.
       Note whether detection missed any ad format.
 - [ ] **YouTube Music**: open `music.youtube.com`, play a song from search, a playlist and the radio queue.
-      The id matches the `v=` of the song; title and artist are right; next-track changes are picked up.
+      The id matches the song that is actually playing; title and artist are right; next-track changes are
+      picked up.
+- [ ] **YouTube Music recording identity**: open `music.youtube.com/watch?v=iKzRIweSBLA`. If the player plays
+      a different recording (e.g. "Perfect Duet"), the header shows that recording's own id (not
+      iKzRIweSBLA) and a yellow notice "주소의 v=iKzRIweSBLA와 다른 녹음이 재생 중입니다". Record both ids.
+      A chart saved now is stored under the playing id (check 편집 → JSON 내보내기 file name).
 - [ ] Switching browser tabs: the panel follows the active tab's player.
 - [ ] Measure drift: with a hand-made chart, does the chord change land on the audible change? Adjust
       설정 → 싱크 보정 and write down the offset that feels right (ms) for each site.
@@ -60,8 +65,32 @@ For each song:
       stamps under B, and returning to A restores the draft.
 - [ ] Overall: could you play along without stopping? Write the top 3 annoyances.
 
-## D. Known limits to keep in mind while testing
+## D. Listening mode (recognition)
+
+Use songs with no chart first. Note Chrome version and the 캡처 tab "실행 방식" (wasm or webgpu).
+
+- [ ] Click the toolbar icon on a playing YouTube song. 캡처 tab: 인식 모델 "준비됨" within ~5 s.
+- [ ] 연주 tab: the "듣기 모드 · 인식 중" card shows a chord that changes with the music, about 1 s late.
+      Note how often it is right for 3 songs you know (rough %).
+- [ ] Pause → card says "기록 멈춤: 일시정지"; seek ahead → coverage shows 2 ranges; 1.25x → "재생 속도"
+      and no recording; ad → "광고 중".
+- [ ] Let one song play to the end (≥ 90 % heard): an auto chart appears in the play view with "자동 코드표
+      (사람이 확인하지 않음)" and "불확실" badges on low-confidence chords. Note analysis seconds shown.
+- [ ] Press "들은 구간으로 자동 코드표 만들기" after half a song: the play view shows chords only for the heard
+      range and "코드표 구간 끝" at its end.
+- [ ] On a song with a hand-made chart: let it build an auto chart. Your chart must stay in use; the card shows
+      "직접 만든 코드표와의 일치율 …". Record the numbers (this is the user-chart vs auto-chart evaluation).
+      Try "자동 코드표로 바꾸기" → confirm dialog; cancel keeps your chart.
+- [ ] Open the bench page (캡처 tab link), run WASM with 6 clips and WebGPU with 6 clips; record the latency
+      lines and the summary.
+- [ ] Watch CPU in Chrome's task manager (offscreen document) during listening; record the % and whether the
+      tab audio ever stutters.
+- [ ] Sync check: do auto-chart chord changes land on the audible change? Note the offset (ms) if any.
+
+## E. Known limits to keep in mind while testing
 
 - Example charts have fake timings; use them only to try the UI.
-- No chord or beat recognition in this slice; the 20-song accuracy benchmark is the next slice.
+- Recognition accuracy was measured only on synthetic audio (docs/phase0-benchmark.md); real-song accuracy is
+  what section D and the 20-song evaluation should measure.
+- The capture-to-playback latency used to place audio on the timeline is a fixed 50 ms guess.
 - Apple Music support is experimental and may stop working when the site changes.
