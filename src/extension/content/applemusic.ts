@@ -13,6 +13,9 @@ import {
   type PlayerControlResult,
   type PlayerStateMessage,
 } from '../messages';
+import { claimInstance, onRuntimeMessage } from './instance';
+
+const instanceSignal = claimInstance('__vibeGuitarAppleMusic');
 
 interface MainPayload {
   via: string;
@@ -33,7 +36,7 @@ window.addEventListener('message', (e: MessageEvent) => {
   const d = e.data as { __vibeGuitar?: string; payload?: MainPayload | null; sampledAt?: number };
   if (d?.__vibeGuitar !== 'am-state' || !d.payload) return;
   lastMain = { payload: d.payload, at: Date.now(), sampledAt: d.sampledAt ?? Date.now() };
-});
+}, { signal: instanceSignal });
 
 function deepQueryMedia(root: Document | ShadowRoot): HTMLMediaElement | null {
   const direct = root.querySelector<HTMLMediaElement>('audio, video');
@@ -121,6 +124,10 @@ function report(): void {
 }
 
 const timer = setInterval(report, 250);
+instanceSignal.addEventListener('abort', () => {
+  stopped = true;
+  clearInterval(timer);
+});
 
 let controlSeq = 0;
 const pendingControls = new Map<number, (r: PlayerControlResult) => void>();
@@ -131,7 +138,7 @@ window.addEventListener('message', (e: MessageEvent) => {
   if (d?.__vibeGuitar !== 'am-control-result' || typeof d.seq !== 'number') return;
   pendingControls.get(d.seq)?.({ ok: !!d.ok, reason: d.reason });
   pendingControls.delete(d.seq);
-});
+}, { signal: instanceSignal });
 
 /** Ask the page-world script to call the public MusicKit play/pause/seekToTime API. */
 function controlViaMusicKit(msg: PlayerControlMessage): Promise<PlayerControlResult> {
@@ -145,7 +152,7 @@ function controlViaMusicKit(msg: PlayerControlMessage): Promise<PlayerControlRes
   });
 }
 
-chrome.runtime.onMessage.addListener((msg: ExtensionMessage, _sender, sendResponse) => {
+onRuntimeMessage(instanceSignal, (msg: ExtensionMessage, _sender, sendResponse) => {
   if (msg.type !== 'player-control') return;
   const viaMusicKit = lastMain !== null && Date.now() - lastMain.at < 1500 && lastMain.payload.via === 'musickit';
   if (viaMusicKit) {

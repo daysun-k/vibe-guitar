@@ -163,7 +163,7 @@ function recompute(): void {
 function renderHeader(): void {
   if (!player) {
     setText('rec-title', '재생 중인 곡이 없습니다 (YouTube · YouTube Music · Apple Music 탭을 여세요)');
-    setText('rec-meta', '');
+    setText('rec-meta', '음악 탭이 열려 있는데도 이 문구가 계속 보이면 그 탭을 새로고침하세요.');
     return;
   }
   const r = player.recording;

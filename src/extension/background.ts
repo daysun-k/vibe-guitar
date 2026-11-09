@@ -4,12 +4,15 @@
  */
 import type { AutoChartSavedMessage, CaptureStartMessage, CaptureStatusMessage, CommandMessage, ExtensionMessage } from './messages';
 import { handleChartWrite, serviceWorkerChartStore } from './storage';
+import { reinjectContentScripts } from './reinject';
 
 const OFFSCREEN_URL = 'offscreen.html';
 
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener((details) => {
   // We open the panel ourselves so that action.onClicked still fires (needed for tabCapture).
   void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false }).catch(() => undefined);
+  // Reconnect tabs that were already open when the extension was installed or reloaded.
+  void reinjectContentScripts(details.reason).catch((e: unknown) => console.warn('reinject failed', e));
 });
 
 function broadcast(msg: ExtensionMessage): void {
