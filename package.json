@@ -8,13 +8,19 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "build": "node scripts/build.mjs",
-    "watch": "node scripts/build.mjs --watch"
+    "watch": "node scripts/build.mjs --watch",
+    "fetch-models": "node scripts/fetch-models.mjs",
+    "bench": "node scripts/bench.mjs"
   },
   "devDependencies": {
     "@types/chrome": "^0.3.7",
     "ajv": "^8.20.0",
     "esbuild": "^0.28.2",
+    "onnxruntime-node": "^1.31.1",
     "typescript": "^7.0.2",
     "vitest": "^5.1.0"
+  },
+  "dependencies": {
+    "onnxruntime-web": "^1.31.1"
   }
 }

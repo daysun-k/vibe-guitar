@@ -11,6 +11,7 @@ const watch = process.argv.includes('--watch');
 const entryPoints = {
   background: 'src/extension/background.ts',
   'content-youtube': 'src/extension/content/youtube.ts',
+  'youtube-main': 'src/extension/content/youtube-main.ts',
   'content-applemusic': 'src/extension/content/applemusic.ts',
   'applemusic-main': 'src/extension/content/applemusic-main.ts',
   offscreen: 'src/extension/offscreen/offscreen.ts',

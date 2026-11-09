@@ -5,6 +5,7 @@
  */
 import type { Recording } from '../../chart/types';
 import { sendQuietly, type ExtensionMessage, type PlayerControlResult, type PlayerStateMessage } from '../messages';
+import { chooseRecordingId, isVideoId, type PlayerVideoData, type RecordingIdChoice } from './recording-id';
 
 const adapter: 'youtube' | 'ytmusic' = location.hostname === 'music.youtube.com' ? 'ytmusic' : 'youtube';
 const TICK_MS = 250;
@@ -24,16 +25,27 @@ export function videoIdFromUrl(href: string): string | null {
   return m ? m[2] : null;
 }
 
-function videoIdFromPage(): string | null {
-  const fromUrl = videoIdFromUrl(location.href);
-  if (fromUrl) return fromUrl;
-  if (adapter === 'ytmusic') {
-    // Player bar link (when the URL is a playlist / home while a song plays).
-    const a = document.querySelector<HTMLAnchorElement>('ytmusic-player-bar a[href*="watch?v="]');
-    if (a) return videoIdFromUrl(a.href);
-  }
-  return null;
+/** Player bar link (when the URL is a playlist / home while a song plays). */
+function playerBarId(): string | null {
+  if (adapter !== 'ytmusic') return null;
+  const a = document.querySelector<HTMLAnchorElement>('ytmusic-player-bar a[href*="watch?v="]');
+  return a ? videoIdFromUrl(a.href) : null;
 }
+
+/** Latest report of the page's own player (MAIN world, YouTube Music only). */
+let playerData: PlayerVideoData | null = null;
+let lastChoice: RecordingIdChoice | null = null;
+
+window.addEventListener('message', (e: MessageEvent) => {
+  if (e.source !== window || e.origin !== location.origin) return;
+  const d = e.data as { __vibeGuitar?: string; payload?: Partial<PlayerVideoData> | null };
+  if (d?.__vibeGuitar !== 'yt-video-data') return;
+  const p = d.payload;
+  playerData =
+    p && isVideoId(p.videoId)
+      ? { videoId: p.videoId, title: String(p.title ?? ''), author: String(p.author ?? ''), sampledAt: Number(p.sampledAt) || Date.now() }
+      : null;
+});
 
 function text(sel: string): string {
   return document.querySelector(sel)?.textContent?.trim() ?? '';
@@ -63,19 +75,32 @@ let lastHref = location.href;
 function report(note?: string): void {
   if (stopped) return;
   const video = getVideo();
-  const id = videoIdFromPage();
+  const isAd = isAdShowing();
+  const choice = chooseRecordingId({
+    urlId: videoIdFromUrl(location.href),
+    playerBarId: playerBarId(),
+    player: playerData,
+    isAd,
+    previous: lastChoice,
+    now: Date.now(),
+  });
+  if (!isAd) lastChoice = choice;
   const meta = metadata();
-  const recording: Recording | null = id ? { source: adapter, id, title: meta.title, artist: meta.artist } : null;
+  const title = meta.title || choice?.title || '';
+  const artist = meta.artist || choice?.artist || '';
+  const recording: Recording | null = choice ? { source: adapter, id: choice.id, title, artist } : null;
   const msg: PlayerStateMessage = {
     type: 'player-state',
     adapter,
     via: video ? 'video-element' : 'unreachable',
     recording,
+    idSource: choice?.source,
+    urlIdMismatch: choice?.urlIdMismatch,
     currentTime: video?.currentTime ?? 0,
     duration: video && Number.isFinite(video.duration) ? video.duration : 0,
     paused: video ? video.paused : true,
     playbackRate: video?.playbackRate ?? 1,
-    isAd: isAdShowing(),
+    isAd,
     sampledAt: Date.now(),
     url: location.href,
     note,

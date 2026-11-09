@@ -21,6 +21,12 @@
       "run_at": "document_idle"
     },
     {
+      "matches": ["https://music.youtube.com/*"],
+      "js": ["youtube-main.js"],
+      "run_at": "document_idle",
+      "world": "MAIN"
+    },
+    {
       "matches": ["https://music.apple.com/*"],
       "js": ["content-applemusic.js"],
       "run_at": "document_idle"

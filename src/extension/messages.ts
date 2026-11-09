@@ -1,5 +1,6 @@
 /** Messages exchanged between content scripts, service worker, offscreen document and side panel. */
-import type { Recording, RecordingSource } from '../chart/types';
+import type { Chart, CoverageRange, Recording, RecordingSource } from '../chart/types';
+import type { RecordingIdSource } from './content/recording-id';
 
 export type AdapterVia = 'video-element' | 'musickit' | 'media-element' | 'unreachable';
 
@@ -9,6 +10,13 @@ export interface PlayerStateMessage {
   /** How the position was read (Apple Music adapter is experimental). */
   via: AdapterVia;
   recording: Recording | null;
+  /**
+   * YouTube adapters: where recording.id came from. 'player' = what the page's player is
+   * playing; 'url' / 'player-bar' = fallback (could differ from the audio on YouTube Music).
+   */
+  idSource?: RecordingIdSource;
+  /** URL `v=` when it names a different recording than the one playing. */
+  urlIdMismatch?: string;
   currentTime: number;
   duration: number;
   paused: boolean;
