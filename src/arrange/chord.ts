@@ -108,7 +108,11 @@ function parseQuality(raw: string, input: string): Quality {
     halfDim = true;
     seventh = 'b7';
     eat(/^7/);
-  } else if (eat(/^(aug|\+)(?!\d)/)) triad = 'aug';
+  } else if (eat(/^(aug|\+(?!(5|9|11|13)\b))/)) {
+    // "Caug7", "C+7", "Caugmaj7": a seventh/extension may follow the augmented triad.
+    triad = 'aug';
+    if (eat(/^(maj|Maj|Ma|M|Δ|△)/)) majFlag = true;
+  }
 
   const num = halfDim ? null : eat(/^(6\/9|69|13|11|9|7|6|5)/);
   if (num) {

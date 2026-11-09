@@ -22,7 +22,15 @@ import {
   undoStamp,
   type StampState,
 } from '../../editor/core';
-import type { CaptureStatsMessage, CaptureStatusMessage, ExtensionMessage, PlayerControlMessage, PlayerStateMessage } from '../messages';
+import { DraftBook, checkSaveTarget, isDraftEmpty, reattachDraft, recordingKeyOf, type EditorDraft } from '../../editor/drafts';
+import type {
+  CaptureStatsMessage,
+  CaptureStatusMessage,
+  ExtensionMessage,
+  PlayerControlMessage,
+  PlayerControlResult,
+  PlayerStateMessage,
+} from '../messages';
 import { computePlayView, estimatePosition, type PlayerSnapshot } from '../playview';
 import { loadChart, loadSettings, saveChart, saveSettings, type Settings } from '../storage';
 import { escapeHtml, renderChordDiagram } from './diagram';
@@ -58,6 +66,11 @@ let countInOverride: number | null = null;
 let editor: StampState = { chords: [], stamps: [] };
 let taps: number[] = [];
 let editorTiming: Timing = { bpm: 100, beatsPerBar: 4, beatUnit: 4, firstDownbeatSec: 0 };
+/** Recording the editor draft belongs to (drafts never follow navigation to another song). */
+let draftRecording: Recording | null = null;
+const draftBook = new DraftBook();
+/** Most recent non-empty draft left behind by navigation; can be reattached explicitly. */
+let leftDraft: EditorDraft | null = null;
 
 // ---------- player sync ----------
 function snapshot(): PlayerSnapshot | null {
@@ -84,6 +97,7 @@ async function onPlayerState(msg: PlayerStateMessage, sender: chrome.runtime.Mes
   const key = recordingKey(msg.recording);
   if (key !== chartKey) {
     chartKey = key;
+    switchDraft(msg.recording);
     await reloadChart();
     renderEditorTarget();
   }
@@ -223,7 +237,7 @@ function renderLive(): void {
     setHtml($('cur-badges'), badgesHtml(cur));
     setHtml($('cur-diagram'), cur?.voicing ? renderChordDiagram(cur.voicing, { width: 140 }) : '');
     const nx = view.next;
-    setText('next-chord', nx ? (nx.rest ? 'N.C.' : (capo ? nx.shape! : nx.sounding!)) : '끝');
+    setText('next-chord', nx ? (nx.rest ? 'N.C.' : (capo ? nx.shape! : nx.sounding!)) : view.endOfCoverage !== null ? '코드표 구간 끝' : cur ? '끝' : '–');
     setText('next-shape', shapeLine(nx, capo));
     setHtml($('next-badges'), badgesHtml(nx));
     setHtml($('next-diagram'), nx?.voicing ? renderChordDiagram(nx.voicing, { width: 100 }) : '');
@@ -293,9 +307,14 @@ function renderAppleMusicStatus(msg: PlayerStateMessage): void {
 }
 
 // ---------- player control / count-in ----------
-async function sendControl(msg: PlayerControlMessage): Promise<void> {
-  if (playerTabId === null) return;
-  await chrome.tabs.sendMessage(playerTabId, msg).catch(() => undefined);
+async function sendControl(msg: PlayerControlMessage): Promise<PlayerControlResult> {
+  if (playerTabId === null) return { ok: false, reason: 'no player tab' };
+  try {
+    const r = (await chrome.tabs.sendMessage(playerTabId, msg)) as PlayerControlResult | undefined;
+    return r ?? { ok: false, reason: 'the player did not answer' };
+  } catch (e) {
+    return { ok: false, reason: e instanceof Error ? e.message : String(e) };
+  }
 }
 
 let clickCtx: AudioContext | null = null;
@@ -317,8 +336,18 @@ async function countInAndPlay(): Promise<void> {
   if (!chart || !player) return;
   const t = chart.timing;
   const target = Math.max(0, previousDownbeat(t, positionNow(false)));
-  await sendControl({ type: 'player-control', action: 'pause' });
-  await sendControl({ type: 'player-control', action: 'seek', time: target });
+  setText('countin-status', '');
+  // Stop before showing the count-in overlay when the player cannot be controlled.
+  const paused = await sendControl({ type: 'player-control', action: 'pause' });
+  if (!paused.ok) {
+    setText('countin-status', `이 플레이어에서는 카운트인 재생을 지원하지 않습니다 (${paused.reason ?? '알 수 없음'}).`);
+    return;
+  }
+  const seek = await sendControl({ type: 'player-control', action: 'seek', time: target });
+  if (!seek.ok) {
+    setText('countin-status', `마디 처음으로 이동하지 못했습니다 (${seek.reason ?? '알 수 없음'}). 카운트인을 취소했습니다.`);
+    return;
+  }
   const beatMs = 60000 / t.bpm / (player.playbackRate || 1);
   for (let i = 1; i <= t.beatsPerBar; i++) {
     countInOverride = i;
@@ -326,7 +355,8 @@ async function countInAndPlay(): Promise<void> {
     await new Promise((r) => setTimeout(r, beatMs));
   }
   countInOverride = null;
-  await sendControl({ type: 'player-control', action: 'play' });
+  const play = await sendControl({ type: 'player-control', action: 'play' });
+  if (!play.ok) setText('countin-status', `재생을 다시 시작하지 못했습니다 (${play.reason ?? '알 수 없음'}).`);
 }
 
 // ---------- editor ----------
@@ -334,9 +364,74 @@ function currentRecording(): Recording | null {
   return player?.recording ?? null;
 }
 
+function currentDraft(): EditorDraft {
+  return {
+    recordingKey: recordingKeyOf(draftRecording),
+    recording: draftRecording,
+    seqText: $<HTMLTextAreaElement>('seq').value,
+    chords: [...editor.chords],
+    stamps: [...editor.stamps],
+    timing: readEditorTiming(),
+  };
+}
+
+function applyDraft(d: EditorDraft): void {
+  draftRecording = d.recording;
+  $<HTMLTextAreaElement>('seq').value = d.seqText;
+  editor = { chords: [...d.chords], stamps: [...d.stamps] };
+  writeEditorTiming(d.timing);
+  taps = [];
+  setText('seq-status', d.chords.length ? `${d.chords.length}개 코드` : '');
+  setText('tap-status', '첫 탭은 마디의 첫 박(다운비트)에 맞춰 누르고, 이후 박마다 누릅니다.');
+  renderStamps();
+}
+
+/** Store the draft of the song we leave and restore (or start) the draft of the new one. */
+function switchDraft(next: Recording | null): void {
+  const cur = currentDraft();
+  if (!cur.recordingKey) {
+    // An unbound draft (typed before any song was detected; it cannot have stamps) is
+    // adopted by the next song; an empty one restores that song's stored draft.
+    applyDraft(next && !isDraftEmpty(cur) ? reattachDraft(cur, next) : draftBook.switchTo(cur, next));
+    renderReattach();
+    return;
+  }
+  if (!isDraftEmpty(cur) && cur.recordingKey !== recordingKeyOf(next)) leftDraft = cur;
+  applyDraft(draftBook.switchTo(cur, next));
+  renderReattach();
+}
+
+function renderReattach(): void {
+  const btn = $('draft-reattach');
+  const show = !!leftDraft && !!currentRecording() && leftDraft.recordingKey !== recordingKeyOf(currentRecording());
+  btn.hidden = !show;
+  if (show) setText('draft-reattach', `이전 곡(${leftDraft!.recording?.title || leftDraft!.recordingKey})의 초안을 이 곡으로 옮기기`);
+}
+
+function doReattach(): void {
+  const r = currentRecording();
+  if (!leftDraft || !r) return;
+  if (!isDraftEmpty(currentDraft()) && !confirm('지금 곡의 편집 초안을 이전 곡 초안으로 바꿀까요?')) return;
+  draftBook.delete(leftDraft.recordingKey);
+  applyDraft(reattachDraft(leftDraft, r));
+  leftDraft = null;
+  renderReattach();
+  setStatus('save-status', '이전 곡의 초안을 이 곡에 연결했습니다. 타이밍이 맞는지 확인하세요.', false);
+}
+
+/** Stamping/tapping only for the song the draft belongs to. */
+function draftMatchesPlayer(): boolean {
+  if (!player || !draftRecording || recordingKeyOf(player.recording) !== recordingKeyOf(draftRecording)) {
+    setStatus('save-status', '편집 초안이 지금 재생 중인 곡과 다릅니다. 찍기/탭을 무시했습니다.', true);
+    return false;
+  }
+  return true;
+}
+
 function renderEditorTarget(): void {
   const r = currentRecording();
   setText('edit-target', r ? `${r.source} · ${r.id} · ${r.title}` : '재생 중인 곡이 없습니다.');
+  renderReattach();
   setText('edit-existing', chart ? `저장된 코드표: 코드 ${chart.events.length}개, ${chart.timing.bpm} BPM${chart.provenance.example ? ' (예시)' : ''}` : '저장된 코드표 없음');
 }
 
@@ -375,13 +470,13 @@ function parseSequenceFromTextarea(): void {
 }
 
 function doStamp(): void {
-  if (!player) return;
+  if (!draftMatchesPlayer()) return;
   editor = stamp(editor, positionNow(false));
   renderStamps();
 }
 
 function doTap(): void {
-  if (!player) return;
+  if (!draftMatchesPlayer()) return;
   taps = addTap(taps, positionNow(false));
   const fit = fitTapTempo(taps);
   if (fit) {
@@ -391,13 +486,21 @@ function doTap(): void {
 }
 
 async function doSave(): Promise<void> {
-  const r = currentRecording();
-  if (!r) return setStatus('save-status', '재생 중인 곡이 없습니다.', true);
+  const check = checkSaveTarget(currentDraft(), currentRecording());
+  if (!check.ok) {
+    return setStatus(
+      'save-status',
+      check.reason === 'no-recording' ? '재생 중인 곡이 없습니다.' : '이 초안은 다른 곡에서 만들었습니다. 저장하지 않았습니다(옮기려면 "초안을 이 곡으로 옮기기"를 누르세요).',
+      true,
+    );
+  }
+  const r = check.recording;
   if (!editor.stamps.length) return setStatus('save-status', '찍은 코드가 없습니다.', true);
   try {
     const timing = readEditorTiming();
     const stamps = $<HTMLInputElement>('quantize').checked ? quantizeStamps(editor.stamps, timing, 2) : editor.stamps;
-    const built = buildChart({ recording: r, timing, chords: editor.chords, stamps, durationSec: player?.duration || undefined, existing: chart });
+    const existing = chartKey === recordingKeyOf(r) ? chart : null;
+    const built = buildChart({ recording: r, timing, chords: editor.chords, stamps, durationSec: player?.duration || undefined, existing });
     await saveChart(built);
     chart = built;
     recompute();
@@ -414,7 +517,8 @@ function setStatus(id: string, text: string, error: boolean): void {
 }
 
 function loadExistingIntoEditor(): void {
-  if (!chart) return;
+  if (!chart || !player?.recording) return;
+  draftRecording = player.recording;
   $<HTMLTextAreaElement>('seq').value = chartToSequenceText(chart);
   editor = { chords: chart.events.map((e) => e.chord), stamps: chart.events.map((e) => e.startSec) };
   writeEditorTiming(chart.timing);
@@ -579,6 +683,7 @@ function bindEditor(): void {
   $('downbeat-now').onclick = () => writeEditorTiming({ ...readEditorTiming(), firstDownbeatSec: Math.round(positionNow(false) * 1000) / 1000 });
   $('save-chart').onclick = () => void doSave();
   $('edit-load-existing').onclick = loadExistingIntoEditor;
+  $('draft-reattach').onclick = doReattach;
   $('export-json').onclick = exportJson;
   $<HTMLInputElement>('import-json').onchange = (e) => {
     const f = (e.target as HTMLInputElement).files?.[0];
@@ -663,6 +768,7 @@ async function main(): Promise<void> {
   });
   // Switching tabs: forget the old player until the new active tab reports.
   chrome.tabs.onActivated.addListener(() => {
+    switchDraft(null);
     player = null;
     playerTabId = null;
     chartKey = '';

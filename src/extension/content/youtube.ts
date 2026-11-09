@@ -4,7 +4,7 @@
  * and accepts play/pause/seek controls for the count-in.
  */
 import type { Recording } from '../../chart/types';
-import { sendQuietly, type ExtensionMessage, type PlayerStateMessage } from '../messages';
+import { sendQuietly, type ExtensionMessage, type PlayerControlResult, type PlayerStateMessage } from '../messages';
 
 const adapter: 'youtube' | 'ytmusic' = location.hostname === 'music.youtube.com' ? 'ytmusic' : 'youtube';
 const TICK_MS = 250;
@@ -109,14 +109,18 @@ for (const ev of ['yt-navigate-finish', 'yt-page-data-updated']) {
   document.addEventListener(ev, () => report('navigation'));
 }
 
-chrome.runtime.onMessage.addListener((msg: ExtensionMessage) => {
+chrome.runtime.onMessage.addListener((msg: ExtensionMessage, _sender, sendResponse) => {
   if (msg.type !== 'player-control') return;
   const video = getVideo();
-  if (!video) return;
+  if (!video) {
+    sendResponse({ ok: false, reason: 'no video element on this page' } satisfies PlayerControlResult);
+    return;
+  }
   if (msg.action === 'seek' && typeof msg.time === 'number') video.currentTime = Math.max(0, msg.time);
   if (msg.action === 'pause') video.pause();
   if (msg.action === 'play') void video.play().catch(() => undefined);
   report(`control:${msg.action}`);
+  sendResponse({ ok: true } satisfies PlayerControlResult);
 });
 
 report('init');

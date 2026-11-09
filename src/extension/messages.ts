@@ -26,6 +26,13 @@ export interface PlayerControlMessage {
   time?: number;
 }
 
+/** Reply of a content script to a PlayerControlMessage. */
+export interface PlayerControlResult {
+  ok: boolean;
+  /** Present when ok is false, e.g. "unsupported on this player". */
+  reason?: string;
+}
+
 export interface CaptureStartMessage {
   type: 'capture-start';
   target: 'offscreen';

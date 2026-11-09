@@ -32,6 +32,8 @@ Things only a person with Chrome, a guitar and the real services can check. Reco
             proposal, Apple Music is then unsupported (no circumvention).
       - [ ] 캡처 tab → "Apple Music 어댑터 (실험)": record which path worked: MusicKit, media element, or
             unreachable; whether the position advances and the song id is present.
+      - [ ] 연주 tab → "이 마디 처음부터 카운트인 후 재생": either it pauses, jumps, counts and plays (MusicKit
+            bridge), or it shows "이 플레이어에서는 카운트인 재생을 지원하지 않습니다" without a count-in overlay.
 
 ## C. Play-along with 3–5 hand-made charts
 
@@ -52,6 +54,10 @@ For each song:
 - [ ] Mark a few shapes as "잡을 수 있음" in "이 곡에 나오는 코드": does the arrangement prefer them?
 - [ ] Strumming suggestion: is the pattern sensible for the meter and level?
 - [ ] "이 마디 처음부터 카운트인 후 재생": pauses, jumps to the bar start, counts 1–N (click sound), then plays.
+- [ ] Coverage gaps: in a chart whose coverage skips a section, the panel shows no chord in the gap and
+      "코드표 구간 끝" instead of a next chord just before the gap.
+- [ ] Drafts: start a chart on song A, skip to song B: the editor is empty for B, saving cannot write A's
+      stamps under B, and returning to A restores the draft.
 - [ ] Overall: could you play along without stopping? Write the top 3 annoyances.
 
 ## D. Known limits to keep in mind while testing

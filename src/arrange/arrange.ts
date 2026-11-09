@@ -67,27 +67,53 @@ export interface ArrangeOptions {
 const UNPLAYABLE_COST = 50;
 const UNCERTAIN_BELOW = 0.5;
 
-/** Chart events → events with end times (next start, coverage end, or one bar). */
+/**
+ * Chart events → events with end times. Each event ends at the next event or at the
+ * end of the coverage interval it starts in, whichever comes first (the last event of an
+ * interval lasts to the interval end); events that start outside every coverage interval
+ * are dropped. With no coverage at all, the last event lasts one bar.
+ */
 export function chartToInputEvents(chart: Chart): ArrangeInputEvent[] {
-  const covEnd = chart.coverage.length ? Math.max(...chart.coverage.map((c) => c.toSec)) : -Infinity;
-  return chart.events.map((e, i) => {
+  const cov = [...chart.coverage].sort((a, b) => a.fromSec - b.fromSec);
+  const out: ArrangeInputEvent[] = [];
+  chart.events.forEach((e, i) => {
     const next = chart.events[i + 1];
-    const fallbackEnd = Math.max(covEnd, e.startSec + barSeconds(chart.timing));
-    return { startSec: e.startSec, endSec: next ? next.startSec : fallbackEnd, chord: e.chord, confidence: e.confidence };
+    let end: number;
+    if (cov.length) {
+      const range = cov.find((c) => e.startSec >= c.fromSec && e.startSec < c.toSec);
+      if (!range) return;
+      end = next ? Math.min(next.startSec, range.toSec) : range.toSec;
+    } else {
+      end = next ? next.startSec : e.startSec + barSeconds(chart.timing);
+    }
+    out.push({ startSec: e.startSec, endSec: end, chord: e.chord, confidence: e.confidence });
   });
+  return out;
 }
 
 interface WorkEvent extends ArrangeInputEvent {
   mergedFrom: string[];
 }
 
-/** Merge chords shorter than level.minChordBeats into the previous chord. */
+const GAP_EPS = 1e-6;
+
+/**
+ * Merge chords shorter than level.minChordBeats into the previous chord. Never merges
+ * across a rest ("N") on either side, nor across a coverage gap.
+ */
 export function mergeShortEvents(events: ArrangeInputEvent[], timing: Timing, minBeats: number): WorkEvent[] {
   const out: WorkEvent[] = [];
   for (const e of events) {
     const beats = beatsBetween(timing, e.startSec, e.endSec);
     const prev = out[out.length - 1];
-    if (prev && minBeats > 0 && beats < minBeats - 1e-6) {
+    const mergeable =
+      prev !== undefined &&
+      minBeats > 0 &&
+      beats < minBeats - 1e-6 &&
+      !isNoChord(e.chord) &&
+      !isNoChord(prev.chord) &&
+      prev.endSec >= e.startSec - GAP_EPS;
+    if (mergeable) {
       prev.endSec = e.endSec;
       prev.mergedFrom.push(e.chord);
       continue;
@@ -180,8 +206,9 @@ export function arrangeEvents(input: ArrangeInputEvent[], timing: Timing, opts: 
       }
       const prevCands = plans[i - 1].candidates;
       const pressure = timePressure(events[i - 1].endSec - events[i - 1].startSec, profile);
+      const gap = events[i - 1].endSec < events[i].startSec - GAP_EPS;
       for (let k = 0; k < prevCands.length; k++) {
-        const t = transitionCost(prevCands[k].voicing, cands[j].voicing) * pressure;
+        const t = gap ? 0 : transitionCost(prevCands[k].voicing, cands[j].voicing) * pressure;
         const total = best[i - 1][k] + t + cands[j].cost;
         if (total < best[i][j]) {
           best[i][j] = total;

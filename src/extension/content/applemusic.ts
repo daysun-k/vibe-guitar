@@ -5,7 +5,14 @@
  *   3. reports "unreachable" so the side panel can show that result.
  */
 import type { Recording } from '../../chart/types';
-import { sendQuietly, type AdapterVia, type ExtensionMessage, type PlayerStateMessage } from '../messages';
+import {
+  sendQuietly,
+  type AdapterVia,
+  type ExtensionMessage,
+  type PlayerControlMessage,
+  type PlayerControlResult,
+  type PlayerStateMessage,
+} from '../messages';
 
 interface MainPayload {
   via: string;
@@ -115,9 +122,43 @@ function report(): void {
 
 const timer = setInterval(report, 250);
 
-chrome.runtime.onMessage.addListener((msg: ExtensionMessage) => {
-  if (msg.type !== 'player-control' || !media) return;
+let controlSeq = 0;
+const pendingControls = new Map<number, (r: PlayerControlResult) => void>();
+
+window.addEventListener('message', (e: MessageEvent) => {
+  if (e.source !== window || e.origin !== location.origin) return;
+  const d = e.data as { __vibeGuitar?: string; seq?: number; ok?: boolean; reason?: string };
+  if (d?.__vibeGuitar !== 'am-control-result' || typeof d.seq !== 'number') return;
+  pendingControls.get(d.seq)?.({ ok: !!d.ok, reason: d.reason });
+  pendingControls.delete(d.seq);
+});
+
+/** Ask the page-world script to call the public MusicKit play/pause/seekToTime API. */
+function controlViaMusicKit(msg: PlayerControlMessage): Promise<PlayerControlResult> {
+  const seq = ++controlSeq;
+  return new Promise((resolve) => {
+    pendingControls.set(seq, resolve);
+    window.postMessage({ __vibeGuitar: 'am-control', seq, action: msg.action, time: msg.time }, location.origin);
+    setTimeout(() => {
+      if (pendingControls.delete(seq)) resolve({ ok: false, reason: 'MusicKit did not answer' });
+    }, 1000);
+  });
+}
+
+chrome.runtime.onMessage.addListener((msg: ExtensionMessage, _sender, sendResponse) => {
+  if (msg.type !== 'player-control') return;
+  const viaMusicKit = lastMain !== null && Date.now() - lastMain.at < 1500 && lastMain.payload.via === 'musickit';
+  if (viaMusicKit) {
+    void controlViaMusicKit(msg).then(sendResponse);
+    return true; // async response
+  }
+  if (!media) {
+    sendResponse({ ok: false, reason: 'unsupported on this player: no reachable MusicKit or media element' } satisfies PlayerControlResult);
+    return;
+  }
   if (msg.action === 'seek' && typeof msg.time === 'number') media.currentTime = msg.time;
   if (msg.action === 'pause') media.pause();
   if (msg.action === 'play') void media.play().catch(() => undefined);
+  sendResponse({ ok: true } satisfies PlayerControlResult);
+  return;
 });

@@ -11,6 +11,9 @@ interface MusicKitItem {
   attributes?: { name?: string; artistName?: string };
 }
 interface MusicKitInstance {
+  play?: () => Promise<unknown> | unknown;
+  pause?: () => Promise<unknown> | unknown;
+  seekToTime?: (t: number) => Promise<unknown> | unknown;
   currentPlaybackTime?: number;
   currentPlaybackDuration?: number;
   isPlaying?: boolean;
@@ -19,6 +22,21 @@ interface MusicKitInstance {
 }
 
 const w = window as unknown as { MusicKit?: { getInstance?: () => MusicKitInstance | undefined } };
+
+// Count-in controls relayed from the isolated content script (public MusicKit API only).
+window.addEventListener('message', (e: MessageEvent) => {
+  if (e.source !== window || e.origin !== location.origin) return;
+  const d = e.data as { __vibeGuitar?: string; seq?: number; action?: string; time?: number };
+  if (d?.__vibeGuitar !== 'am-control') return;
+  const reply = (ok: boolean, reason?: string): void =>
+    window.postMessage({ __vibeGuitar: 'am-control-result', seq: d.seq, ok, reason }, location.origin);
+  const mk = w.MusicKit?.getInstance?.();
+  const fn = d.action === 'play' ? mk?.play : d.action === 'pause' ? mk?.pause : d.action === 'seek' ? mk?.seekToTime : undefined;
+  if (!mk || !fn) return reply(false, 'unsupported on this player: MusicKit control not available');
+  Promise.resolve(d.action === 'seek' ? fn.call(mk, Number(d.time ?? 0)) : (fn as () => unknown).call(mk))
+    .then(() => reply(true))
+    .catch((err: unknown) => reply(false, String(err)));
+});
 
 setInterval(() => {
   let payload: Record<string, unknown> | null = null;

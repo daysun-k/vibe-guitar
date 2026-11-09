@@ -20,6 +20,7 @@ export function estimatePosition(s: PlayerSnapshot, nowMs: number, offsetMs = 0)
 export interface PlayView {
   position: number;
   current: ArrangedEvent | null;
+  /** Index of the current event; negative (and unique per gap) when no chord is active. */
   currentIndex: number;
   next: ArrangedEvent | null;
   /** Beats until the next chord change (fractional), null if no next chord. */
@@ -29,8 +30,10 @@ export interface PlayView {
   inLookAhead: boolean;
   bar: number;
   beatInBar: number;
-  /** 1..beatsPerBar while counting in to the first chord (or after a rest); else null. */
+  /** 1..beatsPerBar while counting in to the first chord (or after a rest / gap); else null. */
   countIn: number | null;
+  /** When the current chord is the last one before a coverage gap: the time the coverage ends. */
+  endOfCoverage: number | null;
 }
 
 export function findEventIndex(events: { startSec: number }[], t: number): number {
@@ -47,28 +50,40 @@ export function findEventIndex(events: { startSec: number }[], t: number): numbe
   return ans;
 }
 
+const EPS = 1e-9;
+
+/**
+ * Current/next chord at `position`. Events are half-open [startSec, endSec): outside every
+ * event (before the first, in a coverage gap, after the end) there is no current chord.
+ * While a chord is active and the coverage ends before the next event, there is no
+ * "next" chord (the next change is unknown), so the look-ahead does not jump the gap.
+ */
 export function computePlayView(a: Arrangement, timing: Timing, position: number, lookAheadBars = 1): PlayView {
   const idx = findEventIndex(a.events, position);
-  const current = idx >= 0 ? a.events[idx] : null;
-  const next = a.events[idx + 1] ?? null;
+  const candidate = idx >= 0 ? a.events[idx] : null;
+  const current = candidate && position < candidate.endSec - EPS ? candidate : null;
+  const following = a.events[idx + 1] ?? null;
+  const gapAhead = current !== null && following !== null && current.endSec < following.startSec - 1e-6;
+  const next = gapAhead ? null : following;
   const beatsUntilNext = next ? beatIndexAt(timing, next.startSec) - beatIndexAt(timing, position) : null;
   const window = lookAheadBars * timing.beatsPerBar;
-  const inLookAhead = beatsUntilNext !== null && beatsUntilNext <= window + 1e-9;
+  const inLookAhead = beatsUntilNext !== null && beatsUntilNext <= window + EPS;
   const pos = barPosition(timing, position);
   let countIn: number | null = null;
   if ((current === null || current.rest) && next && !next.rest && beatsUntilNext !== null && beatsUntilNext <= timing.beatsPerBar && beatsUntilNext > 0) {
-    countIn = Math.max(1, timing.beatsPerBar - Math.ceil(beatsUntilNext - 1e-9) + 1);
+    countIn = Math.max(1, timing.beatsPerBar - Math.ceil(beatsUntilNext - EPS) + 1);
   }
   return {
     position,
     current,
-    currentIndex: idx,
+    currentIndex: current ? idx : -1 - Math.max(0, idx + 1),
     next,
     beatsUntilNext,
-    countdown: inLookAhead && beatsUntilNext !== null ? Math.max(0, Math.ceil(beatsUntilNext - 1e-9)) : null,
+    countdown: inLookAhead && beatsUntilNext !== null ? Math.max(0, Math.ceil(beatsUntilNext - EPS)) : null,
     inLookAhead,
     bar: pos.bar,
     beatInBar: pos.beatInBar,
     countIn,
+    endOfCoverage: gapAhead ? current!.endSec : null,
   };
 }

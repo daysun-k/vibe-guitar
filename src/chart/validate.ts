@@ -109,6 +109,15 @@ export function validateChart(input: unknown): ValidationResult {
     });
   }
 
+  if (Array.isArray(events) && Array.isArray(cov) && cov.length && errors.length === 0) {
+    const ranges = cov as { fromSec: number; toSec: number }[];
+    (events as { startSec: number }[]).forEach((e, i) => {
+      if (!ranges.some((r) => e.startSec >= r.fromSec && e.startSec < r.toSec)) {
+        warnings.push(`events[${i}] starts outside every coverage range and will be ignored`);
+      }
+    });
+  }
+
   const prov = input.provenance;
   if (!isObj(prov)) errors.push('chart.provenance must be an object');
   else {
