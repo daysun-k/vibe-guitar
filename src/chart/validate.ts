@@ -3,7 +3,8 @@
  * semantic checks the schema cannot express (ordering, parseable chords).
  */
 import { isNoChord, parseChord } from '../arrange/chord';
-import type { Chart } from './types';
+import { coverageRangeAt, normalizeCoverage } from './coverage';
+import type { Chart, CoverageRange } from './types';
 
 export interface ValidationResult {
   ok: boolean;
@@ -110,9 +111,9 @@ export function validateChart(input: unknown): ValidationResult {
   }
 
   if (Array.isArray(events) && Array.isArray(cov) && cov.length && errors.length === 0) {
-    const ranges = cov as { fromSec: number; toSec: number }[];
+    const ranges = normalizeCoverage(cov as CoverageRange[]);
     (events as { startSec: number }[]).forEach((e, i) => {
-      if (!ranges.some((r) => e.startSec >= r.fromSec && e.startSec < r.toSec)) {
+      if (!coverageRangeAt(ranges, e.startSec)) {
         warnings.push(`events[${i}] starts outside every coverage range and will be ignored`);
       }
     });

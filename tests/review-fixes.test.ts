@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { arrangeChart, arrangeEvents, chartToInputEvents, chordPitchClasses, formatChord, parseChord } from '../src/arrange';
 import type { Chart, Recording, Timing } from '../src/chart/types';
 import { validateChart } from '../src/chart/validate';
+import { normalizeCoverage } from '../src/chart/coverage';
 import { DraftBook, checkSaveTarget, emptyDraft, reattachDraft } from '../src/editor/drafts';
 import { computePlayView } from '../src/extension/playview';
 
@@ -169,4 +170,67 @@ describe('finding 5: augmented sevenths and extended chords round-trip', () => {
       expect(chordPitchClasses(parseChord(once))).toEqual(chordPitchClasses(parseChord(sym)));
     },
   );
+});
+
+describe('finding 6: coverage ranges are normalized before use', () => {
+  const base = (coverage: Chart['coverage'], events: [number, string][] = [[0, 'C']]): Chart => ({
+    schemaVersion: 1,
+    recording: songA,
+    timing: { bpm: 120, beatsPerBar: 4, firstDownbeatSec: 0 },
+    events: events.map(([startSec, chord]) => ({ startSec, chord, confidence: 1, source: 'manual' as const })),
+    coverage,
+    provenance: { createdBy: 'manual', createdAt: '2026-11-09T00:00:00Z' },
+  });
+  const at = (c: Chart, t: number) => computePlayView(arrangeChart(c, { level: 'novice', capo: 0 }), c.timing, t, 1);
+
+  it('normalizeCoverage merges adjacent, overlapping and nested ranges and keeps real gaps', () => {
+    expect(
+      normalizeCoverage([
+        { fromSec: 20, toSec: 25 },
+        { fromSec: 5, toSec: 10 },
+        { fromSec: 0, toSec: 5 },
+        { fromSec: 8, toSec: 12 },
+        { fromSec: 21, toSec: 22 },
+        { fromSec: 30, toSec: 30 },
+      ]),
+    ).toEqual([
+      { fromSec: 0, toSec: 12 },
+      { fromSec: 20, toSec: 25 },
+    ]);
+  });
+
+  it('adjacent ranges [0,5]+[5,10]: C lasts to 10 and is shown at 7 s', () => {
+    const c = base([{ fromSec: 0, toSec: 5 }, { fromSec: 5, toSec: 10 }]);
+    expect(validateChart(c).warnings).toEqual([]);
+    expect(chartToInputEvents(c).map((e) => e.endSec)).toEqual([10]);
+    expect(at(c, 7).current?.sounding).toBe('C');
+    expect(at(c, 10).current).toBeNull();
+  });
+
+  it('overlapping ranges [0,6]+[5,10]: C lasts to 10', () => {
+    const c = base([{ fromSec: 0, toSec: 6 }, { fromSec: 5, toSec: 10 }]);
+    expect(chartToInputEvents(c).map((e) => e.endSec)).toEqual([10]);
+    expect(at(c, 8).current?.sounding).toBe('C');
+  });
+
+  it('nested ranges [0,10]+[2,4]: C lasts to 10', () => {
+    const c = base([{ fromSec: 2, toSec: 4 }, { fromSec: 0, toSec: 10 }]);
+    expect(chartToInputEvents(c).map((e) => e.endSec)).toEqual([10]);
+    expect(at(c, 9.5).current?.sounding).toBe('C');
+  });
+
+  it('a real gap [0,5]+[6,10] still ends C at 5 and is blank inside the gap', () => {
+    const c = base([{ fromSec: 0, toSec: 5 }, { fromSec: 6, toSec: 10 }], [[0, 'C'], [6, 'G']]);
+    expect(chartToInputEvents(c).map((e) => [e.chord, e.endSec])).toEqual([['C', 5], ['G', 10]]);
+    expect(at(c, 5.5).current).toBeNull();
+    expect(at(c, 4.5).next).toBeNull();
+    expect(at(c, 7).current?.sounding).toBe('G');
+  });
+
+  it('the validator uses the merged ranges for its coverage warning', () => {
+    const c = base([{ fromSec: 0, toSec: 5 }, { fromSec: 5, toSec: 10 }], [[0, 'C'], [5, 'G']]);
+    expect(validateChart(c).warnings).toEqual([]);
+    const gap = base([{ fromSec: 0, toSec: 5 }, { fromSec: 6, toSec: 10 }], [[0, 'C'], [5.5, 'G']]);
+    expect(validateChart(gap).warnings.join()).toMatch(/events\[1\] starts outside/);
+  });
 });

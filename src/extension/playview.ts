@@ -53,7 +53,9 @@ export function findEventIndex(events: { startSec: number }[], t: number): numbe
 const EPS = 1e-9;
 
 /**
- * Current/next chord at `position`. Events are half-open [startSec, endSec): outside every
+ * Current/next chord at `position`. Coverage is applied through the arranged events,
+ * whose end times come from normalizeCoverage (chartToInputEvents), so lookups here
+ * use the same merged ranges. Events are half-open [startSec, endSec): outside every
  * event (before the first, in a coverage gap, after the end) there is no current chord.
  * While a chord is active and the coverage ends before the next event, there is no
  * "next" chord (the next change is unknown), so the look-ahead does not jump the gap.

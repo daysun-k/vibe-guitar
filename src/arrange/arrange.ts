@@ -3,6 +3,7 @@
  * substitutions) chosen jointly by dynamic programming over
  * static difficulty + transition cost, for a given capo; plus capo suggestion.
  */
+import { coverageRangeAt, normalizeCoverage } from '../chart/coverage';
 import { beatsBetween, barSeconds } from '../chart/timing';
 import type { Chart, Timing } from '../chart/types';
 import { chordKey, formatChord, isNoChord, parseChord, transposeChord, type Chord } from './chord';
@@ -69,18 +70,18 @@ const UNCERTAIN_BELOW = 0.5;
 
 /**
  * Chart events → events with end times. Each event ends at the next event or at the
- * end of the coverage interval it starts in, whichever comes first (the last event of an
+ * end of the (normalized, merged) coverage interval it starts in, whichever comes first (the last event of an
  * interval lasts to the interval end); events that start outside every coverage interval
  * are dropped. With no coverage at all, the last event lasts one bar.
  */
 export function chartToInputEvents(chart: Chart): ArrangeInputEvent[] {
-  const cov = [...chart.coverage].sort((a, b) => a.fromSec - b.fromSec);
+  const cov = normalizeCoverage(chart.coverage);
   const out: ArrangeInputEvent[] = [];
   chart.events.forEach((e, i) => {
     const next = chart.events[i + 1];
     let end: number;
     if (cov.length) {
-      const range = cov.find((c) => e.startSec >= c.fromSec && e.startSec < c.toSec);
+      const range = coverageRangeAt(cov, e.startSec);
       if (!range) return;
       end = next ? Math.min(next.startSec, range.toSec) : range.toSec;
     } else {
