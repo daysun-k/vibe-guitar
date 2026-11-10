@@ -136,6 +136,17 @@ export type ChartWriteMessage =
 /** Service worker → side panel: reply to a ChartWriteMessage. */
 export type ChartWriteResult = { ok: true; chart?: Chart | null } | { ok: false; error: string };
 
+/**
+ * Side panel → service worker: lyrics for a recording (cache first; LRCLIB only when
+ * allowFetch is true). Reply: LyricsReply from lyrics-service.ts.
+ */
+export interface LyricsGetMessage {
+  type: 'lyrics-get';
+  recording: Recording;
+  durationSec: number;
+  allowFetch: boolean;
+}
+
 export interface CommandMessage {
   type: 'command';
   command: 'stamp-chord' | 'tap-tempo';
@@ -153,7 +164,8 @@ export type ExtensionMessage =
   | ListenAnalyzeMessage
   | AutoChartMessage
   | AutoChartSavedMessage
-  | ChartWriteMessage;
+  | ChartWriteMessage
+  | LyricsGetMessage;
 
 /** sendMessage that ignores "no receiver" errors (side panel closed). */
 export function sendQuietly(msg: ExtensionMessage): void {

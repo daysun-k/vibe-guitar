@@ -5,8 +5,19 @@
 import type { AutoChartSavedMessage, CaptureStartMessage, CaptureStatusMessage, CommandMessage, ExtensionMessage } from './messages';
 import { handleChartWrite, serviceWorkerChartStore } from './storage';
 import { reinjectContentScripts } from './reinject';
+import { LyricsService } from './lyrics-service';
 
 const OFFSCREEN_URL = 'offscreen.html';
+
+// Lyrics: the only off-device request. Sends title, artist and duration to lrclib.net,
+// once per recording, and only when the side panel's "가사 가져오기" setting is on.
+const lyricsService = new LyricsService(
+  {
+    get: (keys) => chrome.storage.local.get(keys) as Promise<Record<string, unknown>>,
+    set: (items) => chrome.storage.local.set(items),
+  },
+  (url, init) => fetch(url, { ...init, credentials: 'omit', cache: 'no-store' }),
+);
 
 chrome.runtime.onInstalled.addListener((details) => {
   // We open the panel ourselves so that action.onClicked still fires (needed for tabCapture).
@@ -82,6 +93,10 @@ chrome.commands.onCommand.addListener((command) => {
 // the side panel, auto charts from listening mode (the offscreen document cannot use
 // chrome.storage).
 chrome.runtime.onMessage.addListener((msg: ExtensionMessage, _sender, sendResponse) => {
+  if (msg.type === 'lyrics-get') {
+    void lyricsService.get(msg).then(sendResponse);
+    return true;
+  }
   if (msg.type === 'chart-write') {
     void handleChartWrite(serviceWorkerChartStore(), msg).then(sendResponse);
     return true; // reply asynchronously

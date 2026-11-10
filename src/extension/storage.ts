@@ -8,9 +8,18 @@ import type { ChartWriteMessage, ChartWriteResult } from './messages';
 export interface Settings {
   level: Level;
   capo: 'auto' | number;
+  /** Look-ahead before a change, in bars (converted to big beats for compound meter). */
   lookAheadBars: number;
-  countIn: boolean;
+  /** Legacy on/off; superseded by countInBars. */
+  countIn?: boolean;
+  /** Count-in before playing from the panel: 0 (off), 1 or 2 bars of big beats. */
+  countInBars: 0 | 1 | 2;
   countInClick: boolean;
+  /** Show the sounding chord names (e.g. A♭ with capo 1 shape G). */
+  showSounding: boolean;
+  /** Look up time-synced lyrics on lrclib.net (title, artist, duration only). */
+  fetchLyrics: boolean;
+  theme: 'auto' | 'light' | 'dark';
   /** Added to the estimated position (positive = chords earlier). */
   syncOffsetMs: number;
   profile: Profile;
@@ -20,8 +29,11 @@ export const DEFAULT_SETTINGS: Settings = {
   level: 'beginner',
   capo: 'auto',
   lookAheadBars: 1,
-  countIn: true,
+  countInBars: 1,
   countInClick: true,
+  showSounding: false,
+  fetchLyrics: true,
+  theme: 'auto',
   syncOffsetMs: 0,
   profile: DEFAULT_PROFILE,
 };
@@ -30,8 +42,15 @@ const SETTINGS_KEY = 'settings';
 
 export async function loadSettings(): Promise<Settings> {
   const r = await chrome.storage.local.get(SETTINGS_KEY);
-  const s = (r[SETTINGS_KEY] ?? {}) as Partial<Settings>;
-  return { ...DEFAULT_SETTINGS, ...s, profile: { ...DEFAULT_PROFILE, ...(s.profile ?? {}) } };
+  return normalizeSettings(r[SETTINGS_KEY]);
+}
+
+/** Defaults for missing fields; the old countIn flag maps to 1 bar (on) or 0 (off). */
+export function normalizeSettings(raw: unknown): Settings {
+  const s = (raw && typeof raw === 'object' ? raw : {}) as Partial<Settings>;
+  const countInBars = s.countInBars === 0 || s.countInBars === 1 || s.countInBars === 2 ? s.countInBars : s.countIn === false ? 0 : 1;
+  const { countIn: _legacy, ...rest } = s;
+  return { ...DEFAULT_SETTINGS, ...rest, countInBars, profile: { ...DEFAULT_PROFILE, ...(s.profile ?? {}) } };
 }
 
 export async function saveSettings(s: Settings): Promise<void> {
