@@ -4,7 +4,9 @@ Personal tool: while a song plays on YouTube / YouTube Music / Apple Music (desk
 show time-synced acoustic guitar chords, fingering diagrams, and skill-level arrangements
 (easier voicings, capo, strumming suggestions).
 
-Personal use only; not distributed. Audio never leaves the browser.
+Personal use only; not distributed. Audio never leaves the browser. The only off-device request
+is the optional lyrics lookup: song title, artist and duration go to [LRCLIB](https://lrclib.net),
+once per recording (setting "가사 가져오기", on by default).
 
 - Proposal: [docs/proposal.md](docs/proposal.md)
 - Phase 0 manual checklist: [docs/phase0-test-checklist.md](docs/phase0-test-checklist.md)
@@ -12,8 +14,8 @@ Personal use only; not distributed. Audio never leaves the browser.
 ## Phase 0 prototype (this branch)
 
 A Chrome MV3 extension driven by hand-made chord charts, plus listening mode: in-browser beat/downbeat
-and chord recognition on the captured tab audio (slice 2). No server, no network calls at runtime;
-audio never leaves the browser.
+and chord recognition on the captured tab audio (slice 2). No server; audio never leaves the browser.
+The only runtime network call is the lyrics lookup described in [Lyrics](#lyrics-lrclib).
 
 | Path | What |
 |---|---|
@@ -22,12 +24,16 @@ audio never leaves the browser.
 | `src/editor/core.ts` | Pure editor logic: sequence paste, stamping, tap tempo, quantize, build chart |
 | `src/audio/` | RMS/chroma (capture readout), FFT, streaming resampler, model features (log-mel for Beat This!, librosa-style CQT for BTC) |
 | `src/recognize/` | Beat This! chunking + peak picking, BTC windows + vocabulary + beat-synchronous Viterbi, listening session, auto chart |
+| `src/music/` | Key estimation + key-aware spelling (`key.ts`), big beats for compound meter and bar-phase correction (`meter.ts`) |
+| `src/lyrics/` | LRCLIB client and parsers (`lrclib.ts`), lyric↔chart offset, chord-over-word placement, pinned line (`align.ts`) |
+| `src/play/` | Play-view model (`model.ts`), lane/sections/strip (`lane.ts`), demo clock and synthetic demo song (`demo.ts`) |
 | `src/eval/metrics.ts` | WCSR (majmin/root/sevenths), beat F-measure, chart-vs-chart comparison |
 | `src/bench/` | Synthetic labeled set and benchmark core (Node script and in-extension bench page) |
 | `scripts/fetch-models.mjs` | Downloads the pinned models (sha256-checked) into `models/` (gitignored) |
 | `src/extension/` | MV3: service worker, content scripts (YouTube, YouTube Music, experimental Apple Music), offscreen capture, side panel |
 | `tests/` | Vitest unit tests |
 | `scripts/build.mjs` | esbuild bundle → `dist/` + manifest reference check |
+| `scripts/screens.mjs` | Headless-Chromium screenshots of `sidepanel.html?demo=1` into `docs/screens/` (no network) |
 
 ## Load and test
 
@@ -48,24 +54,97 @@ Requirements: Node 20+ and desktop Chrome 116 or newer.
 7. Click the **Vibe Guitar** toolbar icon. This opens the side panel **and** starts tab-audio capture for that tab
    (Chrome only allows tab capture after you click the extension). The tab should stay audible.
 8. In the side panel:
-   - **연주 (Play)** tab: the header shows the video id and the playback state. With no chart you will see
-     "이 곡의 코드표가 없습니다".
+   - **연주 (Play)** tab: song title/artist, the chord-shape strip, the pinned lyric line and the bar grid
+     (see [Play view](#play-view)). With no chart you will see "이 곡의 코드표가 아직 없어요".
    - **편집 (Edit)** tab: either attach an example ("예시를 현재 곡에 연결해 저장"; timings are fake), or make a
      real chart: paste the chord sequence → 코드 읽기 → tap tempo (T, first tap on a downbeat) → play the song
      and press **J** (or click the big button) at each chord change → 이 곡에 저장.
      Click inside the panel first so it receives key presses; when the YouTube page has focus use the
      global shortcuts Alt+Shift+K (stamp) and Alt+Shift+T (tap tempo). Check or change them at
      `chrome://extensions/shortcuts`.
-   - **캡처 (Capture)** tab: audio received yes/no, RMS, sample rate, a live 12-bin chroma, and the
-     recognition model state / backend (WASM or WebGPU).
+   - **듣기·캡처 (Listen / Capture)** tab: listening-mode progress, audio received yes/no, RMS, sample rate,
+     a live 12-bin chroma, the recognition model state / backend (WASM or WebGPU) and the player readout
+     (adapter, video id, state).
+   - **설정 (Settings)** tab: personal profile, the song's shapes with "잡을 수 있음" toggles, sync offset,
+     count-in click and an analysis readout (key, meter, bar-phase fix, lyric offset).
 9. After code changes: `npm run build`, then press the reload icon on the extension card in `chrome://extensions`
    and reload the YouTube tab (old content scripts stop when the extension reloads).
+
+## Play view
+
+Port of the approved mockup B ("진행표형", diagrams 3x):
+
+- **Header**: title and artist, one badge ("자동 코드표 · 사람이 확인하지 않음" for auto charts, "예시 코드표"
+  for bundled examples, nothing for manual charts; click it for a short explanation) and a level/capo chip
+  that opens the **settings sheet** (난이도, 카포, 미리 알림, 카운트인 끔/1마디/2마디, 실제 음 이름 보기 (off),
+  가사 가져오기 (on), 추천 반주, 데모 재생).
+- **Chord-shape strip**: 120 px diagrams with finger numbers in one row. When it overflows it scrolls
+  sideways (fade mask) and, just before a change, scrolls so the next shape is visible (if the current and
+  next shapes cannot both fit, the next one). Current shape: accent border; next shape: neutral border with
+  the big-beat countdown. From about 560 px all shapes of a typical song fit.
+- **Pinned lyric line** (only when lyrics exist): the line sung at the playhead with chord names over the
+  words where the changes happen, the current word underlined and the current chord highlighted; the next
+  line small below. Between sung parts: "♪ 연주만 나와요".
+- **Bar grid**: 4 bars per row (44 px cells, 40 px under 340 px), section labels (from lyrics: 인트로, N절,
+  후렴, 간주, 아웃트로; without lyrics: groups of 8 bars), repeat bars as %, one tick per big beat, a playhead
+  line, auto-follow with "현재 위치로" after manual scrolling, click a bar to seek, and a "soon" border on the
+  bar of the next change.
+- **Transport**: seek bar with section ticks, play/pause (with the count-in when it is on), time and section.
+  Play/pause/seek control the YouTube player through the content script.
+- **Uncertainty** is shown only by the badge, plus at 중급/상급 an actionable hint such as "Em도 돼요" on
+  low-confidence 7th chords. 입문 reduces 7/maj7 to triads and marks them with a tiny superscript 7.
+
+Music fixes applied before drawing (pure functions in `src/music/`, tests in `tests/music.test.ts`):
+
+- **Key-aware spelling**: all 24 keys are scored by how well the duration-weighted chords fit the key's
+  diatonic triads (+ a tonic and dominant bonus that separates relative major/minor); roots and slash basses
+  are then spelled with that key's letters (a recognizer's G#, C#, D# in A♭ major → A♭, D♭, E♭).
+- **Bar phase**: chord changes are voted onto beat positions in the bar; when another position clearly
+  wins (3+ more changes and 1.5× the current one), the grid is shifted so that position is the downbeat
+  (explicit beat times are kept; synthetic beats are prepended).
+- **Compound meter**: a 6/9/12-beat bar counted in eighths (beatUnit 8, or a tracker tempo ≥ 120) counts
+  dotted-quarter big beats for the countdown, look-ahead and count-in.
+
+## Lyrics (LRCLIB)
+
+The service worker (`src/extension/lyrics-service.ts`) answers the side panel's `lyrics-get` message:
+
+1. Cache first: `lyrics:<source>:<id>` in `chrome.storage.local` (YouTube and YouTube Music share ids).
+2. Only for a recording that has a chart, when "가사 가져오기" is on and the player reports a duration:
+   `GET https://lrclib.net/api/get` with
+   `artist_name`, `track_name`, `duration`; on 404 `GET /api/search` and pick the result with word timing
+   and a duration within ±4 s. The YouTube title is cleaned first ("Artist - Title [Official Lyric Video]"
+   → artist + title; "- Topic"/"VEVO" channel suffixes removed).
+3. Parse `lyricsfile` (YAML with per-word `start_ms`); fall back to `syncedLyrics` (LRC, line level, word
+   times interpolated) and then to no lyrics. Found and not-found results are cached (one request per
+   recording); network errors are not cached, so the next visit retries.
+
+Lyrics are stored only in this browser; none are in the repository or tests (tests use synthetic text).
+The side panel then estimates a constant lyric→chart offset: it slides the lyrics over −1.5…+1.5 s (50 ms
+steps) and keeps the shift with the most chord changes within ±0.15 s of a word onset (ties: the smallest
+total distance). The shift is used only when it beats the unshifted lyrics by 3+ changes and the scan's
+median (chance level) by 25 % and 4+ changes; otherwise it stays 0.
+
+## Demo playback and screenshots
+
+`sidepanel.html?demo=1` (or "데모 재생" in the settings sheet, or the empty-state button) replays a chart with a
+simulated clock: the current recording's chart, any stored chart chosen in the demo bar, or a built-in
+synthetic song (made-up 6/8 progression in A♭ named with sharps, a beat grid that starts mid-bar, and
+placeholder lyrics 0.4 s early) that exercises the spelling, phase and offset fixes. Stored recordings use
+cached lyrics only (no request in demo mode). Query parameters: `t=<sec>`, `play`, `rate=0.5`,
+`theme=light|dark`, `level=beginner|novice|intermediate|advanced`, `capo=auto|0..7`, `snd` (sounding
+names), `sheet=1`, `lyrics=0`, `mute` (no count-in click).
+
+Opened outside the extension (file://) the page runs the synthetic demo with default settings, which is
+how `node scripts/screens.mjs` (after `npm run build`) writes `docs/screens/*.png` at 400 and 600 px, light
+and dark. It uses `$CHROME` or Playwright's cached Chromium, blocks every http(s) request and needs no
+extra npm dependency.
 
 ## Listening mode (recognition)
 
 After the toolbar click starts capture, the offscreen document also runs listening mode:
 
-- **연주** tab → card **듣기 모드 · 인식 중**: the chord the model hears now (about 1 s late; for "what is
+- **듣기·캡처** tab → card **듣기 모드 · 인식 중**: the chord the model hears now (about 1 s late; for "what is
   this chord?", not for play-along), the heard coverage of the song, and whether audio is being recorded.
   Audio is stored only while the song plays at 1x with no ad; pauses and seeks start a new segment. Each
   captured block is placed by its AudioContext sample time (player reports are mapped to that clock), so late

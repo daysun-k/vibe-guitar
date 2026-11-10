@@ -7,120 +7,79 @@
   <link rel="stylesheet" href="sidepanel.css" />
 </head>
 <body>
-  <header>
-    <div id="rec-title" class="rec-title">재생 중인 곡을 찾는 중…</div>
-    <div id="rec-meta" class="muted small"></div>
+  <header class="top">
+    <div class="top-row">
+      <div class="song"><b id="song-title">재생 중인 곡을 찾는 중…</b><span id="song-artist"></span></div>
+      <button class="ibtn" id="theme-btn" aria-label="밝은 화면과 어두운 화면 전환"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16z" fill="currentColor"/></svg></button>
+      <button class="ibtn" id="set-btn" aria-label="연주 설정 열기" aria-haspopup="dialog"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button>
+    </div>
+    <div class="meta-row">
+      <button class="badge" id="badge" hidden aria-expanded="false" aria-controls="badge-pop"><i></i><span class="long" id="badge-long"></span><span class="short" id="badge-short"></span></button>
+      <button class="chip" id="chip" aria-haspopup="dialog"></button>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="화면">
+      <button data-tab="play" class="active" role="tab">연주</button>
+      <button data-tab="edit" role="tab">편집</button>
+      <button data-tab="capture" role="tab">듣기·캡처</button>
+      <button data-tab="settings" role="tab">설정</button>
+    </nav>
   </header>
+  <div class="pop" id="badge-pop" role="note"></div>
+  <div id="demo-bar" class="demo-bar" hidden>
+    <b>데모 재생</b>
+    <select id="demo-select" aria-label="데모로 재생할 코드표"></select>
+    <button id="demo-exit">끝내기</button>
+  </div>
 
-  <nav class="tabs" role="tablist">
-    <button data-tab="play" class="active">연주</button>
-    <button data-tab="edit">편집</button>
-    <button data-tab="capture">캡처</button>
-    <button data-tab="settings">설정</button>
-  </nav>
-
-  <!-- PLAY -->
-  <section id="tab-play" class="tab">
-    <div id="no-chart" class="notice" hidden>
-      이 곡의 코드표가 없습니다.
-      <button id="goto-edit" class="link">편집 탭에서 만들기</button>
+  <!-- PLAY (mockup B) -->
+  <main id="tab-play" class="tab play-view">
+    <div id="notices" class="notices">
+      <div id="ad-banner" class="notice warn" hidden>광고 재생 중이에요. 광고가 끝나면 코드가 다시 움직여요.</div>
+      <div id="id-warning" class="notice warn" hidden></div>
+      <div id="pending-note" class="notice" hidden>이 곡의 자동 코드표가 준비됐어요. <button class="link" data-goto="capture">듣기·캡처 탭에서 보기</button></div>
     </div>
-    <div id="ad-banner" class="notice warn" hidden>광고 재생 중: 코드 진행을 멈춥니다.</div>
-    <div id="id-warning" class="notice warn small" hidden></div>
-
-    <div id="listen-card" class="card listen" hidden>
-      <div class="label">듣기 모드 <span class="badge uncertain">인식 중</span></div>
-      <div class="now-row">
-        <div id="listen-chord" class="chord-mid">–</div>
-        <div id="listen-conf" class="muted small"></div>
-      </div>
-      <div class="muted small">따라 치기용이 아닙니다. 지금 들리는 코드를 추정한 값이며 약 1초 늦습니다.</div>
-      <div class="coverage-bar"><div id="listen-coverage-fill"></div></div>
-      <div id="listen-coverage" class="small"></div>
-      <div id="listen-status" class="muted small"></div>
-      <button id="listen-analyze">들은 구간으로 자동 코드표 만들기</button>
-      <div id="listen-result" class="small"></div>
-      <div id="listen-pending" class="notice small" hidden>
-        이 곡의 자동 코드표가 준비됐지만, 직접 만든 코드표가 있어서 바꾸지 않았습니다.
-        <div id="listen-compare" class="muted small"></div>
-        <button id="listen-adopt">자동 코드표로 바꾸기</button>
+    <div id="empty" class="empty" hidden>
+      <p id="empty-title" class="empty-title"></p>
+      <p id="empty-text" class="empty-text"></p>
+      <div class="empty-actions">
+        <button id="empty-edit" class="btn">편집 탭에서 만들기</button>
+        <button id="empty-listen" class="btn" data-goto="capture">듣기 상태 보기</button>
+        <button id="empty-demo" class="btn">데모 재생</button>
       </div>
     </div>
-
-    <div id="countin" class="countin" hidden></div>
-
-    <div class="now card">
-      <div class="label">지금 <span id="cur-badges" class="badges"></span></div>
-      <div class="now-row">
-        <div>
-          <div id="cur-chord" class="chord-big">–</div>
-          <div id="cur-shape" class="shape-line"></div>
-          <div id="cur-notes" class="muted small"></div>
-        </div>
-        <div id="cur-diagram" class="diagram"></div>
-      </div>
+    <section class="dias" id="dias-wrap" aria-label="이 곡에 나오는 코드 모양"><ul id="dias"></ul></section>
+    <section class="pin" id="pin" aria-label="지금 가사" hidden>
+      <div class="pin-head" id="pin-sec"></div>
+      <p class="ly" id="ly-cur"></p>
+      <p class="nxt" id="ly-next"></p>
+    </section>
+    <div class="lane-wrap" id="lane-wrap">
+      <div class="lane" id="lane" tabindex="0" aria-label="마디 진행표. 마디를 누르면 그 위치로 이동"></div>
+      <button class="follow" id="follow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M6 13l6 6 6-6"/></svg>현재 위치로</button>
     </div>
-
-    <div class="next card" id="next-card">
-      <div class="label">다음 <span id="next-countdown" class="countdown"></span></div>
-      <div class="now-row">
-        <div>
-          <div id="next-chord" class="chord-mid">–</div>
-          <div id="next-shape" class="shape-line"></div>
-          <div id="next-badges" class="badges"></div>
-        </div>
-        <div id="next-diagram" class="diagram small"></div>
+    <footer class="transport" id="transport">
+      <div class="seek"><div class="seek-track"><div class="seek-fill" id="seek-fill"></div></div><div class="seek-ticks" id="seek-ticks"></div>
+        <input type="range" id="seek" min="0" max="1" step="0.1" value="0" aria-label="재생 위치" /></div>
+      <div class="t-row">
+        <button class="play" id="play-btn" aria-label="재생"></button>
+        <div class="time"><b id="t-now">0:00</b> / <span id="t-dur">0:00</span></div>
+        <div class="sec-now" id="sec-now"></div>
+        <div class="seg" id="rate-seg" role="group" aria-label="재생 속도" hidden><button data-rate="0.5" aria-pressed="false">0.5×</button><button data-rate="1" aria-pressed="true">1×</button></div>
       </div>
-      <div id="beat-dots" class="beat-dots"></div>
-    </div>
-
-    <div id="bar-pos" class="muted small"></div>
-
-    <div class="controls card">
-      <label>숙련도
-        <select id="level">
-          <option value="beginner">입문</option>
-          <option value="novice">초급</option>
-          <option value="intermediate">중급</option>
-          <option value="advanced">상급</option>
-        </select>
-      </label>
-      <label>카포
-        <select id="capo">
-          <option value="auto">자동</option>
-          <option value="0">없음</option>
-          <option value="1">1</option><option value="2">2</option><option value="3">3</option>
-          <option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option>
-        </select>
-      </label>
-      <div id="capo-suggest" class="muted small"></div>
-      <label>미리 보기
-        <input type="range" id="lookahead" min="0.5" max="4" step="0.5" />
-        <span id="lookahead-val"></span>마디
-      </label>
-      <label><input type="checkbox" id="countin-enable" /> 카운트인 표시</label>
-      <label><input type="checkbox" id="countin-click" /> 카운트인 클릭음</label>
-      <button id="countin-play">이 마디 처음부터 카운트인 후 재생</button>
       <div id="countin-status" class="small err"></div>
-    </div>
-
-    <div id="strum" class="card small"></div>
-
-    <details class="card">
-      <summary>이 곡에 나오는 코드 (운지 미리 보기)</summary>
-      <p class="muted small">"잡을 수 있음"을 표시하면 그 모양을 우선 고릅니다.</p>
-      <div id="song-chords" class="grid"></div>
-    </details>
-  </section>
+    </footer>
+  </main>
 
   <!-- EDIT -->
-  <section id="tab-edit" class="tab" hidden>
+  <section id="tab-edit" class="tab scroll" hidden>
     <div class="card">
       <div class="label">대상 곡</div>
       <div id="edit-target" class="small"></div>
       <div id="edit-existing" class="muted small"></div>
-      <button id="edit-load-existing">저장된 코드표를 편집기로 불러오기</button>
-      <button id="draft-reattach" hidden>이전 곡의 초안을 이 곡으로 옮기기</button>
+      <div class="row">
+        <button id="edit-load-existing">저장된 코드표를 편집기로 불러오기</button>
+        <button id="draft-reattach" hidden>이전 곡의 초안을 이 곡으로 옮기기</button>
+      </div>
     </div>
 
     <div class="card">
@@ -182,8 +141,26 @@
     </div>
   </section>
 
-  <!-- CAPTURE -->
-  <section id="tab-capture" class="tab" hidden>
+  <!-- LISTEN / CAPTURE -->
+  <section id="tab-capture" class="tab scroll" hidden>
+    <div id="listen-card" class="card listen" hidden>
+      <div class="label">듣기 모드 <span class="pill">인식 중</span></div>
+      <div class="now-row">
+        <div id="listen-chord" class="chord-mid">–</div>
+        <div id="listen-conf" class="muted small"></div>
+      </div>
+      <div class="muted small">따라 치기용이 아닙니다. 지금 들리는 코드를 추정한 값이며 약 1초 늦습니다.</div>
+      <div class="coverage-bar"><div id="listen-coverage-fill"></div></div>
+      <div id="listen-coverage" class="small"></div>
+      <div id="listen-status" class="muted small"></div>
+      <button id="listen-analyze">들은 구간으로 자동 코드표 만들기</button>
+      <div id="listen-result" class="small"></div>
+    </div>
+    <div id="listen-pending" class="card notice" hidden>
+      이 곡의 자동 코드표가 준비됐지만, 직접 만든 코드표가 있어서 바꾸지 않았습니다.
+      <div id="listen-compare" class="muted small"></div>
+      <button id="listen-adopt">자동 코드표로 바꾸기</button>
+    </div>
     <div class="card small">
       툴바의 Vibe Guitar 아이콘을 누르면 현재 탭의 오디오 캡처와 듣기 모드(코드·박자 인식)를 시작합니다.
       오디오와 인식은 모두 브라우저 안에서 처리하며 밖으로 보내지 않습니다.
@@ -206,13 +183,17 @@
       <button id="cap-stop">캡처 중지</button>
     </div>
     <div class="card">
+      <div class="label">재생 정보</div>
+      <div id="rec-meta" class="muted small">–</div>
+    </div>
+    <div class="card">
       <div class="label">Apple Music 어댑터 (실험)</div>
       <div id="am-status" class="small">music.apple.com 탭을 열면 여기에 결과가 표시됩니다.</div>
     </div>
   </section>
 
   <!-- SETTINGS -->
-  <section id="tab-settings" class="tab" hidden>
+  <section id="tab-settings" class="tab scroll" hidden>
     <div class="card">
       <div class="label">개인 프로필</div>
       <label><input type="checkbox" id="can-barre" /> 바레 코드를 잡을 수 있음</label>
@@ -232,15 +213,51 @@
         <button id="known-reset">잡을 수 있는 모양 초기화</button>
       </div>
     </div>
+    <details class="card">
+      <summary>이 곡에 나오는 코드 (잡을 수 있는 모양 표시)</summary>
+      <p class="muted small">"잡을 수 있음"을 표시하면 그 모양을 우선 고릅니다.</p>
+      <div id="song-chords" class="grid"></div>
+    </details>
     <div class="card">
       <div class="label">싱크 보정</div>
       <label>오프셋 <input type="range" id="sync-offset" min="-500" max="500" step="10" /> <span id="sync-offset-val"></span> ms</label>
       <div class="muted small">양수면 코드가 더 일찍 바뀝니다.</div>
+      <label><input type="checkbox" id="countin-click" /> 카운트인 클릭음</label>
+    </div>
+    <div class="card">
+      <div class="label">분석 정보</div>
+      <div id="analysis" class="muted small">–</div>
     </div>
     <div class="card small muted">
-      개인용 프로토타입입니다. 코드표는 이 브라우저의 chrome.storage.local에만 저장됩니다.
+      개인용 프로토타입입니다. 코드표와 가사는 이 브라우저의 chrome.storage.local에만 저장됩니다.
+      "가사 가져오기"를 켜 두면 곡마다 한 번, 곡 제목·아티스트·길이만 lrclib.net으로 보냅니다.
     </div>
   </section>
+
+  <!-- settings sheet -->
+  <div class="scrim" id="scrim"></div>
+  <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="연주 설정">
+    <div class="grab"></div>
+    <h2>연주 설정</h2>
+    <p class="hint">연주 화면을 가리지 않도록 여기로 모았어요.</p>
+    <div class="field"><span>난이도<small>입문은 7화음을 쉬운 코드로 줄여요</small></span>
+      <div class="seg" role="group" aria-label="난이도" data-k="level"><button data-v="beginner">입문</button><button data-v="novice">초급</button><button data-v="intermediate">중급</button><button data-v="advanced">상급</button></div></div>
+    <div class="field"><span>카포<small id="capo-suggest"></small></span>
+      <div class="stepper"><button id="capo-down" aria-label="카포 내리기">−</button><output id="capo-out"></output><button id="capo-up" aria-label="카포 올리기">+</button></div></div>
+    <div class="field"><span>미리 알림<small id="look-note">바뀌기 전에 다음 코드를 강조할 때</small></span>
+      <div class="seg" role="group" aria-label="미리 알림" data-k="lookAheadBars"><button data-v="0.5">½마디 전</button><button data-v="1">1마디 전</button><button data-v="2">2마디 전</button></div></div>
+    <div class="field"><span>카운트인<small id="countin-note">패널에서 재생을 누르면 큰 박을 세어 줘요</small></span>
+      <div class="seg" role="group" aria-label="카운트인" data-k="countInBars"><button data-v="0">끔</button><button data-v="1">1마디</button><button data-v="2">2마디</button></div></div>
+    <div class="field"><span>실제 음 이름 보기<small>카포 없이 들리는 코드(A♭ 등)</small></span>
+      <button class="switch" id="snd-sw" role="switch" aria-checked="false" aria-label="실제 음 이름 보기"><i></i></button></div>
+    <div class="field"><span>가사 가져오기<small>곡 제목·아티스트·길이만 lrclib.net으로 보내요</small></span>
+      <button class="switch" id="lyrics-sw" role="switch" aria-checked="true" aria-label="가사 가져오기"><i></i></button></div>
+    <div class="field"><span>추천 반주<small id="strum"></small></span></div>
+    <div class="field"><span>데모 재생<small>재생기 없이 저장된 코드표를 가상 시계로 틀어 봐요</small></span>
+      <button class="btn" id="demo-btn">데모 재생</button></div>
+    <button class="sheet-done" id="sheet-done">완료</button>
+  </div>
+  <div class="countin" id="countin" aria-live="assertive"><div class="cin-box"><b></b><small>준비하세요</small></div></div>
 
   <script src="sidepanel.js"></script>
 </body>

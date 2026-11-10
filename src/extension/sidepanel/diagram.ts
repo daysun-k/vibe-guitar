@@ -61,3 +61,48 @@ export function renderChordDiagram(v: Voicing, opts: DiagramOptions = {}): strin
   parts.push('</svg>');
   return parts.join('');
 }
+
+/**
+ * Play-view diagram (mockup B geometry, viewBox 100 wide): open/muted marks above the nut,
+ * finger numbers inside the dots, a rounded bar for barres and "Nfr" for high positions.
+ */
+export function renderShapeDiagram(v: Voicing, width = 120): string {
+  const fretted = v.frets.filter((f): f is number => f !== null && f > 0);
+  const maxF = fretted.length ? Math.max(...fretted) : 0;
+  const minF = fretted.length ? Math.min(...fretted) : 0;
+  const base = maxF <= 4 ? 1 : minF;
+  const rows = Math.max(4, Math.min(5, maxF - base + 1));
+  const x0 = 16;
+  const x1 = 84;
+  const y0 = 26;
+  const dx = (x1 - x0) / 5;
+  const dy = 24;
+  const y1 = y0 + rows * dy;
+  const H = y1 + 6;
+  const g: string[] = [];
+  for (let i = 0; i <= rows; i++) g.push(`<line class="d-fret" x1="${x0}" x2="${x1}" y1="${y0 + i * dy}" y2="${y0 + i * dy}"/>`);
+  for (let i = 0; i < 6; i++) g.push(`<line class="d-str" x1="${x0 + i * dx}" x2="${x0 + i * dx}" y1="${y0}" y2="${y1}" stroke-width="${(1.9 - i * 0.18).toFixed(2)}"/>`);
+  g.push(base === 1 ? `<rect class="d-nut" x="${x0 - 1.5}" y="${y0 - 4}" width="${x1 - x0 + 3}" height="5" rx="1.2"/>` : `<text class="d-fr" x="${x1 + 5}" y="${y0 + dy * 0.62}">${base}fr</text>`);
+  const barre = detectBarre(v);
+  if (barre) {
+    const y = y0 + (barre.fret - base + 0.5) * dy;
+    const xa = x0 + barre.fromString * dx;
+    const xb = x0 + barre.toString * dx;
+    g.push(`<rect class="d-dot d-barre" x="${xa - dx * 0.4}" y="${y - dx * 0.4}" width="${xb - xa + dx * 0.8}" height="${dx * 0.8}" rx="${dx * 0.4}"/>`);
+    g.push(`<text class="d-num" x="${(xa + xb) / 2}" y="${y + 0.5}">${barre.finger}</text>`);
+  }
+  v.frets.forEach((f, i) => {
+    const x = x0 + i * dx;
+    if (f === null) g.push(`<path class="d-x" d="M${x - 4} ${y0 - 17}l8 8M${x + 4} ${y0 - 17}l-8 8"/>`);
+    else if (f === 0) g.push(`<circle class="d-open" cx="${x}" cy="${y0 - 13}" r="4.2"/>`);
+    else {
+      const finger = v.fingers[i];
+      if (barre && finger === barre.finger && f === barre.fret && i >= barre.fromString && i <= barre.toString) return;
+      const y = y0 + (f - base + 0.5) * dy;
+      g.push(`<circle class="d-dot" cx="${x}" cy="${y}" r="${dx * 0.4}"/>`);
+      if (finger) g.push(`<text class="d-num" x="${x}" y="${y + 0.5}">${finger}</text>`);
+    }
+  });
+  const label = `${v.chord} 운지 ${v.frets.map((f) => (f === null ? 'x' : f)).join(' ')}`;
+  return `<svg class="dia" viewBox="0 0 100 ${H}" width="${width}" height="${Math.round((width * H) / 100)}" role="img" aria-label="${escapeHtml(label)}">${g.join('')}</svg>`;
+}
