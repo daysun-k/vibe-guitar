@@ -92,9 +92,12 @@ export class LyricsService {
     if (nowMs < this.blockedUntil) return { ok: false, error: 'lrclib rate limited', reason: 'rate-limited', retryAt: this.blockedUntil };
     const key = lyricsKey(source, id);
     let cur = this.inflight.get(key);
-    if (!cur) {
+    // A lookup aborted by turning the setting off is not joined: OFF→ON starts a fresh one.
+    if (!cur || cur.abort.signal.aborted) {
       const abort = new AbortController();
-      const promise = this.fetchAndStore(req, abort.signal).finally(() => this.inflight.delete(key));
+      const promise: Promise<LyricsReply> = this.fetchAndStore(req, abort.signal).finally(() => {
+        if (this.inflight.get(key)?.promise === promise) this.inflight.delete(key);
+      });
       cur = { promise, abort };
       this.inflight.set(key, cur);
     }

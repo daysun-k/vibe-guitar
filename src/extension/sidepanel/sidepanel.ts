@@ -41,7 +41,8 @@ import type {
 import { estimatePosition, type PlayerSnapshot } from '../playview';
 import { adoptAutoChart, listCharts, loadAutoChart, loadChart, loadSettings, normalizeSettings, saveChart, saveSettings, type Settings } from '../storage';
 import { escapeHtml, renderShapeDiagram } from './diagram';
-import { LyricsAsker } from './lyrics-asker';
+import { LyricsAsker, lyricsOutcome } from './lyrics-asker';
+import { controlTabId, keepPlayerAfterDemo } from './player-target';
 import { PlayScreen, formatTime } from './play';
 
 // ---------- DOM helpers ----------
@@ -69,6 +70,8 @@ const hasChrome = typeof chrome !== 'undefined' && !!chrome.storage?.local && !!
 let settings: Settings;
 let player: PlayerStateMessage | null = null;
 let playerTabId: number | null = null;
+/** Active tab of the panel's window (followed during demo too); player commands go only there. */
+let activeTabId: number | null = null;
 let myWindowId: number | null = null;
 let chart: Chart | null = null;
 let chartKey = '';
@@ -113,11 +116,12 @@ function recordingKey(r: Recording | null): string {
 }
 
 async function onPlayerState(msg: PlayerStateMessage, sender: chrome.runtime.MessageSender): Promise<void> {
-  if (demo) return;
   const tab = sender.tab;
   if (!tab || tab.id === undefined) return;
   if (myWindowId !== null && tab.windowId !== myWindowId) return;
   if (!tab.active) return;
+  activeTabId = tab.id;
+  if (demo) return;
   const durationBefore = player?.duration ?? 0;
   player = msg;
   playerTabId = tab.id;
@@ -136,6 +140,31 @@ async function onPlayerState(msg: PlayerStateMessage, sender: chrome.runtime.Mes
   }
   void requestLyrics();
   renderHeader();
+}
+
+/** Forget the current player (tab switch, demo exit) until the active tab's player reports. */
+function forgetPlayer(): void {
+  if (player === null && playerTabId === null) return;
+  switchDraft(null);
+  player = null;
+  playerTabId = null;
+  chartKey = '';
+  chart = null;
+  lyrics = null;
+  lyricsNote = '';
+  recompute();
+  renderHeader();
+}
+
+/** Re-read the active tab of the panel's window (unknown on failure, which blocks player commands). */
+async function refreshActiveTab(): Promise<void> {
+  if (!hasChrome) return;
+  try {
+    const [t] = await chrome.tabs.query(myWindowId !== null ? { active: true, windowId: myWindowId } : { active: true, currentWindow: true });
+    activeTabId = t?.id ?? null;
+  } catch {
+    activeTabId = null;
+  }
 }
 
 async function reloadChart(): Promise<void> {
@@ -183,6 +212,7 @@ async function requestLyrics(): Promise<void> {
   const duration = player?.duration ?? 0;
   if (!lyricsAsker.shouldAsk(chartKey, settings.fetchLyrics, duration > 0)) return;
   const forKey = chartKey;
+  const ticket = lyricsAsker.begin();
   const msg: LyricsGetMessage = { type: 'lyrics-get', recording: r, durationSec: duration, allowFetch: settings.fetchLyrics };
   let reply: LyricsReply | undefined;
   try {
@@ -191,24 +221,12 @@ async function requestLyrics(): Promise<void> {
     reply = { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
   if (forKey !== chartKey) return;
-  if (!reply || !reply.ok) {
-    // The attempt stays recorded for this visit: no retry on every player update (429 included);
-    // the next visit or recording change asks again, and the service worker honours its backoff.
-    lyricsNote =
-      reply && !reply.ok && reply.reason === 'rate-limited'
-        ? 'LRCLIB 요청이 많아 잠시 쉬어요. 나중에 이 곡을 다시 열면 가져와요.'
-        : reply && !reply.ok && reply.reason === 'cancelled'
-          ? '가사 가져오기를 껐어요.'
-          : `가사를 가져오지 못했어요${reply && !reply.ok ? ` (${reply.error})` : ''}. 다음에 이 곡을 열 때 다시 시도해요.`;
-  } else if (reply.entry?.result === 'found' && reply.entry.lyrics) {
-    lyrics = reply.entry.lyrics;
-    lyricsNote = `가사: LRCLIB ${reply.entry.lyrics.kind === 'words' ? '단어 단위' : '줄 단위'} (${reply.entry.query.artist} – ${reply.entry.query.track})`;
-  } else if (reply.entry?.result === 'not-found') {
-    lyrics = null;
-    lyricsNote = `가사: LRCLIB에서 찾지 못했어요 (${reply.entry.query.artist} – ${reply.entry.query.track})`;
-  } else {
-    lyricsNote = settings.fetchLyrics ? '' : '가사 가져오기가 꺼져 있어요.';
-  }
+  const out = lyricsOutcome(reply, settings.fetchLyrics);
+  // A superseded reply (e.g. the lookup cancelled by OFF arriving after ON asked again) must not
+  // overwrite the newer status; found lyrics are still worth showing.
+  if (!lyricsAsker.isLatest(ticket) && !out.lyrics) return;
+  if (out.lyrics !== undefined) lyrics = out.lyrics;
+  lyricsNote = out.note;
   recompute();
 }
 
@@ -727,9 +745,11 @@ async function sendControl(msg: PlayerControlMessage): Promise<PlayerControlResu
     else if (msg.time !== undefined) demo.clock.seek(msg.time);
     return { ok: true };
   }
-  if (playerTabId === null || !hasChrome) return { ok: false, reason: 'no player tab' };
+  // Never control a player that is not in the active tab (e.g. the old tab after a demo).
+  const target = controlTabId(playerTabId, activeTabId);
+  if (target === null || !hasChrome) return { ok: false, reason: 'no player in the active tab' };
   try {
-    const r = (await chrome.tabs.sendMessage(playerTabId, msg)) as PlayerControlResult | undefined;
+    const r = (await chrome.tabs.sendMessage(target, msg)) as PlayerControlResult | undefined;
     return r ?? { ok: false, reason: 'the player did not answer' };
   } catch (e) {
     return { ok: false, reason: e instanceof Error ? e.message : String(e) };
@@ -868,11 +888,17 @@ async function startDemo(preferKey?: string): Promise<void> {
   if (params.has('play')) clock.play(performance.now());
 }
 
-function exitDemo(): void {
+async function exitDemo(): Promise<void> {
   stopCountIn();
   demo = null;
   $('demo-bar').hidden = true;
   $('rate-seg').hidden = true;
+  // Tab switches were not followed during the demo: drop a player that is no longer in the
+  // active tab, re-check which tab is active now, and wait for that tab's player to report.
+  if (!keepPlayerAfterDemo(playerTabId, activeTabId)) forgetPlayer();
+  await refreshActiveTab();
+  if (demo) return; // a new demo started meanwhile
+  if (!keepPlayerAfterDemo(playerTabId, activeTabId)) forgetPlayer();
   // Back to the real song: its chart may have changed while storage events were ignored.
   recompute();
   renderHeader();
@@ -894,13 +920,15 @@ function closeSheet(): void {
   (lastFocus as HTMLElement | null)?.focus?.();
 }
 
-function persist(rebuild: boolean): void {
-  if (hasChrome) void saveSettings(settings);
+/** Saves the settings (the returned promise settles once they are stored) and re-renders. */
+function persist(rebuild: boolean): Promise<void> {
+  const saved = hasChrome ? saveSettings(settings).catch((e: unknown) => console.error(e)) : Promise.resolve();
   if (rebuild) recompute();
   else {
     screen.setLook(settings.lookAheadBars);
     renderStatic();
   }
+  return saved;
 }
 
 function syncSheet(): void {
@@ -947,10 +975,16 @@ function bindSheet(): void {
     syncSheet();
     persist(false);
   };
-  $('lyrics-sw').onclick = () => {
+  $('lyrics-sw').onclick = async () => {
     settings.fetchLyrics = !settings.fetchLyrics;
+    const on = settings.fetchLyrics;
     syncSheet();
-    persist(false);
+    // Ask only after the setting is stored: the service worker re-reads it before every request.
+    await persist(false);
+    if (settings.fetchLyrics !== on) return; // flipped again meanwhile: that click asks
+    // An explicit OFF→ON allows one fresh lookup for this song (an earlier one may have been
+    // cancelled by OFF); player updates still never retry on their own.
+    if (on) lyricsAsker.fetchTurnedOn(chartKey);
     void requestLyrics();
   };
   $('demo-btn').onclick = () => void startDemo();
@@ -1053,7 +1087,7 @@ function bindTabs(): void {
   for (const b of document.querySelectorAll<HTMLElement>('[data-goto]')) b.addEventListener('click', () => showTab(b.dataset.goto!));
   $('empty-edit').onclick = () => showTab('edit');
   $('empty-demo').onclick = () => void startDemo();
-  $('demo-exit').onclick = exitDemo;
+  $('demo-exit').onclick = () => void exitDemo();
   $<HTMLSelectElement>('demo-select').onchange = (e) => void startDemo((e.target as HTMLSelectElement).value);
   document.addEventListener('keydown', (e) => {
     const t = e.target as HTMLElement;
@@ -1192,16 +1226,13 @@ async function main(): Promise<void> {
       if (chartKey && Object.keys(changes).some((k) => k.startsWith('chart:') && k.endsWith(`:${player?.recording?.id ?? ''}`))) void reloadChart();
     });
     // Switching tabs: forget the old player until the new active tab reports.
-    chrome.tabs.onActivated.addListener(() => {
+    // The active tab is followed during demo too, so leaving the demo knows where the user is.
+    chrome.tabs.onActivated.addListener((info) => {
+      if (myWindowId === null || info.windowId === myWindowId) activeTabId = info.tabId;
       if (demo) return;
-      switchDraft(null);
-      player = null;
-      playerTabId = null;
-      chartKey = '';
-      chart = null;
-      lyrics = null;
-      recompute();
+      forgetPlayer();
     });
+    await refreshActiveTab();
   }
   recompute();
   renderHeader();
