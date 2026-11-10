@@ -104,6 +104,18 @@ describe('beginner-only shape penalties', () => {
   });
 });
 
+describe('voicing ids stay stable for saved "known shapes"', () => {
+  it('keeps the ids that main 9ed8cea gave existing shapes', () => {
+    const id = (c: string, f: string) => voicingsForChord(parseChord(c)).find((x) => fretString(x.frets) === f)!.id;
+    expect(id('C', 'x32010')).toBe('db:C:x32010:0');
+    expect(id('F', 'xx3211')).toBe('db:F:xx3211:30');
+    expect(id('G', '320003')).toBe('db:G:320003:35');
+    expect(id('Gm', 'xx5333')).toBe('db:Gm:xx5333:42');
+    expect(id('B7', 'x21202')).toBe('db:B7:x21202:55');
+    expect(id('C#m', 'xx6654')).toBe('db:C#m:xx6654:60');
+  });
+});
+
 describe('new open shapes', () => {
   it('F#m7 2x2220 and F#7 xx4320 are listed and need no barre', () => {
     for (const [chord, frets] of [['F#m7', '2x2220'], ['F#7', 'xx4320']] as const) {

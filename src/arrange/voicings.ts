@@ -67,8 +67,6 @@ const RAW: RawVoicing[] = [
   { chord: 'Fsus2', frets: 'xx3011', fingers: 'xx3011', kind: 'small' },
   { chord: 'Fm', frets: 'xx3111', fingers: 'xx3111', kind: 'small' },
   { chord: 'F#m', frets: 'xx4222', fingers: 'xx3111', kind: 'small' },
-  { chord: 'F#m7', frets: '2x2220', fingers: '1x2340', kind: 'open' },
-  { chord: 'F#7', frets: 'xx4320', fingers: 'xx3210', kind: 'small' },
   // G family
   { chord: 'G', frets: '320003', fingers: '210003', kind: 'open' },
   { chord: 'G', frets: '320033', fingers: '210034', kind: 'open' },
@@ -98,6 +96,9 @@ const RAW: RawVoicing[] = [
   { chord: 'B', frets: 'xx4442', fingers: 'xx2341', kind: 'small' },
   { chord: 'Bb', frets: 'xx3331', fingers: 'xx3331', kind: 'small' },
   { chord: 'C#m', frets: 'xx6654', fingers: 'xx3421', kind: 'small' },
+  // Append new shapes here: an id carries the row index, and saved "known shapes" refer to ids.
+  { chord: 'F#m7', frets: '2x2220', fingers: '1x2340', kind: 'open' },
+  { chord: 'F#7', frets: 'xx4320', fingers: 'xx3210', kind: 'small' },
 ];
 
 interface Template {
