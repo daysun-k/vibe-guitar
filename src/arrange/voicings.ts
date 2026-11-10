@@ -67,6 +67,8 @@ const RAW: RawVoicing[] = [
   { chord: 'Fsus2', frets: 'xx3011', fingers: 'xx3011', kind: 'small' },
   { chord: 'Fm', frets: 'xx3111', fingers: 'xx3111', kind: 'small' },
   { chord: 'F#m', frets: 'xx4222', fingers: 'xx3111', kind: 'small' },
+  { chord: 'F#m7', frets: '2x2220', fingers: '1x2340', kind: 'open' },
+  { chord: 'F#7', frets: 'xx4320', fingers: 'xx3210', kind: 'small' },
   // G family
   { chord: 'G', frets: '320003', fingers: '210003', kind: 'open' },
   { chord: 'G', frets: '320033', fingers: '210034', kind: 'open' },

@@ -100,7 +100,8 @@ export function substitutionCandidates(c: Chord, ctx: ChordContext, original: Ch
   const plain = c.extension === null && c.adds.length === 0 && c.alterations.length === 0;
 
   if (plain && c.seventh === 'none' && c.bass === null) {
-    if (c.triad === 'maj') push(withChanges(c, { seventh: 'maj7' }), 1, 'easier-sound-alike');
+    // A dominant 7th reduced to its triad must not come back as a major 7th (G7 -> Gmaj7 clashes).
+    if (c.triad === 'maj' && original.seventh !== 'b7') push(withChanges(c, { seventh: 'maj7' }), 1, 'easier-sound-alike');
     if (c.triad === 'min') push(withChanges(c, { seventh: 'b7' }), 1, 'easier-sound-alike');
     if (c.triad === 'maj') push(withChanges(c, { triad: 'sus2' }), 1.4, 'easier-sound-alike');
   }

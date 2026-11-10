@@ -79,6 +79,8 @@ export const PENALTY = {
   rootNotInBass: 0.3,
   /** Fewer than 4 sounding strings: thin for strummed accompaniment. */
   thinVoicing: 1,
+  /** Keeping an original 7th that the level would drop (a mild preference for triads). */
+  keepSeventh: 0.5,
 } as const;
 
 /** Cost of playing voicing v for one chord event, excluding the substitution penalty. */
@@ -86,6 +88,9 @@ export function voicingCost(v: Voicing, rootPc: number, level: LevelConfig, prof
   let c = staticDifficulty(v) * level.difficultyWeight;
   const barre = detectBarre(v);
   if (barre?.full && !(level.barreAllowed && profile.canBarre)) c += PENALTY.barreNotAllowed;
+  if (barre && !barre.full) c += level.partialBarreCost;
+  const low = lowestFret(v);
+  if (level.highPositionCost > 0 && low >= 5) c += level.highPositionCost + 0.5 * (low - 5);
   if (fretSpan(v) > profile.maxStretch) c += PENALTY.overStretch;
   if (profile.knownShapes.length > 0 && !profile.knownShapes.includes(v.id)) c += PENALTY.unknownShape;
   const bass = voicingBassPc(v, capo);

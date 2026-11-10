@@ -10,7 +10,7 @@ import { chordKey, formatChord, isNoChord, parseChord, transposeChord, type Chor
 import { PENALTY, timePressure, transitionCost, voicingCost } from './cost';
 import { fretString, type Voicing } from './guitar';
 import { DEFAULT_PROFILE, LEVEL_CONFIGS, type Level, type LevelConfig, type Profile } from './levels';
-import { reduceForLevel, substitutionCandidates, type ChordContext, type SubstitutionReason } from './transform';
+import { reduceForLevel, substitutionCandidates, type ChordContext, type Reduction, type SubstitutionReason } from './transform';
 import { voicingsForChord } from './voicings';
 
 export interface ArrangeInputEvent {
@@ -131,12 +131,13 @@ interface Candidate {
   voicing: Voicing | null;
   cost: number;
   substitutionReason: SubstitutionReason | null;
+  /** The level reduction this candidate starts from, and the steps that produced it. */
+  base: Chord | null;
+  baseSteps: string[];
 }
 
 interface EventPlan {
   original: Chord | null;
-  reducedSteps: string[];
-  reduced: Chord | null;
   candidates: Candidate[];
 }
 
@@ -145,18 +146,35 @@ function standardVoicing(list: Voicing[]): Voicing | null {
 }
 
 function planEvent(original: Chord | null, ctx: ChordContext, level: LevelConfig, profile: Profile, capo: number): EventPlan {
-  if (!original) return { original: null, reducedSteps: [], reduced: null, candidates: [{ sounding: null, shape: null, voicing: null, cost: 0, substitutionReason: null }] };
+  if (!original) {
+    return { original: null, candidates: [{ sounding: null, shape: null, voicing: null, cost: 0, substitutionReason: null, base: null, baseSteps: [] }] };
+  }
   const red = reduceForLevel(original, level, ctx);
-  const options: { chord: Chord; penalty: number; reason: SubstitutionReason | null }[] = [
-    { chord: red.chord, penalty: 0, reason: red.changed ? 'level-simplify' : null },
+  type Option = { chord: Chord; penalty: number; reason: SubstitutionReason | null; base: Reduction };
+  const raw: Option[] = [
+    { chord: red.chord, penalty: 0, reason: red.changed ? 'level-simplify' : null, base: red },
     ...substitutionCandidates(red.chord, ctx, original).map((s) => ({
       chord: s.chord,
       penalty: s.weight * level.substitutionWeight * PENALTY.substitution,
       reason: s.reason,
+      base: red,
     })),
   ];
+  if (!level.allowSevenths) {
+    // Dropping the 7th is a preference, not a rule: the original 7th (Fmaj7 xx3210, Am7, A7)
+    // stays available at a small cost and wins when its shape is easier than the triad.
+    const keep = reduceForLevel(original, { ...level, allowSevenths: true }, ctx);
+    if (chordKey(keep.chord) !== chordKey(red.chord)) raw.push({ chord: keep.chord, penalty: PENALTY.keepSeventh, reason: keep.changed ? 'level-simplify' : null, base: keep });
+  }
+  // One option per chord, at its lowest penalty.
+  const byChord = new Map<string, Option>();
+  for (const o of raw) {
+    const k = chordKey(o.chord);
+    const had = byChord.get(k);
+    if (!had || o.penalty < had.penalty) byChord.set(k, o);
+  }
   const candidates: Candidate[] = [];
-  for (const opt of options) {
+  for (const opt of byChord.values()) {
     const shape = transposeChord(opt.chord, -capo);
     for (const v of voicingsForChord(shape)) {
       candidates.push({
@@ -165,14 +183,24 @@ function planEvent(original: Chord | null, ctx: ChordContext, level: LevelConfig
         voicing: v,
         cost: voicingCost(v, shape.root, level, profile) + opt.penalty,
         substitutionReason: opt.reason,
+        base: opt.base.chord,
+        baseSteps: opt.base.steps,
       });
     }
   }
   if (candidates.length === 0) {
     const shape = transposeChord(red.chord, -capo);
-    candidates.push({ sounding: red.chord, shape, voicing: null, cost: UNPLAYABLE_COST, substitutionReason: red.changed ? 'level-simplify' : null });
+    candidates.push({
+      sounding: red.chord,
+      shape,
+      voicing: null,
+      cost: UNPLAYABLE_COST,
+      substitutionReason: red.changed ? 'level-simplify' : null,
+      base: red.chord,
+      baseSteps: red.steps,
+    });
   }
-  return { original, reducedSteps: red.steps, reduced: red.chord, candidates };
+  return { original, candidates };
 }
 
 function parseOrNull(sym: string): Chord | null {
@@ -248,10 +276,11 @@ export function arrangeEvents(input: ArrangeInputEvent[], timing: Timing, opts: 
       return { ...base, rest: true, sounding: null, shape: null, voicing: null, substitution: false, transformations };
     }
     const originalName = formatChord(plan.original);
-    const reducedName = formatChord(plan.reduced!);
+    // History of the chosen candidate only: a kept 7th has no "drop 7th" step.
+    const reducedName = formatChord(c.base!);
     const soundingName = formatChord(c.sounding!);
     if (reducedName !== originalName) {
-      transformations.push({ kind: 'substitution', from: e.chord, to: reducedName, reason: 'level-simplify', detail: plan.reducedSteps.join('; ') });
+      transformations.push({ kind: 'substitution', from: e.chord, to: reducedName, reason: 'level-simplify', detail: c.baseSteps.join('; ') });
     }
     if (soundingName !== reducedName) {
       transformations.push({ kind: 'substitution', from: reducedName, to: soundingName, reason: c.substitutionReason ?? 'fallback' });

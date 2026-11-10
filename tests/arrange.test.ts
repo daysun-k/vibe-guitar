@@ -122,10 +122,10 @@ describe('arrangement (DP)', () => {
     expect(a.unplayable).toEqual([]);
   });
 
-  it('simplifies Cmaj7 → C and Dm9 → Dm at beginner with badges, keeps them at intermediate', () => {
+  it('beginner keeps the easier Cmaj7 shape but simplifies Dm9 → Dm with a badge; intermediate keeps both', () => {
     const beg = arrangeEvents(seq(['Cmaj7', 'Dm9', 'G', 'C']), timing44, { level: 'beginner', capo: 0 });
-    expect(beg.events[0].sounding).toBe('C');
-    expect(beg.events[0].substitution).toBe(true);
+    expect(beg.events[0].sounding).toBe('Cmaj7'); // x32000 is easier than C x32010
+    expect(beg.events[0].substitution).toBe(false);
     expect(beg.events[1].sounding).toBe('Dm');
     expect(beg.events[1].substitution).toBe(true);
     const mid = arrangeEvents(seq(['Cmaj7', 'Dm9', 'G', 'C']), timing44, { level: 'intermediate', capo: 0, profile: P({ canBarre: true }) });
