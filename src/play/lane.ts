@@ -130,6 +130,15 @@ export function buildSections(bars: { startSec: number; endSec: number }[], line
       isChorus.push(smooth[i]);
     }
   });
+  // A short run of once-sung lines straight after a chorus (no gap) is the chorus's tail, not a verse.
+  for (let i = blocks.length - 1; i > 0; i--) {
+    const prev = blocks[i - 1];
+    if (!isChorus[i] && isChorus[i - 1] && blocks[i].length < 4 && blocks[i][0].startSec - prev[prev.length - 1].endSec <= gap) {
+      prev.push(...blocks[i]);
+      blocks.splice(i, 1);
+      isChorus.splice(i, 1);
+    }
+  }
   const raw: LaneSection[] = [];
   let verse = 0;
   blocks.forEach((b, i) => {

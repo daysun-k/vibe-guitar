@@ -119,3 +119,23 @@ describe('sections without lyrics', () => {
     ]);
   });
 });
+
+describe('sections from lyrics', () => {
+  it('keeps a short once-sung tail with the chorus and numbers verses after gaps', async () => {
+    const { buildSections } = await import('../src/play/lane');
+    const bars = Array.from({ length: 40 }, (_, i) => ({ startSec: i * 2, endSec: i * 2 + 2 }));
+    let t = 4;
+    const line = (text: string, gapAfter = 0.3) => {
+      const l = { startSec: t, endSec: t + 1.7, text, words: [], wordTimed: false };
+      t += 2 + gapAfter;
+      return l;
+    };
+    const lines = [
+      line('v1 a'), line('v1 b'), line('v1 c'), line('v1 d'),
+      line('ch a'), line('ch b'), line('tail x'), line('tail y', 8),
+      line('v2 a'), line('v2 b'), line('v2 c'), line('v2 d'),
+      line('ch a'), line('ch b'),
+    ];
+    expect(buildSections(bars, lines).map((s) => s.name)).toEqual(['인트로', '1절', '후렴', '간주', '2절', '후렴', '아웃트로']);
+  });
+});
