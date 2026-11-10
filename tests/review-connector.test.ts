@@ -41,3 +41,54 @@ describe('connector review: count-in never outlives its model', () => {
     expect(afterCopy).not.toMatch(/\bmodel\./);
   });
 });
+
+import { prepareCountIn } from '../src/extension/sidepanel/countin-prep';
+import type { PlayerControlMessage, PlayerControlResult } from '../src/extension/messages';
+
+describe('delta review: a cancelled count-in stops after each pending reply', () => {
+  function deferredSend() {
+    const sent: PlayerControlMessage[] = [];
+    const pending: ((r: PlayerControlResult) => void)[] = [];
+    const send = (msg: PlayerControlMessage) => { sent.push(msg); return new Promise<PlayerControlResult>((res) => pending.push(res)); };
+    return { sent, pending, send };
+  }
+
+  it('cancelled while the pause reply is pending: no seek, no overlay', async () => {
+    const d = deferredSend();
+    let current = true;
+    const p = prepareCountIn(d.send, () => current, 12);
+    current = false; // recording changed while waiting
+    d.pending[0]({ ok: true });
+    await expect(p).resolves.toEqual({ kind: 'cancelled' });
+    expect(d.sent.map((m) => m.action)).toEqual(['pause']);
+  });
+
+  it('cancelled while the seek reply is pending: reports cancelled, not ready', async () => {
+    const d = deferredSend();
+    let current = true;
+    const p = prepareCountIn(d.send, () => current, 12);
+    d.pending[0]({ ok: true });
+    await Promise.resolve(); await Promise.resolve();
+    expect(d.sent.map((m) => m.action)).toEqual(['pause', 'seek']);
+    current = false;
+    d.pending[1]({ ok: true });
+    await expect(p).resolves.toEqual({ kind: 'cancelled' });
+  });
+
+  it('a current run becomes ready only after both replies succeed', async () => {
+    const d = deferredSend();
+    const p = prepareCountIn(d.send, () => true, 7.5);
+    d.pending[0]({ ok: true });
+    await Promise.resolve(); await Promise.resolve();
+    d.pending[1]({ ok: true });
+    await expect(p).resolves.toEqual({ kind: 'ready' });
+    expect(d.sent[1]).toMatchObject({ action: 'seek', time: 7.5 });
+  });
+
+  it('togglePlay sets the count-in overlay only after preparation reports ready', () => {
+    const src = readFileSync(new URL('../src/extension/sidepanel/sidepanel.ts', import.meta.url), 'utf8');
+    const t = src.slice(src.indexOf('async function togglePlay('));
+    expect(t.indexOf('prepareCountIn(')).toBeGreaterThan(0);
+    expect(t.indexOf("if (prep.kind === 'cancelled') return;")).toBeLessThan(t.indexOf('countingIn = true'));
+  });
+});

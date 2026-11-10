@@ -43,6 +43,7 @@ import { adoptAutoChart, listCharts, loadAutoChart, loadChart, loadSettings, nor
 import { escapeHtml, renderShapeDiagram } from './diagram';
 import { LyricsAsker, lyricsOutcome } from './lyrics-asker';
 import { controlTabId, keepPlayerAfterDemo } from './player-target';
+import { prepareCountIn } from './countin-prep';
 import { PlayScreen, formatTime } from './play';
 
 // ---------- DOM helpers ----------
@@ -815,10 +816,13 @@ async function togglePlay(): Promise<void> {
   const f = frameAt(m, pos);
   const bar = f.bar >= 0 ? m.bars[f.bar] : null;
   const target = Math.max(0, bar ? bar.startSec : pos);
-  const paused = await sendControl({ type: 'player-control', action: 'pause' });
-  if (!paused.ok) return setText('countin-status', `이 플레이어에서는 카운트인 재생을 지원하지 않아요 (${paused.reason ?? '알 수 없음'}).`);
-  const seek = await sendControl({ type: 'player-control', action: 'seek', time: target });
-  if (!seek.ok) return setText('countin-status', `마디 처음으로 이동하지 못해 카운트인을 취소했어요 (${seek.reason ?? '알 수 없음'}).`);
+  const prep = await prepareCountIn(sendControl, () => run === countInRun, target);
+  if (prep.kind === 'cancelled') return;
+  if (prep.kind === 'failed') {
+    return setText('countin-status', prep.step === 'pause'
+      ? `이 플레이어에서는 카운트인 재생을 지원하지 않아요 (${prep.reason ?? '알 수 없음'}).`
+      : `마디 처음으로 이동하지 못해 카운트인을 취소했어요 (${prep.reason ?? '알 수 없음'}).`);
+  }
   const rate = (demo ? demo.clock.rate : player?.playbackRate) || 1;
   const n = settings.countInBars * m.big.bigPerBar;
   const stepMs = (screen.bigBeatSec() * 1000) / rate;
