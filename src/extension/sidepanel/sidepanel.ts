@@ -128,6 +128,7 @@ async function onPlayerState(msg: PlayerStateMessage, sender: chrome.runtime.Mes
   if (msg.adapter === 'applemusic') renderAppleMusicStatus(msg);
   const key = recordingKey(msg.recording);
   if (key !== chartKey) {
+    stopCountIn();
     chartKey = key;
     lyrics = null;
     lyricsNote = '';
@@ -144,6 +145,7 @@ async function onPlayerState(msg: PlayerStateMessage, sender: chrome.runtime.Mes
 
 /** Forget the current player (tab switch, demo exit) until the active tab's player reports. */
 function forgetPlayer(): void {
+  stopCountIn(); // the count-in loop must not outlive the model it counts against
   if (player === null && playerTabId === null) return;
   switchDraft(null);
   player = null;
@@ -808,16 +810,17 @@ async function togglePlay(): Promise<void> {
     return;
   }
   const run = ++countInRun;
+  const m = model;
   const pos = positionNow(false);
-  const f = frameAt(model, pos);
-  const bar = f.bar >= 0 ? model.bars[f.bar] : null;
+  const f = frameAt(m, pos);
+  const bar = f.bar >= 0 ? m.bars[f.bar] : null;
   const target = Math.max(0, bar ? bar.startSec : pos);
   const paused = await sendControl({ type: 'player-control', action: 'pause' });
   if (!paused.ok) return setText('countin-status', `이 플레이어에서는 카운트인 재생을 지원하지 않아요 (${paused.reason ?? '알 수 없음'}).`);
   const seek = await sendControl({ type: 'player-control', action: 'seek', time: target });
   if (!seek.ok) return setText('countin-status', `마디 처음으로 이동하지 못해 카운트인을 취소했어요 (${seek.reason ?? '알 수 없음'}).`);
   const rate = (demo ? demo.clock.rate : player?.playbackRate) || 1;
-  const n = settings.countInBars * model.big.bigPerBar;
+  const n = settings.countInBars * m.big.bigPerBar;
   const stepMs = (screen.bigBeatSec() * 1000) / rate;
   const box = $('countin');
   const num = box.querySelector('b')!;
@@ -826,7 +829,7 @@ async function togglePlay(): Promise<void> {
   for (let i = n; i >= 1; i--) {
     if (run !== countInRun) return;
     num.textContent = String(i);
-    click((n - i) % model.big.bigPerBar === 0);
+    click((n - i) % m.big.bigPerBar === 0);
     await new Promise((r) => setTimeout(r, stepMs));
   }
   if (run !== countInRun) return;

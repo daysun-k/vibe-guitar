@@ -189,7 +189,8 @@ export function frameAt(m: PlayModel, t: number): Frame {
   let bar = -1;
   for (let k = m.bars.length - 1; k >= 0; k--) {
     if (m.bars[k].startSec <= t + 1e-3) {
-      bar = t < m.bars[k].endSec || k === m.bars.length - 1 ? k : -1;
+      // Past the end of the last bar (a chart covering only part of a recording) there is no bar.
+      bar = t < m.bars[k].endSec ? k : -1;
       break;
     }
   }
