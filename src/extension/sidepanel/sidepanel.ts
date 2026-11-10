@@ -41,7 +41,7 @@ import type {
 import { estimatePosition, type PlayerSnapshot } from '../playview';
 import { adoptAutoChart, listCharts, loadAutoChart, loadChart, loadSettings, normalizeSettings, saveChart, saveSettings, type Settings } from '../storage';
 import { escapeHtml, renderShapeDiagram } from './diagram';
-import { LyricsAsker, lyricsOutcome } from './lyrics-asker';
+import { LyricsAsker, lyricsOutcome, lyricsLookupReady } from './lyrics-asker';
 import { controlTabId, keepPlayerAfterDemo } from './player-target';
 import { prepareCountIn } from './countin-prep';
 import { PlayScreen, formatTime } from './play';
@@ -213,6 +213,7 @@ async function requestLyrics(): Promise<void> {
   const r = player?.recording;
   if (!r) return;
   const duration = player?.duration ?? 0;
+  if (!lyricsLookupReady(player)) return; // ads report their own duration under the song id
   if (!lyricsAsker.shouldAsk(chartKey, settings.fetchLyrics, duration > 0)) return;
   const forKey = chartKey;
   const ticket = lyricsAsker.begin();

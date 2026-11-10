@@ -92,3 +92,30 @@ describe('delta review: a cancelled count-in stops after each pending reply', ()
     expect(t.indexOf("if (prep.kind === 'cancelled') return;")).toBeLessThan(t.indexOf('countingIn = true'));
   });
 });
+
+import { LyricsAsker, lyricsLookupReady } from '../src/extension/sidepanel/lyrics-asker';
+
+describe('connector review 2: no lyrics lookup during an ad', () => {
+  it('skips ads and implausibly short durations without marking an attempt', () => {
+    expect(lyricsLookupReady({ isAd: true, duration: 263 })).toBe(false);
+    expect(lyricsLookupReady({ isAd: false, duration: 15 })).toBe(false);
+    expect(lyricsLookupReady({ isAd: false, duration: 263 })).toBe(true);
+    expect(lyricsLookupReady({ isAd: false, duration: 0 })).toBe(true); // unknown yet: the asker records it as duration-less
+    expect(lyricsLookupReady(null)).toBe(false);
+  });
+
+  it('the song is still looked up once after the ad ends', () => {
+    const asker = new LyricsAsker();
+    const states = [{ isAd: true, duration: 15 }, { isAd: true, duration: 15 }, { isAd: false, duration: 263 }, { isAd: false, duration: 263 }];
+    let asked = 0;
+    for (const p of states) if (lyricsLookupReady(p) && asker.shouldAsk('youtube:x', true, p.duration > 0)) asked++;
+    expect(asked).toBe(1);
+  });
+
+  it('requestLyrics checks the ad guard before recording an attempt', () => {
+    const src = readFileSync(new URL('../src/extension/sidepanel/sidepanel.ts', import.meta.url), 'utf8');
+    const f = src.slice(src.indexOf('async function requestLyrics('));
+    expect(f.indexOf('lyricsLookupReady(player)')).toBeGreaterThan(0);
+    expect(f.indexOf('lyricsLookupReady(player)')).toBeLessThan(f.indexOf('lyricsAsker.shouldAsk('));
+  });
+});
