@@ -105,7 +105,7 @@ function fakeFetch(routes: Record<string, { status: number; body?: unknown }>): 
     calls.push(url);
     const path = new URL(url).pathname;
     const r = routes[path] ?? { status: 404 };
-    return { ok: r.status >= 200 && r.status < 300, status: r.status, json: async () => r.body };
+    return { ok: r.status >= 200 && r.status < 300, status: r.status, text: async () => (typeof r.body === 'string' ? r.body : JSON.stringify(r.body ?? null)) };
   }) as FetchLike & { calls: string[] };
   f.calls = calls;
   return f;

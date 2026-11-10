@@ -17,7 +17,17 @@ const lyricsService = new LyricsService(
     set: (items) => chrome.storage.local.set(items),
   },
   (url, init) => fetch(url, { ...init, credentials: 'omit', cache: 'no-store' }),
+  () => new Date(),
+  // Re-read the setting right before every request: the panel's flag may be stale.
+  async () => {
+    const r = await chrome.storage.local.get('settings');
+    return (r.settings as { fetchLyrics?: boolean } | undefined)?.fetchLyrics !== false;
+  },
 );
+chrome.storage.onChanged.addListener((changes, area) => {
+  const next = changes.settings?.newValue as { fetchLyrics?: boolean } | undefined;
+  if (area === 'local' && changes.settings && next?.fetchLyrics === false) lyricsService.abortAll();
+});
 
 chrome.runtime.onInstalled.addListener((details) => {
   // We open the panel ourselves so that action.onClicked still fires (needed for tabCapture).

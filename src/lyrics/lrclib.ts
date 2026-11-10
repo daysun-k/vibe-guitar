@@ -10,6 +10,27 @@ import type { LyricLine, Lyrics } from './types';
 
 export const LRCLIB_ORIGIN = 'https://lrclib.net';
 
+/** Limits for untrusted responses: larger lyrics are treated as "no lyrics". */
+export const LYRICS_LIMITS = { maxResponseChars: 512_000, maxLines: 1500, maxWordsPerLine: 200, maxWords: 20_000, maxSec: 3 * 3600 };
+
+/** The lookup was stopped (setting turned off or aborted); never cached. */
+export class LookupCancelled extends Error {
+  constructor() {
+    super('lyrics lookup cancelled');
+    this.name = 'LookupCancelled';
+  }
+}
+
+/** HTTP 429 from LRCLIB; retryAfterSec from the Retry-After header when present. */
+export class RateLimited extends Error {
+  constructor(readonly retryAfterSec: number | null) {
+    super('lrclib rate limited (429)');
+    this.name = 'RateLimited';
+  }
+}
+
+const validTime = (x: number | undefined, maxSec: number): x is number => x !== undefined && Number.isFinite(x) && x >= 0 && x <= maxSec;
+
 export interface LyricsQuery {
   track: string;
   artist: string;
@@ -103,7 +124,11 @@ function yamlScalar(raw: string): string {
  *       start_ms: 2960
  * Returns null when there is no usable line.
  */
-export function parseLyricsfile(yaml: string): LyricLine[] | null {
+export function parseLyricsfile(yaml: string, durationSec?: number): LyricLine[] | null {
+  const L = LYRICS_LIMITS;
+  if (yaml.length > L.maxResponseChars) return null;
+  const maxSec = durationSec && durationSec > 0 ? durationSec + 60 : L.maxSec;
+  let words = 0;
   type Raw = { text: string; start?: number; end?: number; words: { text: string; start?: number }[] };
   const raws: Raw[] = [];
   let inLines = false;
@@ -116,6 +141,7 @@ export function parseLyricsfile(yaml: string): LyricLine[] | null {
     if (/^\S/.test(line) && !line.startsWith('- ')) break; // next top-level key (e.g. "plain:")
     let m = /^- text:\s?(.*)$/.exec(line);
     if (m) {
+      if (raws.length >= L.maxLines) return null;
       cur = { text: yamlScalar(m[1]), words: [] };
       raws.push(cur);
       continue;
@@ -129,6 +155,7 @@ export function parseLyricsfile(yaml: string): LyricLine[] | null {
     }
     m = /^ {2}- text:\s?(.*)$/.exec(line);
     if (m) {
+      if (cur.words.length >= L.maxWordsPerLine || ++words > L.maxWords) return null;
       cur.words.push({ text: yamlScalar(m[1]) });
       continue;
     }
@@ -137,14 +164,16 @@ export function parseLyricsfile(yaml: string): LyricLine[] | null {
   }
   const out: LyricLine[] = [];
   raws.forEach((r, i) => {
-    const words = r.words.filter((w) => w.text.trim() && w.start !== undefined).map((w) => ({ text: w.text.trim(), startSec: w.start! }));
-    const start = r.start ?? words[0]?.startSec;
+    const words = r.words.filter((w) => w.text.trim() && validTime(w.start, maxSec)).map((w) => ({ text: w.text.trim(), startSec: w.start! }));
+    const start = validTime(r.start, maxSec) ? r.start : words[0]?.startSec;
     if (start === undefined || !r.text.trim()) return;
-    const nextStart = raws[i + 1]?.start;
-    const end = r.end ?? nextStart ?? start + 5;
+    const next = raws[i + 1]?.start;
+    const nextStart = validTime(next, maxSec) ? next : undefined;
+    const end = validTime(r.end, maxSec) && r.end >= start ? r.end : (nextStart ?? start + 5);
     if (words.length && words.length === r.words.length) out.push({ startSec: start, endSec: Math.max(end, start + 0.2), text: r.text.trim(), words, wordTimed: true });
     else out.push(interpolatedLine(r.text.trim(), start, Math.max(end, start + 0.2)));
   });
+  out.sort((a, b) => a.startSec - b.startSec);
   return out.length ? out : null;
 }
 
@@ -152,7 +181,7 @@ export function parseLyricsfile(yaml: string): LyricLine[] | null {
 
 /** Words spread over the line by character count (used when only line times exist). */
 export function interpolatedLine(text: string, startSec: number, endSec: number): LyricLine {
-  const tokens = text.split(/\s+/).filter(Boolean);
+  const tokens = text.split(/\s+/).filter(Boolean).slice(0, LYRICS_LIMITS.maxWordsPerLine);
   const total = tokens.reduce((a, w) => a + w.length + 1, 0) || 1;
   const span = Math.max(0.2, Math.min(endSec - startSec, 8));
   let acc = 0;
@@ -166,12 +195,18 @@ export function interpolatedLine(text: string, startSec: number, endSec: number)
 
 /** Parse LRC "[mm:ss.xx] text" lines; an empty text line ends the previous line. */
 export function parseSyncedLyrics(lrc: string, durationSec?: number): LyricLine[] | null {
+  if (lrc.length > LYRICS_LIMITS.maxResponseChars) return null;
+  const maxSec = durationSec && durationSec > 0 ? durationSec + 60 : LYRICS_LIMITS.maxSec;
   const stamps: { t: number; text: string }[] = [];
   for (const raw of lrc.split(/\r?\n/)) {
     const tags = [...raw.matchAll(/\[(\d+):(\d+(?:\.\d+)?)\]/g)];
     if (!tags.length) continue;
     const text = raw.replace(/\[[^\]]*\]/g, '').trim();
-    for (const m of tags) stamps.push({ t: Number(m[1]) * 60 + Number(m[2]), text });
+    for (const m of tags) {
+      const t = Number(m[1]) * 60 + Number(m[2]);
+      if (validTime(t, maxSec)) stamps.push({ t, text });
+    }
+    if (stamps.length > LYRICS_LIMITS.maxLines) return null;
   }
   stamps.sort((a, b) => a.t - b.t);
   const out: LyricLine[] = [];
@@ -185,14 +220,15 @@ export function parseSyncedLyrics(lrc: string, durationSec?: number): LyricLine[
 }
 
 /** Best lyrics in a record: word-level lyricsfile, then line-level syncedLyrics, else null. */
-export function lyricsFromRecord(r: LrclibRecord): Lyrics | null {
+export function lyricsFromRecord(r: LrclibRecord, durationSec?: number): Lyrics | null {
   if (r.instrumental) return null;
-  if (r.lyricsfile) {
-    const lines = parseLyricsfile(r.lyricsfile);
+  const dur = durationSec ?? r.duration;
+  if (typeof r.lyricsfile === 'string' && r.lyricsfile) {
+    const lines = parseLyricsfile(r.lyricsfile, dur);
     if (lines && lines.some((l) => l.wordTimed)) return { kind: 'words', lines };
   }
-  if (r.syncedLyrics) {
-    const lines = parseSyncedLyrics(r.syncedLyrics, r.duration);
+  if (typeof r.syncedLyrics === 'string' && r.syncedLyrics) {
+    const lines = parseSyncedLyrics(r.syncedLyrics, dur);
     if (lines) return { kind: 'lines', lines };
   }
   return null;
@@ -206,32 +242,78 @@ export function pickSearchResult(results: LrclibRecord[], q: LyricsQuery, durati
   return ok.sort((a, b) => score(a) - score(b))[0] ?? null;
 }
 
-export type FetchLike = (url: string, init?: { headers?: Record<string, string> }) => Promise<{ ok: boolean; status: number; json(): Promise<unknown> }>;
+export interface FetchResponseLike {
+  ok: boolean;
+  status: number;
+  text(): Promise<string>;
+  headers?: { get(name: string): string | null };
+}
+
+export type FetchLike = (url: string, init?: { headers?: Record<string, string>; signal?: AbortSignal }) => Promise<FetchResponseLike>;
 
 export type LyricsLookup =
   | { status: 'found'; lyrics: Lyrics; record: { id?: number; trackName?: string; artistName?: string }; via: 'get' | 'search' }
   | { status: 'not-found' };
 
-/** /api/get first, /api/search as fallback. Network or server errors throw (not cached by callers). */
-export async function lookupLyrics(q: LyricsQuery, durationSec: number, fetchFn: FetchLike): Promise<LyricsLookup> {
+export interface LookupOptions {
+  signal?: AbortSignal;
+  /** Re-checked right before every request; false stops the lookup (LookupCancelled). */
+  allowed?: () => boolean | Promise<boolean>;
+}
+
+/** Parse a JSON body; oversized or malformed bodies count as "nothing usable" (null). */
+async function readJson(res: FetchResponseLike): Promise<unknown> {
+  const body = await res.text();
+  if (body.length > LYRICS_LIMITS.maxResponseChars) return null;
+  try {
+    return JSON.parse(body) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+function retryAfter(res: FetchResponseLike): number | null {
+  const v = Number(res.headers?.get('retry-after'));
+  return Number.isFinite(v) && v > 0 ? v : null;
+}
+
+/**
+ * /api/get first, /api/search as fallback. `allowed` is re-checked right before each
+ * request and the signal aborts in-flight ones (LookupCancelled). Network/server errors
+ * throw (callers do not cache them); 429 throws RateLimited.
+ */
+export async function lookupLyrics(q: LyricsQuery, durationSec: number, fetchFn: FetchLike, opts: LookupOptions = {}): Promise<LyricsLookup> {
   if (!q.track) return { status: 'not-found' };
   const headers = { 'Lrclib-Client': 'vibe-guitar (personal chrome extension)' };
-  const res = await fetchFn(getUrl(q, durationSec), { headers });
+  const request = async (url: string): Promise<FetchResponseLike> => {
+    if (opts.signal?.aborted || (opts.allowed && !(await opts.allowed())) || opts.signal?.aborted) throw new LookupCancelled();
+    let res: FetchResponseLike;
+    try {
+      res = await fetchFn(url, { headers, signal: opts.signal });
+    } catch (e) {
+      if (opts.signal?.aborted) throw new LookupCancelled();
+      throw e;
+    }
+    if (opts.signal?.aborted) throw new LookupCancelled();
+    if (res.status === 429) throw new RateLimited(retryAfter(res));
+    return res;
+  };
+  const res = await request(getUrl(q, durationSec));
   if (res.ok) {
-    const rec = (await res.json()) as LrclibRecord;
-    const lyrics = lyricsFromRecord(rec);
-    if (lyrics) return { status: 'found', lyrics, record: pickMeta(rec), via: 'get' };
+    const rec = await readJson(res);
+    const lyrics = rec && typeof rec === 'object' ? lyricsFromRecord(rec as LrclibRecord, durationSec) : null;
+    if (lyrics) return { status: 'found', lyrics, record: pickMeta(rec as LrclibRecord), via: 'get' };
   } else if (res.status !== 404) {
     throw new Error(`lrclib get ${res.status}`);
   }
-  const sr = await fetchFn(searchUrl(q), { headers });
+  const sr = await request(searchUrl(q));
   if (!sr.ok) {
     if (sr.status === 404) return { status: 'not-found' };
     throw new Error(`lrclib search ${sr.status}`);
   }
-  const list = (await sr.json()) as LrclibRecord[];
-  const best = Array.isArray(list) ? pickSearchResult(list, q, durationSec) : null;
-  const lyrics = best ? lyricsFromRecord(best) : null;
+  const list = await readJson(sr);
+  const best = Array.isArray(list) ? pickSearchResult(list.slice(0, 50) as LrclibRecord[], q, durationSec) : null;
+  const lyrics = best ? lyricsFromRecord(best, durationSec) : null;
   return best && lyrics ? { status: 'found', lyrics, record: pickMeta(best), via: 'search' } : { status: 'not-found' };
 }
 

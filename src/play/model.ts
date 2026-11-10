@@ -9,6 +9,7 @@ import type { Level, Profile } from '../arrange/levels';
 import type { Chart, Timing } from '../chart/types';
 import { findEventIndex } from '../extension/playview';
 import { estimateLyricOffset, nextLineAfter, pinnedLineAt, placeChords, shiftLyrics, type OffsetEstimate, type PlacedLine } from '../lyrics/align';
+import { LYRICS_LIMITS } from '../lyrics/lrclib';
 import type { Lyrics } from '../lyrics/types';
 import { prettyChord, respellChartForKey, type KeyEstimate } from '../music/key';
 import { alignBarPhase, bigBeatIndexAt, bigBeatInfo, bigBeatsUntil, type BigBeat, type PhaseEstimate } from '../music/meter';
@@ -63,6 +64,29 @@ function changeTimes(chart: Chart): number[] {
   return out;
 }
 
+/**
+ * Lyrics as stored (cache entries are untrusted): bounded line/word counts, finite and
+ * non-negative times within the song, lines in order. Returns null when nothing usable is left.
+ */
+export function sanitizeLyrics(l: Lyrics, durationSec: number): Lyrics | null {
+  const L = LYRICS_LIMITS;
+  if (!l || !Array.isArray(l.lines) || l.lines.length === 0 || l.lines.length > L.maxLines) return null;
+  const maxSec = durationSec > 0 ? durationSec + 60 : L.maxSec;
+  const ok = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x) && x >= 0 && x <= maxSec;
+  let words = 0;
+  const lines: Lyrics['lines'] = [];
+  for (const line of l.lines) {
+    if (!line || !ok(line.startSec) || !Array.isArray(line.words) || line.words.length > L.maxWordsPerLine) return null;
+    words += line.words.length;
+    if (words > L.maxWords) return null;
+    const ws = line.words.filter((w) => w && typeof w.text === 'string' && ok(w.startSec)).map((w) => ({ text: w.text.slice(0, 80), startSec: w.startSec }));
+    const end = ok(line.endSec) && line.endSec >= line.startSec ? line.endSec : line.startSec + 5;
+    lines.push({ startSec: line.startSec, endSec: end, text: String(line.text ?? '').slice(0, 400), words: ws, wordTimed: !!line.wordTimed && ws.length === line.words.length });
+  }
+  lines.sort((a, b) => a.startSec - b.startSec);
+  return { kind: l.kind === 'lines' ? 'lines' : 'words', lines };
+}
+
 export function buildPlayModel(source: Chart, opts: PlayOptions, rawLyrics: Lyrics | null): PlayModel {
   const { chart, key } = respellChartForKey(source);
   const changes = changeTimes(chart);
@@ -84,18 +108,30 @@ export function buildPlayModel(source: Chart, opts: PlayOptions, rawLyrics: Lyri
     };
   });
   const { items, keys } = stripItems(arrangement);
-  const coverEnd = Math.max(0, ...chart.coverage.map((r) => r.toSec), ...arrangement.events.map((e) => e.endSec));
+  let coverEnd = 0;
+  for (const r of chart.coverage) coverEnd = Math.max(coverEnd, r.toSec);
+  for (const e of arrangement.events) coverEnd = Math.max(coverEnd, e.endSec);
   const durationSec = Math.max(opts.durationSec ?? 0, coverEnd);
   const bars = buildLane(arrangement, timing, big, Math.min(durationSec, coverEnd + 0.01), (i) => keys[i] || labels[i].name);
 
+  // Lyrics are optional: anything wrong with them degrades to "no lyrics", never to no chords.
   let lyrics: Lyrics | null = null;
   let lyricOffset: OffsetEstimate | null = null;
-  if (rawLyrics && rawLyrics.lines.length) {
-    lyricOffset = estimateLyricOffset(rawLyrics, changes);
-    lyrics = shiftLyrics(rawLyrics, lyricOffset.offsetSec);
+  let placed: PlacedLine[] = [];
+  const usable = rawLyrics ? sanitizeLyrics(rawLyrics, durationSec) : null;
+  if (usable) {
+    try {
+      lyricOffset = estimateLyricOffset(usable, changes);
+      lyrics = shiftLyrics(usable, lyricOffset.offsetSec);
+      const starts = arrangement.events.map((e) => e.startSec);
+      placed = lyrics.lines.map((l) => placeChords(l, starts));
+    } catch (e) {
+      console.warn('lyrics ignored', e);
+      lyrics = null;
+      lyricOffset = null;
+      placed = [];
+    }
   }
-  const starts = arrangement.events.map((e) => e.startSec);
-  const placed = lyrics ? lyrics.lines.map((l) => placeChords(l, starts)) : [];
   const sections = buildSections(bars, lyrics?.lines ?? null);
   return {
     chart,

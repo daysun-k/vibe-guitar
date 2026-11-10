@@ -123,7 +123,11 @@ export function placeChords(line: LyricLine, eventStarts: number[]): PlacedLine 
     ws.forEach((w, i) => {
       if (w.startSec <= te + 0.25) wi = i;
     });
-    if (te < ws[ws.length - 1].startSec + 0.3) resid.push(Math.min(...ws.map((w) => Math.abs(w.startSec - te))));
+    if (te < ws[ws.length - 1].startSec + 0.3) {
+      let d = Infinity;
+      for (const w of ws) d = Math.min(d, Math.abs(w.startSec - te));
+      resid.push(d);
+    }
     if (anchors[wi] !== null && wi + 1 < ws.length && anchors[wi + 1] === null) wi++;
     anchors[wi] = j; // a later change on the same word wins
   }

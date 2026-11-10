@@ -19,7 +19,10 @@ describe('play model on the synthetic demo song', () => {
     // every chord change sits on a bar start
     const starts = new Set(m.bars.map((b) => b.startSec.toFixed(3)));
     for (const e of m.arrangement.events.slice(1)) expect(starts.has(e.startSec.toFixed(3))).toBe(true);
-    expect(m.bars.every((b) => b.segments.length === 1)).toBe(true);
+    expect(m.bars.slice(0, -1).every((b) => b.segments.length === 1)).toBe(true);
+    // the last bar runs past the end of coverage (90.6 s): that tail is drawn empty
+    const last = m.bars[m.bars.length - 1];
+    expect(last.segments.map((s) => [s.event >= 0, s.endSec])).toEqual([[true, 90.6], [false, last.endSec]]);
     expect(m.bars.some((b) => b.repeat)).toBe(true);
   });
 

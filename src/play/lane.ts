@@ -57,25 +57,27 @@ export function buildLane(a: Arrangement, t: Timing, big: BigBeat, toSec: number
   const bars = barsBetween(t, from, toSec);
   let prevKey: string | null = null;
   return bars.map((b) => {
-    // Rests and gaps are both "no chord" (-1); consecutive no-chord parts merge.
-    const ids: number[] = [];
-    const chordAt = (i: number) => (i >= 0 && !a.events[i].rest ? i : -1);
-    const at = findEventIndex(a.events, b.startSec + 0.05);
-    ids.push(isActive(a.events[at], b.startSec + 0.05) ? chordAt(at) : -1);
-    a.events.forEach((e, i) => {
-      const id = chordAt(i);
-      if (e.startSec > b.startSec + 0.1 && e.startSec < b.endSec - 0.1 && id !== ids[ids.length - 1]) ids.push(id);
-    });
-    const segStart: number[] = [b.startSec];
-    a.events.forEach((e, i) => {
-      const id = chordAt(i);
-      if (e.startSec > b.startSec + 0.1 && e.startSec < b.endSec - 0.1 && segStart.length < ids.length && id === ids[segStart.length]) segStart.push(e.startSec);
-    });
-    const segments: LaneSegment[] = ids.map((id, n) => {
-      const st = n ? segStart[n] : b.startSec;
-      const en = n + 1 < ids.length ? segStart[n + 1] : b.endSec;
-      const w = (beatIndexAt(t, en) - beatIndexAt(t, st)) / big.beatsPerBig;
-      return { event: id, startSec: st, endSec: en, weight: Math.max(1, Math.round(w)) };
+    // Split at every event start and end inside the bar (ends mark coverage gaps), so time
+    // without analysis is drawn empty. Rests and gaps are both "no chord" (-1); equal
+    // neighbours merge.
+    const chordAt = (sec: number): number => {
+      const i = findEventIndex(a.events, sec);
+      return isActive(a.events[i], sec) && !a.events[i].rest ? i : -1;
+    };
+    const cuts = [b.startSec];
+    for (const e of a.events) {
+      for (const x of [e.startSec, e.endSec]) if (x > b.startSec + 0.1 && x < b.endSec - 0.1) cuts.push(x);
+    }
+    cuts.sort((x, y) => x - y);
+    const parts: { id: number; st: number }[] = [];
+    for (const c of cuts) {
+      const id = chordAt(c + 0.01);
+      if (!parts.length || parts[parts.length - 1].id !== id) parts.push({ id, st: c });
+    }
+    const segments: LaneSegment[] = parts.map((p, n) => {
+      const en = n + 1 < parts.length ? parts[n + 1].st : b.endSec;
+      const w = (beatIndexAt(t, en) - beatIndexAt(t, p.st)) / big.beatsPerBig;
+      return { event: p.id, startSec: p.st, endSec: en, weight: Math.max(1, Math.round(w)) };
     });
     const keys = segments.map((s) => (s.event < 0 ? '-' : keyOf(s.event)));
     const repeat = segments.length === 1 && keys[0] !== '-' && keys[0] === prevKey;

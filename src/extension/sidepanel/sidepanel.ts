@@ -21,7 +21,7 @@ import {
   undoStamp,
   type StampState,
 } from '../../editor/core';
-import { DraftBook, checkSaveTarget, isDraftEmpty, reattachDraft, recordingKeyOf, type EditorDraft } from '../../editor/drafts';
+import { DraftBook, chartWriteTarget, checkSaveTarget, isDraftEmpty, reattachDraft, recordingKeyOf, type EditorDraft } from '../../editor/drafts';
 import type { Lyrics } from '../../lyrics/types';
 import { keyLabel, prettyChord } from '../../music/key';
 import { DEMO_RECORDING, DemoClock, demoChart, demoLyrics } from '../../play/demo';
@@ -41,6 +41,7 @@ import type {
 import { estimatePosition, type PlayerSnapshot } from '../playview';
 import { adoptAutoChart, listCharts, loadAutoChart, loadChart, loadSettings, normalizeSettings, saveChart, saveSettings, type Settings } from '../storage';
 import { escapeHtml, renderShapeDiagram } from './diagram';
+import { LyricsAsker } from './lyrics-asker';
 import { PlayScreen, formatTime } from './play';
 
 // ---------- DOM helpers ----------
@@ -57,6 +58,8 @@ const setHtml = (el: HTMLElement, html: string): void => {
   if (el.innerHTML !== html) el.innerHTML = html;
 };
 
+/** Demo playback never writes charts or drafts (it replays with a simulated clock). */
+const DEMO_BLOCK = '데모 재생 중에는 코드표를 저장하거나 바꾸지 않아요. 데모를 끝낸 뒤 다시 해 주세요.';
 const LEVEL_LABEL: Record<Level, string> = { beginner: '입문', novice: '초급', intermediate: '중급', advanced: '상급' };
 const params = new URLSearchParams(location.search);
 /** False when the page is opened outside the extension (file:// preview, screenshots). */
@@ -87,7 +90,7 @@ let pendingAuto: Chart | null = null;
 /** Lyrics for chartKey (null = none / not loaded) and the request bookkeeping. */
 let lyrics: Lyrics | null = null;
 let lyricsNote = '';
-let lyricsAskedFor = '';
+const lyricsAsker = new LyricsAsker();
 /** Demo playback: a simulated clock replaying a stored or synthetic chart. */
 let demo: { clock: DemoClock; chart: Chart; lyrics: Lyrics | null; key: string } | null = null;
 /** Count-in in progress (cancelled by pressing play again or seeking). */
@@ -124,7 +127,7 @@ async function onPlayerState(msg: PlayerStateMessage, sender: chrome.runtime.Mes
     chartKey = key;
     lyrics = null;
     lyricsNote = '';
-    lyricsAskedFor = '';
+    lyricsAsker.reset();
     switchDraft(msg.recording);
     await reloadChart();
     renderEditorTarget();
@@ -178,9 +181,7 @@ async function requestLyrics(): Promise<void> {
   const r = player?.recording;
   if (!r) return;
   const duration = player?.duration ?? 0;
-  const ask = `${chartKey}|${settings.fetchLyrics ? 'fetch' : 'cache'}|${duration > 0 ? 'd' : '-'}`;
-  if (ask === lyricsAskedFor) return;
-  lyricsAskedFor = ask;
+  if (!lyricsAsker.shouldAsk(chartKey, settings.fetchLyrics, duration > 0)) return;
   const forKey = chartKey;
   const msg: LyricsGetMessage = { type: 'lyrics-get', recording: r, durationSec: duration, allowFetch: settings.fetchLyrics };
   let reply: LyricsReply | undefined;
@@ -191,8 +192,14 @@ async function requestLyrics(): Promise<void> {
   }
   if (forKey !== chartKey) return;
   if (!reply || !reply.ok) {
-    lyricsNote = `가사를 가져오지 못했어요${reply && !reply.ok ? ` (${reply.error})` : ''}. 다음에 이 곡을 열 때 다시 시도해요.`;
-    lyricsAskedFor = '';
+    // The attempt stays recorded for this visit: no retry on every player update (429 included);
+    // the next visit or recording change asks again, and the service worker honours its backoff.
+    lyricsNote =
+      reply && !reply.ok && reply.reason === 'rate-limited'
+        ? 'LRCLIB 요청이 많아 잠시 쉬어요. 나중에 이 곡을 다시 열면 가져와요.'
+        : reply && !reply.ok && reply.reason === 'cancelled'
+          ? '가사 가져오기를 껐어요.'
+          : `가사를 가져오지 못했어요${reply && !reply.ok ? ` (${reply.error})` : ''}. 다음에 이 곡을 열 때 다시 시도해요.`;
   } else if (reply.entry?.result === 'found' && reply.entry.lyrics) {
     lyrics = reply.entry.lyrics;
     lyricsNote = `가사: LRCLIB ${reply.entry.lyrics.kind === 'words' ? '단어 단위' : '줄 단위'} (${reply.entry.query.artist} – ${reply.entry.query.track})`;
@@ -215,11 +222,18 @@ function currentCapo(): 'auto' | number {
 function recompute(): void {
   const c = demo ? demo.chart : chart;
   const ly = demo ? demo.lyrics : lyrics;
+  const opts = { level: settings.level, capo: currentCapo(), profile: settings.profile, durationSec: demo ? demo.clock.durationSec : player?.duration };
   try {
-    model = c ? buildPlayModel(c, { level: settings.level, capo: currentCapo(), profile: settings.profile, durationSec: demo ? demo.clock.durationSec : player?.duration }, ly) : null;
+    model = c ? buildPlayModel(c, opts, ly) : null;
   } catch (e) {
     console.error(e);
-    model = null;
+    // Lyrics are optional: if they break the model, keep the chord view without them.
+    try {
+      model = c && ly ? buildPlayModel(c, opts, null) : null;
+    } catch (e2) {
+      console.error(e2);
+      model = null;
+    }
   }
   screen.setModel(model);
   screen.setLook(settings.lookAheadBars);
@@ -378,12 +392,6 @@ function loop(now: number): void {
   try {
     if (demo) {
       demo.clock.tick(now);
-      if (player) {
-        player.currentTime = demo.clock.t;
-        player.paused = !demo.clock.playing;
-        player.playbackRate = demo.clock.rate;
-        player.sampledAt = Date.now();
-      }
     }
     renderHeader();
     if (model && (demo || (player && !player.isAd))) {
@@ -454,9 +462,11 @@ function onAutoChartSaved(msg: AutoChartSavedMessage): void {
 }
 
 async function doAdoptAuto(): Promise<void> {
-  const r = player?.recording;
-  if (!r || !pendingAuto) return;
+  const target = chartWriteTarget(currentRecording(), demo !== null);
+  if (!target.ok) return target.reason === 'demo' ? setText('listen-result', DEMO_BLOCK) : undefined;
+  if (!pendingAuto) return;
   if (!confirm('직접 만든 코드표를 자동 코드표로 바꿀까요?\n직접 만든 코드표는 chartbackup 키에 보관됩니다(편집 탭의 JSON 내보내기로도 백업할 수 있습니다).')) return;
+  const r = target.recording;
   await adoptAutoChart(r.source, r.id);
   await reloadChart();
 }
@@ -606,12 +616,14 @@ function parseSequenceFromTextarea(): void {
 }
 
 function doStamp(): void {
+  if (demo) return setStatus('save-status', DEMO_BLOCK, true);
   if (!draftMatchesPlayer()) return;
   editor = stamp(editor, positionNow(false));
   renderStamps();
 }
 
 function doTap(): void {
+  if (demo) return setStatus('save-status', DEMO_BLOCK, true);
   if (!draftMatchesPlayer()) return;
   taps = addTap(taps, positionNow(false));
   const fit = fitTapTempo(taps);
@@ -622,11 +634,11 @@ function doTap(): void {
 }
 
 async function doSave(): Promise<void> {
-  const check = checkSaveTarget(currentDraft(), currentRecording());
+  const check = checkSaveTarget(currentDraft(), currentRecording(), { demo: demo !== null });
   if (!check.ok) {
     return setStatus(
       'save-status',
-      check.reason === 'no-recording' ? '재생 중인 곡이 없습니다.' : '이 초안은 다른 곡에서 만들었습니다. 저장하지 않았습니다(옮기려면 "초안을 이 곡으로 옮기기"를 누르세요).',
+      check.reason === 'demo' ? DEMO_BLOCK : check.reason === 'no-recording' ? '재생 중인 곡이 없습니다.' : '이 초안은 다른 곡에서 만들었습니다. 저장하지 않았습니다(옮기려면 "초안을 이 곡으로 옮기기"를 누르세요).',
       true,
     );
   }
@@ -674,11 +686,14 @@ function exportJson(): void {
 }
 
 async function importJson(file: File): Promise<void> {
+  if (demo) return setStatus('io-status', DEMO_BLOCK, true);
   try {
     const data = JSON.parse(await file.text()) as unknown;
     const v = validateChart(data);
     if (!v.ok) return setStatus('io-status', `형식 오류: ${v.errors.slice(0, 5).join('; ')}`, true);
     let c = v.chart!;
+    // Re-check after the await: demo playback may have started while the file was read.
+    if (demo) return setStatus('io-status', DEMO_BLOCK, true);
     const r = currentRecording();
     if ($<HTMLInputElement>('import-attach').checked && r) c = attachChartToRecording(c, r);
     await saveChart(c);
@@ -693,8 +708,9 @@ async function importJson(file: File): Promise<void> {
 }
 
 async function attachExample(): Promise<void> {
-  const r = currentRecording();
-  if (!r) return setStatus('io-status', '재생 중인 곡이 없습니다.', true);
+  const target = chartWriteTarget(currentRecording(), demo !== null);
+  if (!target.ok) return setStatus('io-status', target.reason === 'demo' ? DEMO_BLOCK : '재생 중인 곡이 없습니다.', true);
+  const r = target.recording;
   const ex = EXAMPLE_CHARTS[Number($<HTMLSelectElement>('example-select').value)];
   const c = attachChartToRecording(ex, r);
   await saveChart(c);
@@ -842,19 +858,6 @@ async function startDemo(preferKey?: string): Promise<void> {
   const rate = Number(params.get('rate'));
   if (rate === 0.5) clock.rate = 0.5;
   demo = { clock, chart: pick.chart, lyrics: await demoLyricsFor(pick.chart), key: pick.key };
-  player = {
-    type: 'player-state',
-    adapter: pick.chart.recording.source,
-    via: 'video-element',
-    recording: pick.chart.recording,
-    currentTime: clock.t,
-    duration: end,
-    paused: true,
-    playbackRate: clock.rate,
-    isAd: false,
-    sampledAt: Date.now(),
-    url: 'demo',
-  };
   $('demo-bar').hidden = false;
   $('rate-seg').hidden = false;
   for (const b of document.querySelectorAll('#rate-seg [data-rate]')) b.setAttribute('aria-pressed', String(Number((b as HTMLElement).dataset.rate) === clock.rate));
@@ -868,14 +871,12 @@ async function startDemo(preferKey?: string): Promise<void> {
 function exitDemo(): void {
   stopCountIn();
   demo = null;
-  player = null;
-  playerTabId = null;
-  chartKey = '';
-  chart = null;
   $('demo-bar').hidden = true;
   $('rate-seg').hidden = true;
+  // Back to the real song: its chart may have changed while storage events were ignored.
   recompute();
   renderHeader();
+  void reloadChart();
 }
 
 // ---------- settings sheet ----------
@@ -1078,7 +1079,7 @@ function bindEditor(): void {
     renderStamps();
   };
   $('tap').onclick = doTap;
-  $('downbeat-now').onclick = () => writeEditorTiming({ ...readEditorTiming(), firstDownbeatSec: Math.round(positionNow(false) * 1000) / 1000 });
+  $('downbeat-now').onclick = () => demo ? setStatus('save-status', DEMO_BLOCK, true) : writeEditorTiming({ ...readEditorTiming(), firstDownbeatSec: Math.round(positionNow(false) * 1000) / 1000 });
   $('save-chart').onclick = () => void doSave();
   $('edit-load-existing').onclick = loadExistingIntoEditor;
   $('draft-reattach').onclick = doReattach;
@@ -1092,6 +1093,7 @@ function bindEditor(): void {
   sel.innerHTML = EXAMPLE_CHARTS.map((c, i) => `<option value="${i}">${escapeHtml(c.recording.title)}</option>`).join('');
   $('example-attach').onclick = () => void attachExample();
   $('listen-analyze').onclick = () => {
+    if (demo) return setText('listen-status', DEMO_BLOCK);
     chrome.runtime.sendMessage({ type: 'listen-analyze', target: 'offscreen' } satisfies ExtensionMessage).catch(() => setText('listen-status', '캡처 중이 아닙니다'));
   };
   $('listen-adopt').onclick = () => void doAdoptAuto();
