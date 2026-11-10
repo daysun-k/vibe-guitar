@@ -96,12 +96,24 @@ describe('delta review: a cancelled count-in stops after each pending reply', ()
 import { LyricsAsker, lyricsLookupReady } from '../src/extension/sidepanel/lyrics-asker';
 
 describe('connector review 2: no lyrics lookup during an ad', () => {
-  it('skips ads and implausibly short durations without marking an attempt', () => {
+  it('skips only ads; real short songs and unknown durations are looked up', () => {
     expect(lyricsLookupReady({ isAd: true, duration: 263 })).toBe(false);
-    expect(lyricsLookupReady({ isAd: false, duration: 15 })).toBe(false);
+    expect(lyricsLookupReady({ isAd: true, duration: 15 })).toBe(false);
+    expect(lyricsLookupReady({ isAd: false, duration: 20 })).toBe(true); // a genuine 20-second song
     expect(lyricsLookupReady({ isAd: false, duration: 263 })).toBe(true);
     expect(lyricsLookupReady({ isAd: false, duration: 0 })).toBe(true); // unknown yet: the asker records it as duration-less
     expect(lyricsLookupReady(null)).toBe(false);
+  });
+
+  it('a genuine short song is looked up once and recovers after OFF→ON', () => {
+    const asker = new LyricsAsker();
+    const song = { isAd: false, duration: 20 };
+    let asked = 0;
+    for (let i = 0; i < 4; i++) if (lyricsLookupReady(song) && asker.shouldAsk('youtube:short', true, true)) asked++;
+    expect(asked).toBe(1);
+    asker.fetchTurnedOn('youtube:short');
+    if (lyricsLookupReady(song) && asker.shouldAsk('youtube:short', true, true)) asked++;
+    expect(asked).toBe(2);
   });
 
   it('the song is still looked up once after the ad ends', () => {

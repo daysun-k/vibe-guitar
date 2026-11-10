@@ -68,17 +68,13 @@ export function lyricsOutcome(reply: LyricsReply | undefined, fetchOn: boolean):
   return { note: fetchOn ? '' : '가사 가져오기가 꺼져 있어요.' };
 }
 
-/** Shortest plausible song length; a shorter duration is almost always an ad or a stub. */
-export const MIN_SONG_SEC = 30;
-
 /**
  * Whether the player state can be used for a lyrics lookup right now. During an ad the
  * video element reports the ad's duration under the song's recording id, and a lookup with
  * that duration would cache "not found" for the song. Skipping here marks nothing, so the
- * lookup simply happens once the song itself plays.
+ * lookup simply happens once the song itself plays. Short songs are real songs: only the
+ * ad flag is used, never a duration threshold.
  */
 export function lyricsLookupReady(p: { isAd?: boolean; duration?: number } | null | undefined): boolean {
-  if (!p || p.isAd) return false;
-  const d = p.duration ?? 0;
-  return !(d > 0 && d < MIN_SONG_SEC);
+  return !!p && !p.isAd;
 }
