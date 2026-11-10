@@ -105,25 +105,24 @@ button.link{color:var(--accent);text-decoration:underline;font-weight:600}
 .dia .d-x{stroke:currentColor;stroke-width:1.7;opacity:.6;stroke-linecap:round}
 .dia .d-fr{fill:currentColor;font:600 9px var(--f-ui);opacity:.7}
 
-/* ---------- chord shape strip (one row, sideways scroll) ---------- */
-.dias{--dia:120px;border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:none;background:var(--bg);flex:none;
-  scroll-behavior:smooth;scroll-padding-inline:8px}
-.dias::-webkit-scrollbar{display:none}
-@media (prefers-reduced-motion:reduce){.dias{scroll-behavior:auto}}
-.dias ul{list-style:none;margin:0;padding:8px 8px;display:flex;gap:2px;width:max-content;min-width:100%;justify-content:space-around}
+/* ---------- chord shapes: now, next, the one after ---------- */
+.dias{--dia:120px;border-bottom:1px solid var(--line);background:var(--bg);flex:none}
+.dias ul{list-style:none;margin:0;padding:8px 8px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px}
 .dias li{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 2px;border-radius:12px;border:1.5px solid transparent;
   min-width:0;transition:background .2s,border-color .2s}
-.dias .dia{width:var(--dia);height:auto}
+.dias li.empty{visibility:hidden}
+/* --fig-h: the tallest diagram of the song (set in play.ts), so names and the lane stay put. */
+.dias .fig{width:min(var(--dia),100%);aspect-ratio:100/var(--fig-h,152);display:flex;align-items:flex-start;justify-content:center}
+.dias .dia{width:100%;height:auto}
 .dias .nm{font-size:clamp(17px,calc(var(--dia) * .34),34px)}
 .dias .sd{font-size:11px;color:var(--ink-3);line-height:1}
-.dias .nodia{width:var(--dia);height:calc(var(--dia) * 1.28);display:grid;place-items:center;color:var(--ink-3);font-size:12px}
+.dias .nodia{width:100%;height:100%;display:grid;place-items:center;color:var(--ink-3);font-size:12px}
 .dias li.now{background:var(--surface);border-color:var(--accent);box-shadow:var(--shadow)}
 .dias li.now .nm{color:var(--accent)}
 .dias li.nx{border-color:var(--ink-3)}
 .dias .cd{position:absolute;bottom:8px;right:8px;min-width:22px;height:22px;padding:0 6px;border-radius:99px;background:var(--ink);color:var(--bg);
   font:700 12px/22px var(--f-ui);text-align:center;font-variant-numeric:tabular-nums;display:none}
 .dias li.nx .cd{display:block}
-.dias.scrolls{mask-image:linear-gradient(90deg,#000 88%,transparent);-webkit-mask-image:linear-gradient(90deg,#000 88%,transparent)}
 
 /* ---------- pinned lyric ---------- */
 .pin{padding:7px 14px 9px;border-bottom:1px solid var(--line);background:var(--surface);flex:none}
@@ -249,10 +248,10 @@ button.link{color:var(--accent);text-decoration:underline;font-weight:600}
 .card input[type=range]{accent-color:var(--accent);padding:0;border:0;background:none}
 textarea{width:100%;resize:vertical}
 .row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:4px 0}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:6px;margin-top:8px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:6px;margin-top:8px}
 .grid .cell{text-align:center;border:1px solid var(--line);border-radius:10px;padding:6px 4px;display:flex;flex-direction:column;align-items:center;gap:2px}
-.grid .cell .name{font-weight:700}
-.grid .cell .dia{width:80px;height:auto}
+.grid .cell .name{font-weight:700;font-size:20px}
+.grid .cell .dia{width:min(120px,100%);height:auto}
 .stamp-list{max-height:160px;overflow:auto;padding-left:22px}
 .kv{border-collapse:collapse}
 .kv th{text-align:left;color:var(--ink-3);font-weight:400;padding:2px 10px 2px 0;vertical-align:top}

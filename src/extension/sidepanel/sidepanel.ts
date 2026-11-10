@@ -398,7 +398,7 @@ function renderStatic(): void {
   else {
     const known = new Set(settings.profile.knownShapes);
     const cells = uniqueVoicings(model.arrangement).map((u) => {
-      const dg = u.voicing ? renderShapeDiagram(u.voicing, 80) : '<div class="muted small">운지 없음</div>';
+      const dg = u.voicing ? renderShapeDiagram(u.voicing, 120) : '<div class="muted small">운지 없음</div>';
       const toggle = u.voicing ? `<label class="small"><input type="checkbox" data-known="${escapeHtml(u.voicing.id)}" ${known.has(u.voicing.id) ? 'checked' : ''}/> 잡을 수 있음</label>` : '';
       return `<div class="cell"><div class="name">${escapeHtml(u.shape)}</div>${dg}${toggle}</div>`;
     });

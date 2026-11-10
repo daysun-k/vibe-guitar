@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { demoChart, demoLyrics, DemoClock } from '../src/play/demo';
-import { buildPlayModel, frameAt } from '../src/play/model';
+import { buildPlayModel, frameAt, upcomingShapes, type PlayModel } from '../src/play/model';
 import { simpleShape } from '../src/play/lane';
 import { normalizeSettings } from '../src/extension/storage';
 import { voicingsForChord, parseChord } from '../src/arrange';
-import { renderShapeDiagram } from '../src/extension/sidepanel/diagram';
+import { renderShapeDiagram, shapeDiagramHeight } from '../src/extension/sidepanel/diagram';
 
 describe('play model on the synthetic demo song', () => {
   const chart = demoChart();
@@ -109,6 +109,21 @@ describe('play-view diagram', () => {
     const f = voicingsForChord(parseChord('F')).find((v) => v.frets.join() === [1, 3, 3, 2, 1, 1].join())!;
     expect(renderShapeDiagram(f)).toContain('d-barre');
   });
+
+  it('reports the viewBox height the strip reserves for the tallest shape', () => {
+    const all = ['C', 'G', 'D', 'Em', 'Am', 'F', 'Bm', 'B', 'F#m', 'Bb', 'Gm', 'C#m', 'Ab', 'Eb', 'Fmaj7'].flatMap((n) => voicingsForChord(parseChord(n)));
+    const heights = new Set<number>();
+    for (const v of all) {
+      const h = shapeDiagramHeight(v);
+      expect(renderShapeDiagram(v)).toContain(`viewBox="0 0 100 ${h}"`);
+      heights.add(h);
+    }
+    expect([...heights]).toEqual([128]);
+    // a stretch over five frets gets the fifth row
+    const wide = { ...all[0], frets: [null, 5, 7, 7, 9, 5] };
+    expect(shapeDiagramHeight(wide)).toBe(152);
+    expect(renderShapeDiagram(wide)).toContain('viewBox="0 0 100 152"');
+  });
 });
 
 describe('sections without lyrics', () => {
@@ -140,5 +155,41 @@ describe('sections from lyrics', () => {
       line('ch a'), line('ch b'),
     ];
     expect(buildSections(bars, lines).map((s) => s.name)).toEqual(['인트로', '1절', '후렴', '간주', '2절', '후렴', '아웃트로']);
+  });
+});
+
+describe('three-up shape strip', () => {
+  // events: G, G (same shape), rest, D, Em, C | coverage gap | A
+  const spans: [number, number, string][] = [[0, 2, 'G'], [2, 4, 'G'], [4, 5, ''], [5, 7, 'D'], [7, 9, 'Em'], [9, 11, 'C'], [20, 22, 'A']];
+  const m = {
+    arrangement: { events: spans.map(([startSec, endSec, k]) => ({ startSec, endSec, rest: !k })) },
+    stripKeys: spans.map(([, , k]) => (k ? `${k}|v` : '')),
+  } as unknown as Pick<PlayModel, 'arrangement' | 'stripKeys'>;
+
+  it('shows the current shape and the next two changes, skipping rests and repeats', () => {
+    expect(upcomingShapes(m, { event: 0, next: 1 })).toEqual([0, 3, 4]);
+    expect(upcomingShapes(m, { event: 1, next: 3 })).toEqual([1, 3, 4]);
+    expect(upcomingShapes(m, { event: 3, next: 4 })).toEqual([3, 4, 5]);
+  });
+
+  it('starts from the coming chord during a rest and stops at a coverage gap', () => {
+    expect(upcomingShapes(m, { event: -1, next: 3 })).toEqual([3, 4, 5]);
+    expect(upcomingShapes(m, { event: 4, next: 5 })).toEqual([4, 5]);
+    expect(upcomingShapes(m, { event: 5, next: -1 })).toEqual([5]);
+    expect(upcomingShapes(m, { event: -1, next: 6 })).toEqual([6]);
+    expect(upcomingShapes(m, { event: -1, next: -1 })).toEqual([]);
+  });
+
+  it('never shows more than three shapes on the demo song', () => {
+    const d = buildPlayModel(demoChart(), { level: 'novice', capo: 0 }, null);
+    expect(d.strip.length).toBeGreaterThan(3);
+    for (const e of d.arrangement.events) {
+      const f = frameAt(d, e.startSec + 0.05);
+      const up = upcomingShapes(d, f);
+      expect(up.length).toBeLessThanOrEqual(3);
+      if (f.event >= 0) expect(up[0]).toBe(f.event);
+      const keys = up.map((i) => d.stripKeys[i]);
+      keys.slice(1).forEach((k, i) => expect(k).not.toBe(keys[i]));
+    }
   });
 });
