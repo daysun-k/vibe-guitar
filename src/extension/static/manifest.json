@@ -3,13 +3,14 @@
   "name": "Vibe Guitar (phase 0, personal)",
   "short_name": "Vibe Guitar",
   "version": "0.0.1",
-  "description": "Personal prototype: time-synced guitar chords, fingerings and level-based arrangements for YouTube / YouTube Music. Audio never leaves the browser.",
+  "description": "Personal prototype: time-synced guitar chords, fingerings and level-based arrangements for YouTube / YouTube Music. Audio never leaves the browser; optional lyrics lookup sends only title, artist and duration to lrclib.net.",
   "minimum_chrome_version": "116",
   "permissions": ["sidePanel", "storage", "tabCapture", "offscreen", "activeTab", "scripting"],
   "host_permissions": [
     "https://www.youtube.com/*",
     "https://music.youtube.com/*",
-    "https://music.apple.com/*"
+    "https://music.apple.com/*",
+    "https://lrclib.net/*"
   ],
   "content_security_policy": { "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'" },
   "background": { "service_worker": "background.js" },

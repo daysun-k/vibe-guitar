@@ -60,13 +60,24 @@ export class DraftBook {
 
 export type SaveCheck =
   | { ok: true; recording: Recording }
-  | { ok: false; reason: 'no-recording' | 'recording-mismatch' };
+  | { ok: false; reason: 'no-recording' | 'recording-mismatch' | 'demo' };
 
 /** A draft may only be saved under the recording it was made for. */
-export function checkSaveTarget(draft: EditorDraft, playing: Recording | null): SaveCheck {
+export function checkSaveTarget(draft: EditorDraft, playing: Recording | null, opts: { demo?: boolean } = {}): SaveCheck {
+  // Demo playback replays a chart with a simulated clock: nothing may be written while it runs.
+  if (opts.demo) return { ok: false, reason: 'demo' };
   if (!draft.recording || !draft.recordingKey) return { ok: false, reason: 'no-recording' };
   if (!playing || recordingKeyOf(playing) !== draft.recordingKey) return { ok: false, reason: 'recording-mismatch' };
   return { ok: true, recording: draft.recording };
+}
+
+/**
+ * Target of any other chart write (import, example, adopting the auto chart): always the real
+ * playing recording, never while demo playback runs (the demo song is not what is playing).
+ */
+export function chartWriteTarget(playing: Recording | null, demoActive: boolean): { ok: true; recording: Recording } | { ok: false; reason: 'demo' | 'no-recording' } {
+  if (demoActive) return { ok: false, reason: 'demo' };
+  return playing ? { ok: true, recording: playing } : { ok: false, reason: 'no-recording' };
 }
 
 /** Explicit user action: move the draft (chords, stamps, timing) to another recording. */
