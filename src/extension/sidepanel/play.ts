@@ -6,6 +6,7 @@
 import { bigBeatSeconds } from '../../music/meter';
 import { frameAt, type PlayModel } from '../../play/model';
 import { escapeHtml, renderShapeDiagram } from './diagram';
+import { ScrubState } from './scrub';
 
 export interface PlayHost {
   seek(sec: number): void;
@@ -89,6 +90,7 @@ export class PlayScreen {
   private readonly lane = $('lane');
   private readonly lyCur = $('ly-cur');
   private readonly seek = $('seek') as HTMLInputElement;
+  private readonly scrub = new ScrubState();
 
   constructor(private readonly host: PlayHost) {
     this.fol = follower(this.lane, $('follow'));
@@ -99,6 +101,11 @@ export class PlayScreen {
       this.fol.reset();
     });
     this.seek.addEventListener('input', () => this.host.seek(Number(this.seek.value)));
+    // Track an active drag, not focus (a clicked slider keeps focus after release).
+    this.seek.addEventListener('pointerdown', () => this.scrub.begin());
+    for (const ev of ['pointerup', 'pointercancel'] as const) addEventListener(ev, () => this.scrub.end());
+    this.seek.addEventListener('change', () => this.scrub.end());
+    this.seek.addEventListener('blur', () => this.scrub.end());
     $('play-btn').addEventListener('click', () => this.host.togglePlay());
     for (const b of document.querySelectorAll<HTMLButtonElement>('#rate-seg [data-rate]')) {
       b.addEventListener('click', () => {
@@ -271,7 +278,7 @@ export class PlayScreen {
     }
     if (!m) return;
     const f = frameAt(m, t);
-    if (document.activeElement !== this.seek || jump) this.seek.value = String(t);
+    if (this.scrub.shouldSync(jump)) this.seek.value = String(t);
     this.seek.setAttribute('aria-valuetext', formatTime(t));
     $('seek-fill').style.width = `${Math.min(100, (t / Math.max(1, m.durationSec)) * 100)}%`;
     $('t-now').textContent = formatTime(t);
