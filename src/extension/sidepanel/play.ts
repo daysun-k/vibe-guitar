@@ -4,8 +4,8 @@
  * touches the DOM when something changed.
  */
 import { bigBeatSeconds } from '../../music/meter';
-import { frameAt, type PlayModel } from '../../play/model';
-import { escapeHtml, renderShapeDiagram } from './diagram';
+import { frameAt, upcomingShapes, type PlayModel } from '../../play/model';
+import { escapeHtml, renderShapeDiagram, shapeDiagramHeight } from './diagram';
 import { ScrubState } from './scrub';
 
 export interface PlayHost {
@@ -80,13 +80,12 @@ const $ = (id: string): HTMLElement => {
 export class PlayScreen {
   private m: PlayModel | null = null;
   private lookBars = 1;
-  private stripEls = new Map<string, HTMLElement>();
+  private slots: HTMLElement[] = [];
   private barEls: HTMLElement[] = [];
   private secEls: HTMLElement[] = [];
-  private last = { bar: -2, event: -2, soon: '', line: -2, section: -2, cd: -1 };
+  private last = { bar: -2, up: '', soon: '', line: -2, section: -2, cd: -1 };
   private readonly fol;
   private readonly dias = $('dias');
-  private readonly diasWrap = $('dias-wrap');
   private readonly lane = $('lane');
   private readonly lyCur = $('ly-cur');
   private readonly seek = $('seek') as HTMLInputElement;
@@ -115,7 +114,6 @@ export class PlayScreen {
     }
     addEventListener('resize', () => {
       this.last.line = -2;
-      this.layoutStrip();
     });
   }
 
@@ -130,7 +128,7 @@ export class PlayScreen {
 
   setModel(m: PlayModel | null): void {
     this.m = m;
-    this.last = { bar: -2, event: -2, soon: 'x', line: -2, section: -2, cd: -1 };
+    this.last = { bar: -2, up: 'x', soon: 'x', line: -2, section: -2, cd: -1 };
     for (const id of ['dias-wrap', 'lane-wrap', 'transport']) $(id).hidden = !m;
     $('pin').hidden = !m?.lyrics;
     if (!m) {
@@ -148,47 +146,29 @@ export class PlayScreen {
       .join('');
   }
 
+  /** Three fixed slots: the current shape, the next one and the one after it. */
   private buildStrip(m: PlayModel): void {
-    const firstOf = new Map<string, number>();
-    m.stripKeys.forEach((k, i) => {
-      if (k && !firstOf.has(k)) firstOf.set(k, i);
+    // Reserve the tallest diagram of the song so names and the lane below stay put as shapes change.
+    const tallest = Math.max(128, ...m.strip.map((it) => (it.event.voicing ? shapeDiagramHeight(it.event.voicing) : 0)));
+    this.dias.style.setProperty('--fig-h', String(tallest));
+    this.dias.innerHTML = '<li class="empty"></li>'.repeat(3);
+    this.slots = [...this.dias.querySelectorAll<HTMLElement>('li')];
+  }
+
+  private fillStrip(m: PlayModel, up: number[]): void {
+    this.slots.forEach((li, k) => {
+      const ev = up[k];
+      li.className = ev === undefined ? 'empty' : '';
+      if (ev === undefined) {
+        li.innerHTML = '<div class="fig"></div>';
+        return;
+      }
+      const e = m.arrangement.events[ev];
+      const lab = m.labels[ev];
+      const dia = e.voicing ? renderShapeDiagram(e.voicing, 120) : '<div class="nodia">운지 없음</div>';
+      const snd = lab.sounding !== lab.name ? `<span class="sd snd">${escapeHtml(lab.sounding)}</span>` : '';
+      li.innerHTML = `<div class="fig">${dia}</div><span class="nm">${chordHTML(lab.name)}</span>${snd}<span class="cd" aria-hidden="true"></span>`;
     });
-    this.dias.innerHTML = m.strip
-      .map((it) => {
-        const lab = m.labels[firstOf.get(it.key)!];
-        const dia = it.event.voicing ? renderShapeDiagram(it.event.voicing, 120) : '<div class="nodia">운지 없음</div>';
-        const snd = lab.sounding !== lab.name ? `<span class="sd snd">${escapeHtml(lab.sounding)}</span>` : '';
-        return `<li data-key="${escapeHtml(it.key)}">${dia}<span class="nm">${chordHTML(lab.name)}</span>${snd}<span class="cd" aria-hidden="true"></span></li>`;
-      })
-      .join('');
-    this.stripEls = new Map([...this.dias.querySelectorAll<HTMLElement>('li')].map((li) => [li.dataset.key!, li]));
-    this.layoutStrip();
-  }
-
-  private layoutStrip(): void {
-    const c = this.diasWrap;
-    c.classList.toggle('scrolls', c.scrollWidth > c.clientWidth + 1);
-  }
-
-  /** Keep the current shape (and the next one, if both fit) in view; if not both, the next one. */
-  private revealStrip(): void {
-    const c = this.diasWrap;
-    if (c.scrollWidth <= c.clientWidth + 1) return;
-    const now = this.dias.querySelector<HTMLElement>('li.now');
-    const nx = this.dias.querySelector<HTMLElement>('li.nx');
-    const items = [now, nx].filter((x): x is HTMLElement => !!x);
-    if (!items.length) return;
-    let l = Math.min(...items.map((e) => e.offsetLeft));
-    let r = Math.max(...items.map((e) => e.offsetLeft + e.offsetWidth));
-    if (r - l > c.clientWidth - 16) {
-      const f = nx ?? now!;
-      l = f.offsetLeft;
-      r = l + f.offsetWidth;
-    }
-    if (l < c.scrollLeft + 8 || r > c.scrollLeft + c.clientWidth - 8) {
-      const to = r - l <= c.clientWidth - 16 && r > c.scrollLeft + c.clientWidth - 8 ? r - c.clientWidth + 8 : l - 8;
-      c.scrollTo({ left: Math.max(0, to), behavior: reduceMotion() ? 'auto' : 'smooth' });
-    }
   }
 
   private segHTML(m: PlayModel, ev: number, weight: number, repeat: boolean): string {
@@ -306,25 +286,27 @@ export class PlayScreen {
       }
     }
 
-    const nowKey = f.event >= 0 ? m.stripKeys[f.event] : '';
-    if (f.event !== this.last.event) {
-      for (const li of this.stripEls.values()) li.classList.remove('now');
-      if (nowKey) this.stripEls.get(nowKey)?.classList.add('now');
-      this.last.event = f.event;
-      this.revealStrip();
+    const up = upcomingShapes(m, f);
+    const upKey = `${f.event}|${up.join(',')}`;
+    if (upKey !== this.last.up) {
+      this.fillStrip(m, up);
+      this.slots[0]?.classList.toggle('now', f.event >= 0 && up[0] === f.event);
+      this.last.up = upKey;
+      this.last.soon = 'x';
+      this.last.cd = -1;
     }
     const lookBig = Math.max(1, Math.round(this.lookBars * m.big.bigPerBar));
     const soon = f.next >= 0 && f.bigLeft > 0 && f.bigLeft <= lookBig;
     const soonKey = soon ? `${f.event}>${f.next}` : '';
     if (soonKey !== this.last.soon) {
-      for (const li of this.stripEls.values()) li.classList.remove('nx');
+      for (const li of this.slots) li.classList.remove('nx');
       for (const b of this.barEls) b.classList.remove('soon');
       if (soon) {
-        const nk = m.stripKeys[f.next];
-        if (nk && nk !== nowKey) this.stripEls.get(nk)?.classList.add('nx');
+        // The countdown sits on the slot that shows the next event; none when it keeps the same shape.
+        const k = up.indexOf(f.next);
+        if (k >= 0) this.slots[k].classList.add('nx');
         const nb = m.bars.findIndex((b) => m.arrangement.events[f.next].startSec + 0.05 >= b.startSec && m.arrangement.events[f.next].startSec + 0.05 < b.endSec);
         if (nb >= 0) this.barEls[nb]?.classList.add('soon');
-        this.revealStrip();
       }
       this.last.soon = soonKey;
     }

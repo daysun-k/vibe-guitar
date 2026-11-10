@@ -97,9 +97,11 @@ Screenshots of the synthetic demo: [docs/screens/](screens/) (`node scripts/scre
 - [ ] Demo without a player: settings sheet → 데모 재생 (or open `sidepanel.html?demo=1` from the extension's
       URL). The synthetic song plays with a simulated clock; 0.5× works; "끝내기" returns to the live player.
       Pick a stored recording in the demo bar: its chart replays (cached lyrics only, no request).
-- [ ] Panel width: at ~400 px the strip scrolls sideways with a fade on the right and keeps the current
-      (and, just before a change, the next) shape in view; at ~600 px all shapes of a typical song fit in one
-      row. Diagrams are 120 px wide. Light and dark (theme button) both readable.
+- [ ] Shape strip: exactly three slots — the current shape (accent border), the next change and the one
+      after it; the countdown badge sits on the next one. Between chords the first slot is the coming chord.
+      Diagrams are 120 px wide (shrinking to fit below ~400 px), and the lane below does not jump when a
+      four-fret shape replaces a five-fret one. Settings → 이 곡에 나오는 코드 shows every shape at the same
+      120 px. Light and dark (theme button) both readable.
 - [ ] Key spelling on a song in a flat key (e.g. Perfect, A♭ major, auto chart): the strip and grid show
       A♭, Fm, D♭, E♭ (capo 0) or G, Em, C, D with sounding A♭… (capo 1) — never G#, D#.
       설정 tab → 분석 정보 shows the estimated key.

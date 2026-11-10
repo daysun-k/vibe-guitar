@@ -66,19 +66,28 @@ export function renderChordDiagram(v: Voicing, opts: DiagramOptions = {}): strin
  * Play-view diagram (mockup B geometry, viewBox 100 wide): open/muted marks above the nut,
  * finger numbers inside the dots, a rounded bar for barres and "Nfr" for high positions.
  */
-export function renderShapeDiagram(v: Voicing, width = 120): string {
+function diagramRows(v: Voicing): { base: number; rows: number } {
   const fretted = v.frets.filter((f): f is number => f !== null && f > 0);
   const maxF = fretted.length ? Math.max(...fretted) : 0;
   const minF = fretted.length ? Math.min(...fretted) : 0;
   const base = maxF <= 4 ? 1 : minF;
-  const rows = Math.max(4, Math.min(5, maxF - base + 1));
+  return { base, rows: Math.max(4, Math.min(5, maxF - base + 1)) };
+}
+
+/** Height of a shape diagram's viewBox (its width is always 100). */
+export function shapeDiagramHeight(v: Voicing): number {
+  return 26 + diagramRows(v).rows * 24 + 6;
+}
+
+export function renderShapeDiagram(v: Voicing, width = 120): string {
+  const { base, rows } = diagramRows(v);
   const x0 = 16;
   const x1 = 84;
   const y0 = 26;
   const dx = (x1 - x0) / 5;
   const dy = 24;
   const y1 = y0 + rows * dy;
-  const H = y1 + 6;
+  const H = shapeDiagramHeight(v); // = y1 + 6
   const g: string[] = [];
   for (let i = 0; i <= rows; i++) g.push(`<line class="d-fret" x1="${x0}" x2="${x1}" y1="${y0 + i * dy}" y2="${y0 + i * dy}"/>`);
   for (let i = 0; i < 6; i++) g.push(`<line class="d-str" x1="${x0 + i * dx}" x2="${x0 + i * dx}" y1="${y0}" y2="${y1}" stroke-width="${(1.9 - i * 0.18).toFixed(2)}"/>`);

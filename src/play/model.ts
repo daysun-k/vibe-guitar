@@ -172,6 +172,28 @@ export interface Frame {
   nextLine: number;
 }
 
+/**
+ * Event indices for the three-up shape strip: the sounding chord (or, between chords, the one coming
+ * up), then each following change of shape. Rests and shapeless events are skipped, a repeat of the
+ * same shape is not a change, and a coverage gap ends the run (what plays inside it is unknown).
+ */
+export function upcomingShapes(m: Pick<PlayModel, 'arrangement' | 'stripKeys'>, f: Pick<Frame, 'event' | 'next'>, count = 3): number[] {
+  const ev = m.arrangement.events;
+  const start = f.event >= 0 ? f.event : f.next;
+  const out: number[] = [];
+  if (start < 0) return out;
+  let lastKey = '';
+  for (let j = start; j < ev.length && out.length < count; j++) {
+    if (j > start && ev[j - 1].endSec < ev[j].startSec - 1e-6) break;
+    const k = m.stripKeys[j];
+    if (k && k !== lastKey) {
+      out.push(j);
+      lastKey = k;
+    }
+  }
+  return out;
+}
+
 export function frameAt(m: PlayModel, t: number): Frame {
   const ev = m.arrangement.events;
   const i = findEventIndex(ev, t);
