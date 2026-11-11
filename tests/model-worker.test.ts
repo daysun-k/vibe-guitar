@@ -141,6 +141,43 @@ describe('listening recovers from a crashed model worker', () => {
     }
   });
 
+  it('models whose worker already died at load time are not reported ready', async () => {
+    vi.useFakeTimers();
+    try {
+      let made = 0;
+      let disposed = 0;
+      const makeModels = async (): Promise<ListenModels> => {
+        made++;
+        const w = new FakeWorker();
+        const client = new ModelWorkerClient(w);
+        w.crash('died during load');
+        return {
+          recognizer: {} as ListenModels['recognizer'],
+          beat: client.runner('beat'),
+          backend: 'wasm (worker)',
+          onFailure: (l) => client.onFailure(l),
+          dispose: () => {
+            disposed++;
+            client.terminate();
+          },
+        };
+      };
+      const sent: { modelState?: string }[] = [];
+      const c = new ListeningController((m) => sent.push(m as { modelState?: string }), () => null, makeModels);
+      c.start(3);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(sent.at(-1)).toMatchObject({ modelState: 'error' });
+      expect(disposed).toBe(1);
+      c.stop();
+      c.start(3);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(made).toBe(2);
+      c.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('a terminated client never reports a crash', () => {
     const w = new FakeWorker();
     const c = new ModelWorkerClient(w);

@@ -147,6 +147,10 @@ export class ListeningController {
     this.modelError = undefined;
     try {
       const models = await this.makeModels();
+      this.models = models;
+      this.backend = models.backend;
+      this.modelState = 'ready';
+      // Subscribe last: a worker that already died reports at once and must win over 'ready'.
       // A crashed worker answers nothing more: drop it so the next start() loads a new one.
       models.onFailure((e) => {
         if (this.models !== models) return;
@@ -156,9 +160,6 @@ export class ListeningController {
         models.dispose();
         this.pushState();
       });
-      this.models = models;
-      this.backend = models.backend;
-      this.modelState = 'ready';
     } catch (e) {
       this.modelState = 'error';
       this.modelError = e instanceof Error ? e.message : String(e);
