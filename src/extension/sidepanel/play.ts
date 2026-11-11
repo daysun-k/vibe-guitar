@@ -3,10 +3,24 @@
  * transport. Built once per PlayModel; `render(t)` runs every animation frame and only
  * touches the DOM when something changed.
  */
+import type { Arrangement } from '../../arrange/arrange';
+import { prettyChord, shapeName } from '../../music/key';
 import { bigBeatSeconds } from '../../music/meter';
 import { barsForHardChord, changeConcertLabel, frameAt, upcomingShapes, type PlayModel } from '../../play/model';
 import { escapeHtml, renderShapeDiagram, shapeDiagramHeight } from './diagram';
 import { ScrubState } from './scrub';
+
+/** Korean particle follows the spoken final digit (10 ends in 십). */
+export function capoReason(capo: number): string {
+  return `카포 ${capo}${[2, 4, 5, 9].includes(capo % 10) ? '라' : '이라'}`;
+}
+
+/** The settings card uses shape names, with optional secondary concert names. */
+export function unplayableLine(a: Pick<Arrangement, 'unplayable' | 'capo'>, showSounding: boolean): string {
+  const names = a.unplayable.map((name) => escapeHtml(shapeName(name, a.capo)) +
+    (showSounding && a.capo ? ` <small class="snd">실제 ${escapeHtml(prettyChord(name))}</small>` : ''));
+  return `운지를 찾지 못함: ${names.join(', ')}`;
+}
 
 export interface PlayHost {
   seek(sec: number): void;
@@ -143,6 +157,7 @@ export class PlayScreen {
   }
 
   clearHardChord(): void {
+    if (this.highlighted !== null) $('hard-chord-status').textContent = '표시를 껐어요';
     this.highlighted = null;
     for (const b of this.barEls) b.classList.remove('hard-hit');
   }
@@ -153,6 +168,7 @@ export class PlayScreen {
     if (!this.m || previous === shape) return;
     this.highlighted = shape;
     const hits = barsForHardChord(this.m, shape);
+    $('hard-chord-status').textContent = `${prettyChord(shape)} 마디 ${hits.length}곳을 표시했어요`;
     for (const i of hits) this.barEls[i]?.classList.add('hard-hit');
     this.fol.release();
     const first = this.barEls[hits[0]];

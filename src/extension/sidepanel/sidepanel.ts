@@ -46,7 +46,7 @@ import { escapeHtml, renderShapeDiagram } from './diagram';
 import { LyricsAsker, lyricsOutcome, lyricsLookupReady } from './lyrics-asker';
 import { controlTabId, keepPlayerAfterDemo } from './player-target';
 import { prepareCountIn } from './countin-prep';
-import { PlayScreen, formatTime } from './play';
+import { capoReason, unplayableLine, PlayScreen, formatTime } from './play';
 
 // ---------- DOM helpers ----------
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
@@ -452,7 +452,7 @@ function renderStatic(): void {
   setText('capo-naming', usedCapo > 0 ? `카포 ${usedCapo}: 화면의 코드는 손으로 잡는 모양 이름이에요. 소리는 원곡과 같아요.` : '');
   const source = demo?.chart ?? chart;
   const example = source ? respellChartForKey(source).chart.events.find((e) => shapeName(e.chord, usedCapo) !== prettyChord(e.chord)) : null;
-  setText('editor-naming', usedCapo > 0 ? `여기는 카포 없는 실제 소리 이름이에요. 연주 화면은 카포 ${usedCapo}이라 ${usedCapo === 1 ? '한 칸' : `${usedCapo}칸`} 낮은 모양 이름으로 보여요.${example ? ` 예: ${prettyChord(example.chord)} → ${shapeName(example.chord, usedCapo)}` : ''}` : '');
+  setText('editor-naming', usedCapo > 0 ? `여기는 카포 없는 실제 소리 이름이에요. 연주 화면은 ${capoReason(usedCapo)} ${usedCapo === 1 ? '한 칸' : `${usedCapo}칸`} 낮은 모양 이름으로 보여요.${example ? ` 예: ${prettyChord(example.chord)} → ${shapeName(example.chord, usedCapo)}` : ''}` : '');
   // look-ahead / count-in notes in big beats
   if (model) {
     const b = model.big;
@@ -483,7 +483,7 @@ function renderStatic(): void {
       const toggle = u.voicing ? `<label class="small"><input type="checkbox" data-known="${escapeHtml(u.voicing.id)}" ${known.has(u.voicing.id) ? 'checked' : ''}/> 잡을 수 있음</label>` : '';
       return `<div class="cell"><div class="name">${escapeHtml(u.shape)}</div>${dg}${toggle}</div>`;
     });
-    if (model.arrangement.unplayable.length) cells.push(`<div class="cell err small">운지를 찾지 못함: ${escapeHtml(model.arrangement.unplayable.join(', '))}</div>`);
+    if (model.arrangement.unplayable.length) cells.push(`<div class="cell err small">${unplayableLine(model.arrangement, settings.showSounding)}</div>`);
     setHtml(grid, cells.join(''));
   }
   renderEditorTarget();

@@ -1,3 +1,4 @@
+import { capoReason, unplayableLine } from '../src/extension/sidepanel/play';
 import { describe, expect, it } from 'vitest';
 import { buildPlayModel, barsForHardChord, changeConcertLabel } from '../src/play/model';
 import { computeLevelFits } from '../src/play/level-fit';
@@ -19,6 +20,18 @@ function synthetic(): Chart {
 const model = (capo: number) => buildPlayModel(synthetic(), { level: 'beginner', capo }, null);
 
 describe('one shape name on every play surface', () => {
+  it('uses shape names and optional secondary concert names in the unplayable line', () => {
+    const a = { capo: 1, unplayable: ['Abm', 'B'] };
+    expect(unplayableLine(a, false)).toBe('운지를 찾지 못함: Gm, B♭');
+    expect(unplayableLine(a, true)).toBe('운지를 찾지 못함: Gm <small class="snd">실제 A♭m</small>, B♭ <small class="snd">실제 B</small>');
+    expect(unplayableLine({ ...a, capo: 0 }, true)).toBe('운지를 찾지 못함: A♭m, B');
+  });
+  it('uses the spoken final digit for the capo particle', () => {
+    expect(capoReason(1)).toBe('카포 1이라');
+    expect(capoReason(2)).toBe('카포 2라');
+    expect(capoReason(10)).toBe('카포 10이라');
+    expect(capoReason(12)).toBe('카포 12라');
+  });
   it('uses capo shapes for labels, badges, descriptions, hard list and merged chords', () => {
     const m = model(1);
     expect(m.key?.tonicName).toBe('Eb');
