@@ -100,12 +100,16 @@ describe('cost model', () => {
 });
 
 describe('arrangement (DP)', () => {
-  it('beginner: F becomes the small shape (voicing change, no substitution badge)', () => {
-    const a = arrangeEvents(seq(['C', 'F', 'G', 'C']), timing44, { level: 'beginner', capo: 0 });
+  // VGT-11: F xx3211 is a novice shape (partial barre), so beginner plays Fmaj7 xx3210 (marked).
+  it('novice: F becomes the small shape (voicing change, no substitution badge); beginner marks F → Fmaj7', () => {
+    const a = arrangeEvents(seq(['C', 'F', 'G', 'C']), timing44, { level: 'novice', capo: 0 });
     const f = a.events[1];
     expect(fretString(f.voicing!.frets)).toBe('xx3211');
     expect(f.substitution).toBe(false);
     expect(f.transformations.some((t) => t.kind === 'voicing')).toBe(true);
+    const b = arrangeEvents(seq(['C', 'F', 'G', 'C']), timing44, { level: 'beginner', capo: 0 }).events[1];
+    expect(b.sounding).toBe('Fmaj7');
+    expect(b.change).toMatchObject({ original: 'F', sounding: 'Fmaj7', code: 'colour-seventh', rootChanged: false });
   });
 
   it('beginner who only knows Fmaj7 gets F → Fmaj7 flagged as substitution', () => {
@@ -128,21 +132,29 @@ describe('arrangement (DP)', () => {
     expect(beg.events[0].substitution).toBe(false);
     expect(beg.events[1].sounding).toBe('Dm');
     expect(beg.events[1].substitution).toBe(true);
+    // VGT-11: the movable m9 shape is advanced vocabulary; intermediate drops the 9 (marked).
     const mid = arrangeEvents(seq(['Cmaj7', 'Dm9', 'G', 'C']), timing44, { level: 'intermediate', capo: 0, profile: P({ canBarre: true }) });
     expect(mid.events[0].sounding).toBe('Cmaj7');
-    expect(mid.events[1].sounding).toBe('Dm9');
-    expect(mid.events[1].substitution).toBe(false);
+    expect(mid.events[1].sounding).toBe('Dm7');
+    expect(mid.events[1].change?.code).toBe('drop-extension');
+    const adv = arrangeEvents(seq(['Cmaj7', 'Dm9', 'G', 'C']), timing44, { level: 'advanced', capo: 0, profile: P({ canBarre: true }) });
+    expect(adv.events[1].sounding).toBe('Dm9');
+    expect(adv.events[1].substitution).toBe(false);
   });
 
-  it('keeps a structural slash bass line at beginner level', () => {
-    const a = arrangeEvents(seq(['C', 'C/B', 'Am', 'Am/G', 'F']), timing44, { level: 'beginner', capo: 0 });
+  // VGT-11: a fretted slash bass is novice vocabulary; beginner drops it and marks the change.
+  it('keeps a structural slash bass line at novice level', () => {
+    const a = arrangeEvents(seq(['C', 'C/B', 'Am', 'Am/G', 'F']), timing44, { level: 'novice', capo: 0 });
     expect(a.events[1].sounding).toBe('C/B');
     expect(a.events[3].sounding).toBe('Am/G');
     expect(a.events[1].substitution).toBe(false);
+    const b = arrangeEvents(seq(['C', 'C/B', 'Am', 'Am/G', 'F']), timing44, { level: 'beginner', capo: 0 });
+    expect(b.events[1].change).toMatchObject({ original: 'C/B', code: 'drop-slash', rootChanged: false });
   });
 
+  // VGT-11: sus4 shapes are novice vocabulary (LCM Grades 3-4).
   it('keeps a sus that resolves', () => {
-    const a = arrangeEvents(seq(['G', 'Dsus4', 'D', 'G']), timing44, { level: 'beginner', capo: 0 });
+    const a = arrangeEvents(seq(['G', 'Dsus4', 'D', 'G']), timing44, { level: 'novice', capo: 0 });
     expect(a.events[1].sounding).toBe('Dsus4');
   });
 

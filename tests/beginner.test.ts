@@ -97,10 +97,15 @@ describe('beginner-only shape penalties', () => {
     }
   });
 
-  it('a partial barre alone does not turn a faithful F into a flagged Fmaj7', () => {
+  // VGT-11 changes this: F xx3211 is a novice shape, so beginner plays Fmaj7 (asomemusic's
+  // beginner stand-in) and marks it; novice keeps the faithful F.
+  it('beginner marks F → Fmaj7 (F xx3211 is novice vocabulary); novice keeps a faithful F', () => {
     const f = beginner(['C', 'F', 'G', 'C']).events[1];
-    expect(f.sounding).toBe('F');
-    expect(f.substitution).toBe(false);
+    expect(f.sounding).toBe('Fmaj7');
+    expect(f.change).toMatchObject({ original: 'F', sounding: 'Fmaj7', rootChanged: false });
+    const n = arrangeEvents(seq(['C', 'F', 'G', 'C']), timing44, { level: 'novice', capo: 0 }).events[1];
+    expect(n.sounding).toBe('F');
+    expect(n.substitution).toBe(false);
   });
 });
 

@@ -101,6 +101,11 @@ const RAW: RawVoicing[] = [
   { chord: 'F#7', frets: 'xx4320', fingers: 'xx3210', kind: 'small' },
 ];
 
+/** The hand-listed rows as voicings, in row order (ids carry the row index). */
+export function rawVoicings(): Voicing[] {
+  return RAW.map((r, i) => rawToVoicing(r, i));
+}
+
 interface Template {
   name: string;
   /** Chord suffix, appended to the root name. */
@@ -209,6 +214,14 @@ export function allVoicings(): Voicing[] {
     for (const t of TEMPLATES) templateVoicings(t).forEach(push);
   }
   return cachedAll;
+}
+
+let cachedById: Map<string, Voicing> | null = null;
+
+/** A database voicing (explicit or template) by id. */
+export function voicingById(id: string): Voicing | undefined {
+  if (!cachedById) cachedById = new Map(allVoicings().map((v) => [v.id, v]));
+  return cachedById.get(id);
 }
 
 function index(): Map<string, Voicing[]> {
