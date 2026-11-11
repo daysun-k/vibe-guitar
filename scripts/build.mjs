@@ -19,6 +19,7 @@ const entryPoints = {
   'model-worker': 'src/extension/offscreen/model-worker.ts',
   bench: 'src/extension/bench/bench.ts',
   sidepanel: 'src/extension/sidepanel/sidepanel.ts',
+  'level-worker': 'src/extension/sidepanel/level-worker.ts',
 };
 
 await rm(dist, { recursive: true, force: true });
@@ -75,6 +76,7 @@ if (!watch) {
     'offscreen.html',
     'capture-worklet.js',
     'model-worker.js',
+    'level-worker.js',
     'bench.html',
     'bench.js',
     'ort/ort-wasm-simd-threaded.jsep.wasm',

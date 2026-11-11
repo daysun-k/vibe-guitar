@@ -50,12 +50,14 @@ const isActive = (e: ArrangedEvent | undefined, t: number) => !!e && t >= e.star
 
 /**
  * Bars with their chord segments. `keyOf` names an event's displayed shape, used to mark
- * a bar that repeats the previous one.
+ * a bar that repeats the previous one. A changed event (`changed`) is never drawn as a repeat
+ * of a different event, so its change marker stays visible.
  */
-export function buildLane(a: Arrangement, t: Timing, big: BigBeat, toSec: number, keyOf: (i: number) => string): LaneBar[] {
+export function buildLane(a: Arrangement, t: Timing, big: BigBeat, toSec: number, keyOf: (i: number) => string, changed: (i: number) => boolean = () => false): LaneBar[] {
   const from = a.events.length ? Math.min(0, a.events[0].startSec) : 0;
   const bars = barsBetween(t, from, toSec);
   let prevKey: string | null = null;
+  let prevEvent = -1;
   return bars.map((b) => {
     // Split at every event start and end inside the bar (ends mark coverage gaps), so time
     // without analysis is drawn empty. Rests and gaps are both "no chord" (-1); equal
@@ -80,8 +82,10 @@ export function buildLane(a: Arrangement, t: Timing, big: BigBeat, toSec: number
       return { event: p.id, startSec: p.st, endSec: en, weight: Math.max(1, Math.round(w)) };
     });
     const keys = segments.map((s) => (s.event < 0 ? '-' : keyOf(s.event)));
-    const repeat = segments.length === 1 && keys[0] !== '-' && keys[0] === prevKey;
+    const ev = segments[0]?.event ?? -1;
+    const repeat = segments.length === 1 && keys[0] !== '-' && keys[0] === prevKey && (!changed(ev) || ev === prevEvent);
     prevKey = keys[keys.length - 1];
+    prevEvent = segments[segments.length - 1]?.event ?? -1;
     return { ...b, segments, repeat };
   });
 }
@@ -198,13 +202,17 @@ export interface StripItem {
   event: ArrangedEvent;
 }
 
-/** Shapes in order of first appearance; `keys[i]` is the strip key of event i ('' for rests). */
+/**
+ * Shapes in order of first appearance; `keys[i]` is the strip key of event i ('' for rests).
+ * The key includes the event's change (original → sounding), so an original Fmaj7 and an
+ * F played as Fmaj7 on the same fingering are separate items and each keeps its own marker.
+ */
 export function stripItems(a: Arrangement): { items: StripItem[]; keys: string[] } {
   const items: StripItem[] = [];
   const seen = new Set<string>();
   const keys = a.events.map((e) => {
     if (e.rest || !e.shape) return '';
-    const key = `${e.shape}|${e.voicing?.id ?? ''}`;
+    const key = `${e.shape}|${e.voicing?.id ?? ''}|${e.change ? `${e.change.original}>${e.change.sounding}` : ''}`;
     if (!seen.has(key)) {
       seen.add(key);
       items.push({ key, shape: e.shape, sounding: e.sounding ?? e.shape, event: e });

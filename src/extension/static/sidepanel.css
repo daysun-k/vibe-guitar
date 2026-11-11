@@ -270,3 +270,27 @@ textarea{width:100%;resize:vertical}
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{transition-duration:.01ms!important;animation-duration:.01ms!important;animation-iteration-count:1!important}
 }
+
+/* ---------- level vocabulary (VGT-11): changed chords and per-level fit ---------- */
+/* Lane: ● same-root change, ◆ root changed (a different shape and colour, not colour alone). */
+.sg .chg{font-style:normal;font-size:9px;line-height:1;color:var(--accent);align-self:flex-start;margin-left:-3px}
+.sg .chg.root{color:var(--warn);font-size:10px}
+.chg-tip{display:none;position:absolute;top:calc(100% + 4px);left:0;z-index:6;width:max-content;max-width:260px;padding:7px 9px;border-radius:9px;
+  background:var(--ink);color:var(--bg);font-size:11.5px;line-height:1.35;white-space:normal;box-shadow:var(--shadow);pointer-events:none}
+.chg-tip b{font-weight:600}
+.bar.has-chg:hover,.bar.has-chg:focus-visible{overflow:visible;z-index:6}
+.bar.has-chg:hover .chg-tip,.bar.has-chg:focus-visible .chg-tip{display:block}
+/* Strip: "F→Fmaj7" under the name; the reason on hover, focus and tap. */
+.dias .chg-btn{font-size:11px;line-height:1.2;padding:2px 7px;border-radius:99px;border:1px solid var(--accent-line);background:var(--accent-soft);color:var(--accent-ink);white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.dias .chg-btn.root{border-color:var(--warn);background:transparent;color:var(--warn);border-style:dashed}
+.dias .chg-btn.root::before{content:'◆ '}
+.dias .chg-pop{display:none;position:absolute;top:100%;left:0;right:0;z-index:6;margin-top:2px;padding:7px 9px;border-radius:9px;background:var(--ink);color:var(--bg);font-size:11.5px;line-height:1.35;box-shadow:var(--shadow)}
+.dias li.open .chg-pop,.dias li:hover .chg-pop,.dias .chg-btn:focus-visible+.chg-pop{display:block}
+/* Sheet: one line per level. */
+.lvfit-field{flex-direction:column;align-items:stretch}
+.lvfit{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
+.lvfit li{font-size:12.5px;line-height:1.35;padding:5px 8px;border-radius:8px;background:var(--sunk)}
+.lvfit li.cur{background:var(--accent-soft);outline:1px solid var(--accent-line)}
+.lvfit li small{display:block;color:var(--ink-3);font-size:11px}
+.lvfit li .pend{color:var(--ink-3)}
+.lvfit li[data-v=no-fit] b,.lvfit li[data-v=missing-shape] b{color:var(--warn)}

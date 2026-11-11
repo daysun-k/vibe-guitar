@@ -242,6 +242,10 @@
     <p class="hint">연주 화면을 가리지 않도록 여기로 모았어요.</p>
     <div class="field"><span>난이도<small>입문은 7화음을 쉬운 코드로 줄여요</small></span>
       <div class="seg" role="group" aria-label="난이도" data-k="level"><button data-v="beginner">입문</button><button data-v="novice">초급</button><button data-v="intermediate">중급</button><button data-v="advanced">상급</button></div></div>
+    <div class="field lvfit-field"><span>난이도별 운지 적합도<small>운지만 본 추정이에요. 빠르기나 코드 전환 속도는 따지지 않아요</small></span>
+      <ul class="lvfit" id="level-fit" aria-live="polite"></ul></div>
+    <div class="field"><span>근음 바꾸기<small>쉬운 운지가 없을 때 관계 장·단조 코드로 바꿔요. 멜로디와 어긋날 수 있어요</small></span>
+      <button class="switch" id="root-sw" role="switch" aria-checked="false" aria-label="근음 바꾸기"><i></i></button></div>
     <div class="field"><span>카포<small id="capo-suggest"></small></span>
       <div class="stepper"><button id="capo-down" aria-label="카포 내리기">−</button><output id="capo-out"></output><button id="capo-up" aria-label="카포 올리기">+</button></div></div>
     <div class="field"><span>미리 알림<small id="look-note">바뀌기 전에 다음 코드를 강조할 때</small></span>

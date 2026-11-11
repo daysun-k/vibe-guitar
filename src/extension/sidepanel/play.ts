@@ -35,6 +35,11 @@ export function chordHTML(name: string, had7 = false): string {
   return `<span class="cn">${m[1]}${m[2] ? `<span class="acc">${m[2]}</span>` : ''}${m[3] ? `<span class="q">${escapeHtml(m[3])}</span>` : ''}${sup}</span>`;
 }
 
+/** Screen-reader text of a change: "원래 F에서 Fmaj7로 바꿈. <reason>". */
+export function changeLabel(c: { from: string; to: string; text: string; root: boolean }): string {
+  return `원래 ${c.from}에서 ${c.to}로 바꿈${c.root ? '(근음 바뀜)' : ''}. ${c.text}`;
+}
+
 /** Keeps `el` near 30 % of the scroller unless the user scrolled away ("현재 위치로" brings it back). */
 function follower(scroller: HTMLElement, btn: HTMLElement) {
   let free = false;
@@ -93,6 +98,15 @@ export class PlayScreen {
 
   constructor(private readonly host: PlayHost) {
     this.fol = follower(this.lane, $('follow'));
+    // Tap or Enter on a changed chord's "F→Fmaj7" button shows or hides its reason.
+    this.dias.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('.chg-btn');
+      if (!btn) return;
+      const li = btn.closest('li');
+      const open = !li?.classList.contains('open');
+      li?.classList.toggle('open', open);
+      btn.setAttribute('aria-expanded', String(open));
+    });
     this.lane.addEventListener('click', (e) => {
       const b = (e.target as HTMLElement).closest<HTMLElement>('.bar');
       if (!b) return;
@@ -167,7 +181,14 @@ export class PlayScreen {
       const lab = m.labels[ev];
       const dia = e.voicing ? renderShapeDiagram(e.voicing, 120) : '<div class="nodia">운지 없음</div>';
       const snd = lab.sounding !== lab.name ? `<span class="sd snd">${escapeHtml(lab.sounding)}</span>` : '';
-      li.innerHTML = `<div class="fig">${dia}</div><span class="nm">${chordHTML(lab.name)}</span>${snd}<span class="cd" aria-hidden="true"></span>`;
+      const ch = lab.change;
+      // A changed chord: "F→Fmaj7" button; the reason shows on hover, focus and tap.
+      const chg = ch
+        ? `<button class="chg-btn${ch.root ? ' root' : ''}" aria-expanded="false" aria-label="${escapeHtml(changeLabel(ch))}">${escapeHtml(ch.from)}→${escapeHtml(ch.to)}</button><span class="chg-pop" role="tooltip">${escapeHtml(ch.text)}</span>`
+        : '';
+      li.classList.toggle('changed', !!ch);
+      li.classList.toggle('root', !!ch?.root);
+      li.innerHTML = `<div class="fig">${dia}</div><span class="nm">${chordHTML(lab.name)}</span>${snd}${chg}<span class="cd" aria-hidden="true"></span>`;
     });
   }
 
@@ -177,7 +198,10 @@ export class PlayScreen {
     const lab = m.labels[ev];
     const snd = lab.sounding !== lab.name ? `<small class="snd">${escapeHtml(lab.sounding)}</small>` : '';
     const alt = lab.hint ? `<small class="alt">${escapeHtml(lab.hint)}</small>` : '';
-    return `<span class="sg" style="flex:${weight} 1 0">${chordHTML(lab.name, lab.had7)}${alt}${snd}</span>`;
+    const ch = lab.change;
+    const mark = ch ? `<i class="chg${ch.root ? ' root' : ''}" aria-hidden="true">${ch.root ? '◆' : '●'}</i>` : '';
+    const title = ch ? ` title="${escapeHtml(`${ch.from} → ${ch.to} · ${ch.text}`)}"` : '';
+    return `<span class="sg${ch ? ' changed' : ''}" style="flex:${weight} 1 0"${title}>${chordHTML(lab.name, lab.had7)}${mark}${alt}${snd}</span>`;
   }
 
   private buildLane(m: PlayModel): void {
@@ -195,8 +219,16 @@ export class PlayScreen {
           const b = m.bars[k];
           const col = k - i;
           const segs = b.segments.map((s) => this.segHTML(m, s.event, s.weight, b.repeat && col !== 0)).join('');
-          const aria = b.segments.map((s) => (s.event < 0 ? '코드 없음' : m.labels[s.event].name)).join(', ');
-          row.push(`<button class="bar" data-k="${k}" data-t="${b.startSec.toFixed(3)}" aria-label="${k + 1}마디, ${escapeHtml(aria)}"><span class="segs">${segs}</span><span class="ticks">${ticks}</span><span class="ph"></span></button>`);
+          const aria = b.segments
+            .map((s) => {
+              if (s.event < 0) return '코드 없음';
+              const lab = m.labels[s.event];
+              return lab.change ? `${lab.name}, ${changeLabel(lab.change)}` : lab.name;
+            })
+            .join(', ');
+          const changes = [...new Set(b.segments.filter((s) => s.event >= 0 && m.labels[s.event].change).map((s) => s.event))].map((ev) => m.labels[ev].change!);
+          const tip = changes.length ? `<span class="chg-tip" aria-hidden="true">${changes.map((c) => `<b>${escapeHtml(c.from)} → ${escapeHtml(c.to)}</b> ${escapeHtml(c.text)}`).join('<br>')}</span>` : '';
+          row.push(`<button class="bar${changes.length ? ' has-chg' : ''}" data-k="${k}" data-t="${b.startSec.toFixed(3)}" aria-label="${k + 1}마디, ${escapeHtml(aria)}"><span class="segs">${segs}</span><span class="ticks">${ticks}</span><span class="ph"></span>${tip}</button>`);
         }
         h += `<div class="row4">${row.join('')}</div>`;
       }

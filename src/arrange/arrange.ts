@@ -391,7 +391,7 @@ function eligible(plan: EventPlan, rootChange: boolean): Candidate[] {
 }
 
 function solve(p: Prepared, capo: number, mask: boolean[] | null): Arrangement {
-  const { events, profile, timing } = p;
+  const { events, profile } = p;
   const plans = plansAt(p, capo);
   const cands = plans.map((plan, i) => eligible(plan, !!mask?.[i]));
 
