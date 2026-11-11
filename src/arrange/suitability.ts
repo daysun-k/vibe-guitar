@@ -4,6 +4,7 @@
  * It judges shapes only (no tempo or chord-change speed): never "playable", only a fit
  * estimate. Thresholds are provisional (docs/level-vocabulary.md).
  */
+import { prettyChord, shapeName } from '../music/key';
 import type { Chart, Timing } from '../chart/types';
 import { arrangeChart, hardBeats, suggestCapo, type Arrangement } from './arrange';
 import { fretString } from './guitar';
@@ -25,8 +26,9 @@ export const PRACTICE_MAX_CHORDS = 2;
 export const PRACTICE_MAX_SHARE = 0.15;
 
 export interface HardChord {
-  /** Sounding chord name. */
+  /** Shape name for play-side display. */
   name: string;
+  sounding: string;
   /** Shape name relative to the capo. */
   shape: string;
   /** Fret string of the chosen shape, null when there is none. */
@@ -72,8 +74,8 @@ export function summarizeArrangement(a: Arrangement, timing: Timing, capoAuto: b
       if (e.change.rootChanged) rootChanged++;
     }
     changed += e.mergedFrom.length;
-    if (e.hard && e.sounding && !hardChords.some((h) => h.name === e.sounding)) {
-      hardChords.push({ name: e.sounding, shape: e.shape ?? e.sounding, frets: e.voicing ? fretString(e.voicing.frets) : null, shapeLevel: e.shapeLevel });
+    if (e.hard && e.sounding && !hardChords.some((h) => h.sounding === e.sounding)) {
+      hardChords.push({ name: e.shape ?? e.sounding, sounding: e.sounding, shape: e.shape ?? e.sounding, frets: e.voicing ? fretString(e.voicing.frets) : null, shapeLevel: e.shapeLevel });
     }
   }
   const share = total > 0 ? hard / total : null;
@@ -87,7 +89,7 @@ export function summarizeArrangement(a: Arrangement, timing: Timing, capoAuto: b
     hardChords,
     changed,
     rootChanged,
-    missingShape: [...a.unplayable],
+    missingShape: a.unplayable.map((n) => shapeName(n, a.capo)),
     hardChordsWithRootChange: null,
   };
 }
@@ -118,11 +120,11 @@ export function levelSuitability(chart: Chart, level: Level, o: SuitabilityOptio
   return withRootChangeHint(s, chart, o);
 }
 
-/** One line per level, e.g. "입문 · 카포 1 · 어려운 코드 1개(A♭m) · 연습하면 가능". */
-export function suitabilityLine(s: LevelSuitability, levelLabel: string, pretty: (name: string) => string = (x) => x): string {
+/** One line per level, e.g. "입문 · 카포 1 · 어려운 코드 1개(Gm) · 연습하면 가능". */
+export function suitabilityLine(s: LevelSuitability, levelLabel: string, pretty: (name: string) => string = prettyChord, showSounding = false): string {
   const parts = [levelLabel, s.capo === 0 ? '카포 없음' : `카포 ${s.capo}`];
-  if (s.missingShape.length) parts.push(`운지 없는 코드 ${s.missingShape.length}개(${s.missingShape.map(pretty).join(', ')})`);
-  else if (s.hardChords.length) parts.push(`어려운 코드 ${s.hardChords.length}개(${s.hardChords.map((h) => pretty(h.name)).join(', ')})`);
+  if (s.missingShape.length) parts.push(`운지 없는 코드 ${s.missingShape.length}개(${s.missingShape.map((n) => pretty(n) + (showSounding && s.capo ? ` (실제 ${pretty(s.hardChords.find((h) => pretty(h.name) === pretty(n))?.sounding ?? n)})` : '')).join(', ')})`);
+  else if (s.hardChords.length) parts.push(`어려운 코드 ${s.hardChords.length}개(${s.hardChords.map((h) => pretty(h.name) + (showSounding && s.capo ? ` (실제 ${pretty(h.sounding)})` : '')).join(', ')})`);
   parts.push(VERDICT_TEXT[s.verdict]);
   return parts.join(' · ');
 }

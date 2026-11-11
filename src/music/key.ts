@@ -6,7 +6,7 @@
  * key's diatonic triads (plus a tonic bonus that separates relative major/minor) and then
  * spell every root and slash bass with that key's letters.
  */
-import { formatChord, isNoChord, parseChord, type Chord } from '../arrange/chord';
+import { formatChord, isNoChord, parseChord, transposeChord, type Chord } from '../arrange/chord';
 import { LETTERS, letterIndex, mod12, parseNoteName, spellPitchClass, spellWithLetter } from '../arrange/notes';
 import type { Chart } from '../chart/types';
 
@@ -180,4 +180,10 @@ export function prettyChord(symbol: string): string {
 
 export function keyLabel(k: KeyEstimate): string {
   return `${prettyChord(k.tonicName)}${k.mode === 'minor' ? 'm' : ''}`;
+}
+
+/** Display-only capo shape; uses the arrangement's existing guitar spelling. */
+export function shapeName(symbol: string, capo: number): string {
+  try { return prettyChord(formatChord(transposeChord(parseChord(symbol), -capo))); }
+  catch { return prettyChord(symbol); }
 }

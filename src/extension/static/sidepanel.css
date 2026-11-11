@@ -294,3 +294,8 @@ textarea{width:100%;resize:vertical}
 .lvfit li small{display:block;color:var(--ink-3);font-size:11px}
 .lvfit li .pend{color:var(--ink-3)}
 .lvfit li[data-v=no-fit] b,.lvfit li[data-v=missing-shape] b{color:var(--warn)}
+
+.hard-chord{font:inherit;color:var(--accent);background:none;border:1px solid currentColor;border-radius:5px;padding:2px 5px;cursor:pointer}
+.hard-chord:focus-visible{outline:2px solid currentColor;outline-offset:2px}
+.bar.hard-hit{opacity:1;outline:3px solid var(--accent);outline-offset:-3px;background:var(--accent-soft)}
+.chg-btn small.snd,.chg-pop small.snd,.chg-tip small.snd{display:block;font-size:10px;font-weight:normal;white-space:normal}

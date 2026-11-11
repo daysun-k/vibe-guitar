@@ -3,6 +3,7 @@
  * substitutions) chosen jointly by dynamic programming over
  * static difficulty + transition cost, for a given capo; plus capo suggestion.
  */
+import { shapeName } from '../music/key';
 import { coverageRangeAt, normalizeCoverage } from '../chart/coverage';
 import { beatsBetween, barSeconds } from '../chart/timing';
 import type { Chart, Timing } from '../chart/types';
@@ -169,7 +170,7 @@ const CHANGE_ORDER: ChangeCode[] = ['relative', 'colour-seventh', 'sus2', 'sus-t
 
 const CHANGE_TEXT: Record<ChangeCode, string> = {
   relative: '근음이 바뀌어요. 관계 장·단조 3화음이라 구성음 2개가 같아요. 멜로디와 어긋날 수 있어요',
-  'colour-seventh': '같은 근음에 7음을 더한 코드예요',
+  'colour-seventh': '같은 근음에 7음을 더해요',
   sus2: '같은 근음의 sus2 코드예요',
   'sus-to-triad': 'sus 음을 3음으로 바꿨어요',
   'simplify-quality': '감·증화음을 같은 근음의 3화음으로 바꿨어요',
@@ -208,18 +209,18 @@ export function changeCodes(original: Chord, sounding: Chord): ChangeCode[] {
   return CHANGE_ORDER.filter((c) => out.has(c));
 }
 
-function changeRecord(original: Chord, sounding: Chord, stage: Stage, mergedFrom: string[]): ChangeRecord | null {
+function changeRecord(original: Chord, sounding: Chord, stage: Stage, mergedFrom: string[], capo: number): ChangeRecord | null {
   const codes = changeCodes(original, sounding);
   if (mergedFrom.length) codes.push('merge');
   if (!codes.length) return null;
-  const texts = codes.map((c) => (c === 'merge' ? `짧게 지나가는 코드(${mergedFrom.join(', ')})를 앞 코드에 합쳤어요` : CHANGE_TEXT[c]));
-  const why = stage === 2 || stage === 3 ? '원래 코드는 이 난이도에서 잡을 운지가 없어요. ' : '';
+  const texts = codes.map((c) => (c === 'merge' ? `짧게 지나가는 코드(${mergedFrom.map((n) => shapeName(n, capo)).join(', ')})를 앞 코드에 합쳤어요` : CHANGE_TEXT[c]));
+  const why = stage === 2 || stage === 3 ? '원래 모양은 이 난이도에서 잡을 운지가 없어요. ' : '';
   return {
     original: formatChord(original),
     sounding: formatChord(sounding),
     code: codes[0],
     codes,
-    text: why + texts.join(' · '),
+    text: why + (codes.length === 1 && codes[0] === 'colour-seventh' ? `원래 ${shapeName(formatChord(original), capo)} 모양인데, 7음을 더한 ${shapeName(formatChord(sounding), capo)} 모양으로 쳐요` : `원래 ${shapeName(formatChord(original), capo)} 모양에서 ${shapeName(formatChord(sounding), capo)} 모양으로 쳐요. ${texts.join(' · ')}`),
     rootChanged: original.root !== sounding.root,
   };
 }
@@ -487,7 +488,7 @@ function solve(p: Prepared, capo: number, mask: boolean[] | null): Arrangement {
       stage: c.stage,
       hard: c.stage === 4 || !c.voicing || !inLevel(c.voicing, p.levelName),
       shapeLevel,
-      change: changeRecord(plan.original, c.sounding!, c.stage, e.mergedFrom),
+      change: changeRecord(plan.original, c.sounding!, c.stage, e.mergedFrom, capo),
     };
   });
 

@@ -1,4 +1,5 @@
 /** Pure logic for the side-panel chart editor (sequence paste, stamping, tap tempo). */
+import { respellChartForKey, prettyChord } from '../music/key';
 import { isNoChord, parseChord } from '../arrange/chord';
 import { quantizeTime } from '../chart/timing';
 import type { Chart, ChordEvent, Recording, Timing } from '../chart/types';
@@ -154,9 +155,10 @@ export function attachChartToRecording(chart: Chart, recording: Recording): Char
 }
 
 export function chartToSequenceText(chart: Chart, perLine = 4): string {
+  chart = respellChartForKey(chart).chart;
   const lines: string[] = [];
   for (let i = 0; i < chart.events.length; i += perLine) {
-    lines.push(chart.events.slice(i, i + perLine).map((e) => e.chord).join(' '));
+    lines.push(chart.events.slice(i, i + perLine).map((e) => prettyChord(e.chord)).join(' '));
   }
   return lines.join('\n');
 }

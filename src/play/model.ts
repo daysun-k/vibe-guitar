@@ -13,7 +13,7 @@ import { findEventIndex } from '../extension/playview';
 import { estimateLyricOffset, nextLineAfter, pinnedLineAt, placeChords, shiftLyrics, type OffsetEstimate, type PlacedLine } from '../lyrics/align';
 import { LYRICS_LIMITS } from '../lyrics/lrclib';
 import type { Lyrics } from '../lyrics/types';
-import { prettyChord, type KeyEstimate } from '../music/key';
+import { prettyChord, shapeName, type KeyEstimate } from '../music/key';
 import { bigBeatIndexAt, bigBeatInfo, bigBeatsUntil, type BigBeat, type PhaseEstimate } from '../music/meter';
 import { buildLane, buildSections, droppedSeventh, simpleShape, stripItems, type LaneBar, type LaneSection, type StripItem } from './lane';
 
@@ -37,7 +37,7 @@ export interface EventLabel {
   /** Intermediate+ and uncertain: an easier shape that also works ("Em도 돼요"). */
   hint: string | null;
   /** The chord differs from the original: "F → Fmaj7" and why. */
-  change: { from: string; to: string; text: string; root: boolean } | null;
+  change: { from: string; to: string; text: string; root: boolean; concert?: { from: string; to: string; text?: string } } | null;
 }
 
 export interface PlayModel {
@@ -107,7 +107,7 @@ export function buildPlayModel(source: Chart, opts: PlayOptions, rawLyrics: Lyri
       sounding: prettyChord(e.sounding ?? name),
       had7: droppedSeventh(e),
       hint: ADVANCED_LEVELS.includes(opts.level) && e.uncertain && simple !== name ? `${prettyChord(simple)}도 돼요` : null,
-      change: e.change ? { from: prettyChord(e.change.original), to: prettyChord(e.change.sounding), text: e.change.text, root: e.change.rootChanged } : null,
+      change: e.change ? { from: shapeName(e.change.original, capo), to: prettyChord(e.shape), concert: capo ? { from: prettyChord(e.change.original), to: prettyChord(e.change.sounding), text: e.mergedFrom.length ? `합친 실제 코드: ${e.mergedFrom.map(prettyChord).join(', ')}` : undefined } : undefined, text: e.change.text, root: e.change.rootChanged } : null,
     };
   });
   const { items, keys } = stripItems(arrangement);
@@ -235,4 +235,14 @@ export function frameAt(m: PlayModel, t: number): Frame {
   const line = lines.length ? pinnedLineAt(lines, t) : -1;
   const nextLine = lines.length ? nextLineAfter(lines, t, line) : -1;
   return { event, next, bigLeft, bar, bigInBar, barFraction, section, line, nextLine };
+}
+
+/** Every bar occupied by this hard shape, including sustained events and repeat bars. */
+export function barsForHardChord(m: PlayModel, shape: string): number[] {
+  return m.bars.flatMap((b, i) => b.segments.some((s) => s.event >= 0 && m.arrangement.events[s.event].shape === shape) ? [i] : []);
+}
+
+/** Optional secondary text; the primary shape names never depend on this switch. */
+export function changeConcertLabel(c: NonNullable<EventLabel['change']>, showSounding: boolean, includeMerge = true): string {
+  return showSounding && c.concert ? `실제 ${c.concert.from} → ${c.concert.to}${includeMerge && c.concert.text ? ` · ${c.concert.text}` : ''}` : '';
 }
