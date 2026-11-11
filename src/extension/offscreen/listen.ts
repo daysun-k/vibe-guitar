@@ -2,16 +2,17 @@
  * Listening mode in the offscreen document: stores the captured tab audio on the
  * playback timeline (only while the song plays at 1x and no ad shows), extracts
  * features incrementally, shows the current chord ("인식 중"), and builds an auto
- * chart after a full listen (or on request). Models run locally via onnxruntime-web;
- * audio never leaves this document.
+ * chart after a full listen (or on request). Models run locally via onnxruntime-web in a
+ * dedicated worker (model-worker.ts), so inference never blocks the side panel; audio never
+ * leaves the browser.
  */
-import * as ort from 'onnxruntime-web';
 import { CQT_FRAME_SEC } from '../../audio/features';
 import type { Recording } from '../../chart/types';
 import { buildAutoChart } from '../../recognize/autochart';
 import type { BtcMeta } from '../../recognize/chords';
 import { Recognizer, type SegmentAnalysis } from '../../recognize/recognizer';
-import { MODEL_FILES, ortRunner, type ModelRunner } from '../../recognize/runner';
+import { ModelWorkerClient } from '../../recognize/model-worker-client';
+import { MODEL_FILES, type ModelRunner } from '../../recognize/runner';
 import { anchorFromPlayerState, AudioPlacer } from '../../recognize/placement';
 import { analyzeClosedSegments, ListeningSession, type Segment } from '../../recognize/session';
 import type { ListenStateMessage, ModelState, PlayerStateMessage } from '../messages';
@@ -38,39 +39,55 @@ function positionNow(p: PlayerStateMessage, nowMs: number): number {
 export type AudioClock = () => { ctxTime: number; epochMs: number } | null;
 
 
-interface Models {
+export interface ListenModels {
   recognizer: Recognizer;
   beat: ModelRunner;
   backend: string;
+  /** Called once if the model worker dies; the models are unusable afterwards. */
+  onFailure(listener: (e: Error) => void): void;
+  dispose(): void;
 }
 
-async function createModels(): Promise<Models> {
-  ort.env.wasm.wasmPaths = chrome.runtime.getURL('ort/');
-  ort.env.wasm.numThreads = self.crossOriginIsolated ? Math.min(4, navigator.hardwareConcurrency || 1) : 1;
-  const url = (f: string) => chrome.runtime.getURL(`models/${f}`);
-  const meta = (await (await fetch(url(MODEL_FILES.btcMeta))).json()) as BtcMeta;
-  const wasm = (f: string) => ort.InferenceSession.create(url(f), { executionProviders: ['wasm'] });
-  const beatWasm = ortRunner(await wasm(MODEL_FILES.beat), ort.Tensor);
-  const chords = ortRunner(await wasm(MODEL_FILES.chords), ort.Tensor);
-  let beat = beatWasm;
-  let backend = 'wasm';
-  // WebGPU for the beat model when available, after a numeric check against WASM.
-  if (USE_WEBGPU && 'gpu' in navigator) {
-    try {
-      const gpu = ortRunner(await ort.InferenceSession.create(url(MODEL_FILES.beat), { executionProviders: ['webgpu'] }), ort.Tensor);
-      const probe = new Float32Array(300 * 128).map((_, i) => 2 + Math.sin(i * 0.37));
-      const [a, b] = await Promise.all([gpu.run('spect', probe, [1, 300, 128]), beatWasm.run('spect', probe, [1, 300, 128])]);
-      let maxDiff = 0;
-      for (let i = 0; i < a.beat.length; i++) maxDiff = Math.max(maxDiff, Math.abs(a.beat[i] - b.beat[i]));
-      if (maxDiff < 1e-2) {
-        beat = gpu;
-        backend = 'beat: webgpu, chords: wasm';
-      } else backend = `wasm (webgpu mismatch ${maxDiff.toExponential(1)})`;
-    } catch (e) {
-      backend = `wasm (webgpu unavailable: ${e instanceof Error ? e.message : String(e)})`;
+async function createModels(): Promise<ListenModels> {
+  const client = new ModelWorkerClient(new Worker(chrome.runtime.getURL('model-worker.js')));
+  try {
+    const opts = { wasmPaths: chrome.runtime.getURL('ort/'), numThreads: self.crossOriginIsolated ? Math.min(4, navigator.hardwareConcurrency || 1) : 1 };
+    const url = (f: string) => chrome.runtime.getURL(`models/${f}`);
+    const meta = (await (await fetch(url(MODEL_FILES.btcMeta))).json()) as BtcMeta;
+    await client.load('beat', url(MODEL_FILES.beat), 'wasm', opts);
+    await client.load('chords', url(MODEL_FILES.chords), 'wasm', opts);
+    const beatWasm = client.runner('beat');
+    const chords = client.runner('chords');
+    let beat: ModelRunner = beatWasm;
+    let backend = 'wasm (worker)';
+    // WebGPU for the beat model when available, after a numeric check against WASM.
+    if (USE_WEBGPU && 'gpu' in navigator) {
+      try {
+        await client.load('beat-gpu', url(MODEL_FILES.beat), 'webgpu', opts);
+        const gpu = client.runner('beat-gpu');
+        const probe = new Float32Array(300 * 128).map((_, i) => 2 + Math.sin(i * 0.37));
+        const [a, b] = await Promise.all([gpu.run('spect', probe, [1, 300, 128]), beatWasm.run('spect', probe, [1, 300, 128])]);
+        let maxDiff = 0;
+        for (let i = 0; i < a.beat.length; i++) maxDiff = Math.max(maxDiff, Math.abs(a.beat[i] - b.beat[i]));
+        if (maxDiff < 1e-2) {
+          beat = gpu;
+          backend = 'beat: webgpu, chords: wasm (worker)';
+        } else backend = `wasm (worker; webgpu mismatch ${maxDiff.toExponential(1)})`;
+      } catch (e) {
+        backend = `wasm (worker; webgpu unavailable: ${e instanceof Error ? e.message : String(e)})`;
+      }
     }
+    return {
+      recognizer: new Recognizer(beat, chords, meta.models.large),
+      beat,
+      backend,
+      onFailure: (l) => client.onFailure(l),
+      dispose: () => client.terminate(),
+    };
+  } catch (e) {
+    client.terminate();
+    throw e;
   }
-  return { recognizer: new Recognizer(beat, chords, meta.models.large), beat, backend };
 }
 
 export class ListeningController {
@@ -79,7 +96,7 @@ export class ListeningController {
   private session: ListeningSession | null = null;
   private recording: Recording | null = null;
   private readonly placer = new AudioPlacer(CAPTURE_LATENCY_SEC);
-  private models: Models | null = null;
+  private models: ListenModels | null = null;
   private modelState: ModelState = 'idle';
   private modelError: string | undefined;
   private backend = '';
@@ -96,6 +113,7 @@ export class ListeningController {
   constructor(
     private readonly send: (msg: unknown) => void,
     private readonly clock: AudioClock,
+    private readonly makeModels: () => Promise<ListenModels> = createModels,
   ) {}
 
   private get idleReason(): string | null {
@@ -128,9 +146,20 @@ export class ListeningController {
     this.modelState = 'loading';
     this.modelError = undefined;
     try {
-      this.models = await createModels();
-      this.backend = this.models.backend;
+      const models = await this.makeModels();
+      this.models = models;
+      this.backend = models.backend;
       this.modelState = 'ready';
+      // Subscribe last: a worker that already died reports at once and must win over 'ready'.
+      // A crashed worker answers nothing more: drop it so the next start() loads a new one.
+      models.onFailure((e) => {
+        if (this.models !== models) return;
+        this.models = null;
+        this.modelState = 'error';
+        this.modelError = e.message;
+        models.dispose();
+        this.pushState();
+      });
     } catch (e) {
       this.modelState = 'error';
       this.modelError = e instanceof Error ? e.message : String(e);

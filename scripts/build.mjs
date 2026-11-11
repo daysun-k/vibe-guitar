@@ -16,6 +16,7 @@ const entryPoints = {
   'applemusic-main': 'src/extension/content/applemusic-main.ts',
   offscreen: 'src/extension/offscreen/offscreen.ts',
   'capture-worklet': 'src/extension/offscreen/capture-worklet.ts',
+  'model-worker': 'src/extension/offscreen/model-worker.ts',
   bench: 'src/extension/bench/bench.ts',
   sidepanel: 'src/extension/sidepanel/sidepanel.ts',
 };
@@ -73,6 +74,7 @@ if (!watch) {
     manifest.side_panel.default_path,
     'offscreen.html',
     'capture-worklet.js',
+    'model-worker.js',
     'bench.html',
     'bench.js',
     'ort/ort-wasm-simd-threaded.jsep.wasm',
