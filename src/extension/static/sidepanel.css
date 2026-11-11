@@ -299,3 +299,4 @@ textarea{width:100%;resize:vertical}
 .hard-chord:focus-visible{outline:2px solid currentColor;outline-offset:2px}
 .bar.hard-hit{opacity:1;outline:3px solid var(--accent);outline-offset:-3px;background:var(--accent-soft)}
 .chg-btn small.snd,.chg-pop small.snd,.chg-tip small.snd{display:block;font-size:10px;font-weight:normal;white-space:normal}
+.lvfit small.snd{display:inline;font-size:11px}
