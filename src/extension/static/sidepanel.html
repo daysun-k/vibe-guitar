@@ -53,6 +53,7 @@
       <p class="ly" id="ly-cur"></p>
       <p class="nxt" id="ly-next"></p>
     </section>
+    <p id="hard-chord-status" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
     <div class="lane-wrap" id="lane-wrap">
       <div class="lane" id="lane" tabindex="0" aria-label="마디 진행표. 마디를 누르면 그 위치로 이동"></div>
       <button class="follow" id="follow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M6 13l6 6 6-6"/></svg>현재 위치로</button>
@@ -84,6 +85,7 @@
 
     <div class="card">
       <div class="label">1. 코드 진행 붙여 넣기</div>
+      <p class="small" id="editor-naming"></p>
       <textarea id="seq" rows="4" placeholder="C G/B | Am F | N.C. ..."></textarea>
       <button id="seq-parse">코드 읽기</button>
       <div id="seq-status" class="small"></div>
@@ -248,6 +250,7 @@
       <button class="switch" id="root-sw" role="switch" aria-checked="false" aria-label="근음 바꾸기"><i></i></button></div>
     <div class="field"><span>카포<small id="capo-suggest"></small></span>
       <div class="stepper"><button id="capo-down" aria-label="카포 내리기">−</button><output id="capo-out"></output><button id="capo-up" aria-label="카포 올리기">+</button></div></div>
+    <p class="small" id="capo-naming"></p>
     <div class="field"><span>미리 알림<small id="look-note">바뀌기 전에 다음 코드를 강조할 때</small></span>
       <div class="seg" role="group" aria-label="미리 알림" data-k="lookAheadBars"><button data-v="0.5">½마디 전</button><button data-v="1">1마디 전</button><button data-v="2">2마디 전</button></div></div>
     <div class="field"><span>카운트인<small id="countin-note">패널에서 재생을 누르면 큰 박을 세어 줘요</small></span>

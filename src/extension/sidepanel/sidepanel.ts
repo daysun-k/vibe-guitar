@@ -24,7 +24,7 @@ import {
 } from '../../editor/core';
 import { DraftBook, chartWriteTarget, checkSaveTarget, isDraftEmpty, reattachDraft, recordingKeyOf, type EditorDraft } from '../../editor/drafts';
 import type { Lyrics } from '../../lyrics/types';
-import { keyLabel, prettyChord } from '../../music/key';
+import { keyLabel, prettyChord, respellChartForKey, shapeName } from '../../music/key';
 import { DEMO_RECORDING, DemoClock, demoChart, demoLyrics } from '../../play/demo';
 import { LevelFitController, type LevelFitState, type LevelWorkerLike } from '../../play/level-fit';
 import { buildPlayModel, frameAt, type PlayModel } from '../../play/model';
@@ -46,7 +46,7 @@ import { escapeHtml, renderShapeDiagram } from './diagram';
 import { LyricsAsker, lyricsOutcome, lyricsLookupReady } from './lyrics-asker';
 import { controlTabId, keepPlayerAfterDemo } from './player-target';
 import { prepareCountIn } from './countin-prep';
-import { PlayScreen, formatTime } from './play';
+import { capoReason, unplayableLine, PlayScreen, formatTime } from './play';
 
 // ---------- DOM helpers ----------
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
@@ -310,15 +310,30 @@ function renderLevelFit(): void {
     const cur = level === settings.level ? ' class="cur"' : '';
     if (f === null || f === 'pending') return `<li${cur}><b>${LEVEL_LABEL[level]}</b> · <span class="pend">계산 중…</span></li>`;
     if (f === 'error') return `<li${cur}><b>${LEVEL_LABEL[level]}</b> · 계산하지 못했어요</li>`;
-    const line = escapeHtml(suitabilityLine(f, LEVEL_LABEL[level], prettyChord));
+    let line = escapeHtml(suitabilityLine({ ...f, hardChords: [], missingShape: [] }, LEVEL_LABEL[level], prettyChord));
+    if (f.hardChords.length) {
+      const listed = f.hardChords.map((h, i) => ({ h, i })).filter(({ h }) => !f.missingShape.length || f.missingShape.some((n) => prettyChord(n) === prettyChord(h.name)));
+      const names = listed.map(({ h, i }) => {
+        const name = escapeHtml(prettyChord(h.name));
+        const primary = level === settings.level ? `<button class="hard-chord" data-hard="${i}" aria-label="${name} 모양이 나오는 마디 찾기">${name}</button>` : name;
+        return primary + (settings.showSounding && f.capo ? ` <small class="snd">실제 ${escapeHtml(prettyChord(h.sounding))}</small>` : '');
+      }).join(', ');
+      line = line.replace(` · ${VERDICT_TEXT[f.verdict]}`, ` · ${f.missingShape.length ? '운지 없는 코드' : '어려운 코드'} ${listed.length}개(${names}) · ${VERDICT_TEXT[f.verdict]}`);
+    }
     const sub: string[] = [];
     if (f.changed) sub.push(`바뀐 코드 ${f.changed}개${f.rootChanged ? ` (근음 바뀜 ${f.rootChanged}개)` : ''}`);
     if (f.hardBeatShare !== null && f.hardChords.length) sub.push(`어려운 코드 비중 ${Math.round(f.hardBeatShare * 100)}%`);
     if (f.hardChordsWithRootChange !== null) sub.push(`근음 바꾸기를 켜면 어려운 코드 ${f.hardChordsWithRootChange}개`);
-    const title = f.hardChords.length ? ` title="${escapeHtml(f.hardChords.map((h) => `${prettyChord(h.name)}: ${prettyChord(h.shape)} ${h.frets ?? '운지 없음'}`).join(', '))}"` : '';
+    const title = f.hardChords.length ? ` title="${escapeHtml(f.hardChords.map((h) => `${prettyChord(h.name)}${settings.showSounding && f.capo ? ` (실제 ${prettyChord(h.sounding)})` : ''}: ${h.frets ?? '운지 없음'}`).join(', '))}"` : '';
     return `<li${cur}${title} data-v="${f.verdict}">${line.replace(LEVEL_LABEL[level], `<b>${LEVEL_LABEL[level]}</b>`)}${sub.length ? `<small>${escapeHtml(sub.join(' · '))}</small>` : ''}</li>`;
   });
   setHtml(ul, rows.join(''));
+  for (const button of ul.querySelectorAll<HTMLButtonElement>('[data-hard]')) button.onclick = () => {
+    const h = model?.suitability.hardChords[Number(button.dataset.hard)];
+    if (!h) return;
+    closeSheet();
+    screen.highlightHardChord(h.shape);
+  };
 }
 
 // ---------- header / static parts ----------
@@ -433,6 +448,11 @@ function renderStatic(): void {
   setText('capo-suggest', sug.length ? `추천: ${sug.slice(0, 2).map((s) => `${s.capo === 0 ? '없음' : `${s.capo}프렛`}(${s.shapes.slice(0, 4).map(prettyChord).join(' ')})`).join(' · ')}` : '');
   const cap = currentCapo();
   setText('capo-out', cap === 'auto' ? `자동 · ${model?.arrangement.capo ?? 0}` : cap === 0 ? '없음' : `${cap}프렛`);
+  const usedCapo = model?.arrangement.capo ?? (cap === 'auto' ? 0 : cap);
+  setText('capo-naming', usedCapo > 0 ? `카포 ${usedCapo}: 화면의 코드는 손으로 잡는 모양 이름이에요. 소리는 원곡과 같아요.` : '');
+  const source = demo?.chart ?? chart;
+  const example = source ? respellChartForKey(source).chart.events.find((e) => shapeName(e.chord, usedCapo) !== prettyChord(e.chord)) : null;
+  setText('editor-naming', usedCapo > 0 ? `여기는 카포 없는 실제 소리 이름이에요. 연주 화면은 ${capoReason(usedCapo)} ${usedCapo === 1 ? '한 칸' : `${usedCapo}칸`} 낮은 모양 이름으로 보여요.${example ? ` 예: ${prettyChord(example.chord)} → ${shapeName(example.chord, usedCapo)}` : ''}` : '');
   // look-ahead / count-in notes in big beats
   if (model) {
     const b = model.big;
@@ -463,7 +483,7 @@ function renderStatic(): void {
       const toggle = u.voicing ? `<label class="small"><input type="checkbox" data-known="${escapeHtml(u.voicing.id)}" ${known.has(u.voicing.id) ? 'checked' : ''}/> 잡을 수 있음</label>` : '';
       return `<div class="cell"><div class="name">${escapeHtml(u.shape)}</div>${dg}${toggle}</div>`;
     });
-    if (model.arrangement.unplayable.length) cells.push(`<div class="cell err small">운지를 찾지 못함: ${escapeHtml(model.arrangement.unplayable.join(', '))}</div>`);
+    if (model.arrangement.unplayable.length) cells.push(`<div class="cell err small">${unplayableLine(model.arrangement, settings.showSounding)}</div>`);
     setHtml(grid, cells.join(''));
   }
   renderEditorTarget();
@@ -991,6 +1011,7 @@ function closeSheet(): void {
 
 /** Saves the settings (the returned promise settles once they are stored) and re-renders. */
 function persist(rebuild: boolean): Promise<void> {
+  screen.clearHardChord();
   const saved = hasChrome ? saveSettings(settings).catch((e: unknown) => console.error(e)) : Promise.resolve();
   if (rebuild) recompute();
   else {
@@ -1009,6 +1030,7 @@ function syncSheet(): void {
   $('root-sw').setAttribute('aria-checked', String(settings.allowRootChange));
   $('lyrics-sw').setAttribute('aria-checked', String(settings.fetchLyrics));
   document.documentElement.classList.toggle('show-snd', settings.showSounding);
+  screen.setSounding(settings.showSounding);
 }
 
 const CAPO_STEPS: ('auto' | number)[] = ['auto', 0, 1, 2, 3, 4, 5, 6, 7];

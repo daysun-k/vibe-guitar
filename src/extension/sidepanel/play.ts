@@ -3,10 +3,24 @@
  * transport. Built once per PlayModel; `render(t)` runs every animation frame and only
  * touches the DOM when something changed.
  */
+import type { Arrangement } from '../../arrange/arrange';
+import { prettyChord, shapeName } from '../../music/key';
 import { bigBeatSeconds } from '../../music/meter';
-import { frameAt, upcomingShapes, type PlayModel } from '../../play/model';
+import { barsForHardChord, changeConcertLabel, frameAt, upcomingShapes, type PlayModel } from '../../play/model';
 import { escapeHtml, renderShapeDiagram, shapeDiagramHeight } from './diagram';
 import { ScrubState } from './scrub';
+
+/** Korean particle follows the spoken final digit (10 ends in 십). */
+export function capoReason(capo: number): string {
+  return `카포 ${capo}${[2, 4, 5, 9].includes(capo % 10) ? '라' : '이라'}`;
+}
+
+/** The settings card uses shape names, with optional secondary concert names. */
+export function unplayableLine(a: Pick<Arrangement, 'unplayable' | 'capo'>, showSounding: boolean): string {
+  const names = a.unplayable.map((name) => escapeHtml(shapeName(name, a.capo)) +
+    (showSounding && a.capo ? ` <small class="snd">실제 ${escapeHtml(prettyChord(name))}</small>` : ''));
+  return `운지를 찾지 못함: ${names.join(', ')}`;
+}
 
 export interface PlayHost {
   seek(sec: number): void;
@@ -36,8 +50,9 @@ export function chordHTML(name: string, had7 = false): string {
 }
 
 /** Screen-reader text of a change: "원래 코드 F, 바뀐 코드 Fmaj7. <reason>" (no particle after a chord name). */
-export function changeLabel(c: { from: string; to: string; text: string; root: boolean }): string {
-  return `원래 코드 ${c.from}, 바뀐 코드 ${c.to}${c.root ? '(근음 바뀜)' : ''}. ${c.text}`;
+export function changeLabel(c: { from: string; to: string; text: string; root: boolean; badge?: string }): string {
+  if (c.from === c.to && c.badge) return `${c.badge}. ${c.text}`;
+  return `원래 모양 ${c.from}, 바뀐 모양 ${c.to}${c.root ? '(근음 바뀜)' : ''}. ${c.text}`;
 }
 
 /** Keeps `el` near 30 % of the scroller unless the user scrolled away ("현재 위치로" brings it back). */
@@ -65,6 +80,7 @@ function follower(scroller: HTMLElement, btn: HTMLElement) {
     step(true);
   });
   return {
+    release,
     follow(el: HTMLElement, jump: boolean) {
       target = el;
       step(jump);
@@ -131,6 +147,39 @@ export class PlayScreen {
     });
   }
 
+  private showSounding = false;
+  private highlighted: string | null = null;
+
+  setSounding(on: boolean): void {
+    if (on === this.showSounding) return;
+    this.showSounding = on;
+    this.setModel(this.m);
+  }
+
+  clearHardChord(): void {
+    if (this.highlighted !== null) $('hard-chord-status').textContent = '표시를 껐어요';
+    this.highlighted = null;
+    for (const b of this.barEls) b.classList.remove('hard-hit');
+  }
+
+  highlightHardChord(shape: string): void {
+    const previous = this.highlighted;
+    this.clearHardChord();
+    if (!this.m || previous === shape) return;
+    this.highlighted = shape;
+    const hits = barsForHardChord(this.m, shape);
+    $('hard-chord-status').textContent = `${prettyChord(shape)} 마디 ${hits.length}곳을 표시했어요`;
+    for (const i of hits) this.barEls[i]?.classList.add('hard-hit');
+    this.fol.release();
+    const first = this.barEls[hits[0]];
+    first?.scrollIntoView({ block: 'center', behavior: 'instant' });
+    first?.focus({ preventScroll: true });
+  }
+
+  private concert(c: NonNullable<PlayModel['labels'][number]['change']>, includeMerge = true): string {
+    return changeConcertLabel(c, this.showSounding, includeMerge);
+  }
+
   get model(): PlayModel | null {
     return this.m;
   }
@@ -141,6 +190,7 @@ export class PlayScreen {
   }
 
   setModel(m: PlayModel | null): void {
+    this.clearHardChord();
     this.m = m;
     this.last = { bar: -2, up: 'x', soon: 'x', line: -2, section: -2, cd: -1 };
     for (const id of ['dias-wrap', 'lane-wrap', 'transport']) $(id).hidden = !m;
@@ -184,7 +234,7 @@ export class PlayScreen {
       const ch = lab.change;
       // A changed chord: "F→Fmaj7" button; the reason shows on hover, focus and tap.
       const chg = ch
-        ? `<button class="chg-btn${ch.root ? ' root' : ''}" aria-expanded="false" aria-label="${escapeHtml(changeLabel(ch))}">${escapeHtml(ch.from)}→${escapeHtml(ch.to)}</button><span class="chg-pop" role="tooltip">${escapeHtml(ch.text)}</span>`
+        ? `<button class="chg-btn${ch.root ? ' root' : ''}" aria-expanded="false" aria-label="${escapeHtml(changeLabel(ch) + (this.concert(ch) ? `. ${this.concert(ch)}` : ''))}">${escapeHtml(ch.badge)}${this.concert(ch) ? `<small class="snd">${escapeHtml(this.concert(ch, false))}</small>` : ''}</button><span class="chg-pop" role="tooltip">${escapeHtml(ch.text)}${this.concert(ch) ? `<small class="snd">${escapeHtml(this.concert(ch))}</small>` : ''}</span>`
         : '';
       li.classList.toggle('changed', !!ch);
       li.classList.toggle('root', !!ch?.root);
@@ -200,7 +250,7 @@ export class PlayScreen {
     const alt = lab.hint ? `<small class="alt">${escapeHtml(lab.hint)}</small>` : '';
     const ch = lab.change;
     const mark = ch ? `<i class="chg${ch.root ? ' root' : ''}" aria-hidden="true">${ch.root ? '◆' : '●'}</i>` : '';
-    const title = ch ? ` title="${escapeHtml(`${ch.from} → ${ch.to} · ${ch.text}`)}"` : '';
+    const title = ch ? ` title="${escapeHtml(`${ch.badge} · ${ch.text}${this.concert(ch) ? ` · ${this.concert(ch)}` : ''}`)}"` : '';
     return `<span class="sg${ch ? ' changed' : ''}" style="flex:${weight} 1 0"${title}>${chordHTML(lab.name, lab.had7)}${mark}${alt}${snd}</span>`;
   }
 
@@ -208,7 +258,7 @@ export class PlayScreen {
     const n = m.big.bigPerBar;
     const ticks = '<i></i>'.repeat(n);
     const unit = m.big.compound ? '큰 박 하나' : '한 박';
-    let h = `<p class="legend"><span class="mini">${'<i></i>'.repeat(Math.min(n, 4))}</span>칸 하나가 1마디, 막대 하나가 ${unit}예요 · ${m.big.label}</p>`;
+    let h = `<p class="legend"><span class="mini">${'<i></i>'.repeat(Math.min(n, 4))}</span>칸 하나가 1마디, 막대 하나가 ${unit}예요 · ${m.big.label}${m.arrangement.capo > 0 ? ` · 코드 이름은 카포 ${m.arrangement.capo}에서 잡는 모양이에요` : ''}</p>`;
     m.sections.forEach((sec, si) => {
       const end = m.sections[si + 1]?.firstBar ?? m.bars.length;
       if (end <= sec.firstBar) return;
@@ -223,11 +273,11 @@ export class PlayScreen {
             .map((s) => {
               if (s.event < 0) return '코드 없음';
               const lab = m.labels[s.event];
-              return lab.change ? `${lab.name}, ${changeLabel(lab.change)}` : lab.name;
+              return lab.change ? `${lab.name}, ${changeLabel(lab.change)}${this.concert(lab.change) ? `. ${this.concert(lab.change)}` : ''}` : lab.name;
             })
             .join(', ');
           const changes = [...new Set(b.segments.filter((s) => s.event >= 0 && m.labels[s.event].change).map((s) => s.event))].map((ev) => m.labels[ev].change!);
-          const tip = changes.length ? `<span class="chg-tip" aria-hidden="true">${changes.map((c) => `<b>${escapeHtml(c.from)} → ${escapeHtml(c.to)}</b> ${escapeHtml(c.text)}`).join('<br>')}</span>` : '';
+          const tip = changes.length ? `<span class="chg-tip" aria-hidden="true">${changes.map((c) => `<b>${escapeHtml(c.badge)}</b> ${escapeHtml(c.text)}${this.concert(c) ? `<small class="snd">${escapeHtml(this.concert(c))}</small>` : ''}`).join('<br>')}</span>` : '';
           row.push(`<button class="bar${changes.length ? ' has-chg' : ''}" data-k="${k}" data-t="${b.startSec.toFixed(3)}" aria-label="${k + 1}마디, ${escapeHtml(aria)}"><span class="segs">${segs}</span><span class="ticks">${ticks}</span><span class="ph"></span>${tip}</button>`);
         }
         h += `<div class="row4">${row.join('')}</div>`;
