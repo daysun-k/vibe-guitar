@@ -74,9 +74,11 @@ export function reduceForLevel(original: Chord, level: LevelConfig, ctx: ChordCo
       steps.push(`drop ${c.extension}`);
       c = withChanges(c, { extension: null });
     }
-    if (c.adds.length) {
-      steps.push(`drop add${c.adds.join(',')}`);
-      c = withChanges(c, { adds: [] });
+    // Novice keeps add9 (Cadd9, and the 9 of a 6/9) but no other add-tone.
+    const dropped = c.adds.filter((a) => !(level.allowAddNine && a === 9));
+    if (dropped.length) {
+      steps.push(`drop add${dropped.join(',')}`);
+      c = withChanges(c, { adds: c.adds.filter((a) => !dropped.includes(a)) });
     }
   }
   if (!level.allowSevenths && c.seventh !== 'none') {

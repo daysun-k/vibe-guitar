@@ -7,3 +7,4 @@ export * from './cost';
 export * from './transform';
 export * from './arrange';
 export * from './strum';
+export * from './curriculum';

@@ -6,13 +6,15 @@
  */
 import { arrangeChart, suggestCapo, type Arrangement, type CapoSuggestion } from '../arrange/arrange';
 import type { Level, Profile } from '../arrange/levels';
+import { summarizeArrangement, type LevelSuitability } from '../arrange/suitability';
+import { prepareChart } from './prepare';
 import type { Chart, Timing } from '../chart/types';
 import { findEventIndex } from '../extension/playview';
 import { estimateLyricOffset, nextLineAfter, pinnedLineAt, placeChords, shiftLyrics, type OffsetEstimate, type PlacedLine } from '../lyrics/align';
 import { LYRICS_LIMITS } from '../lyrics/lrclib';
 import type { Lyrics } from '../lyrics/types';
-import { prettyChord, respellChartForKey, type KeyEstimate } from '../music/key';
-import { alignBarPhase, bigBeatIndexAt, bigBeatInfo, bigBeatsUntil, type BigBeat, type PhaseEstimate } from '../music/meter';
+import { prettyChord, type KeyEstimate } from '../music/key';
+import { bigBeatIndexAt, bigBeatInfo, bigBeatsUntil, type BigBeat, type PhaseEstimate } from '../music/meter';
 import { buildLane, buildSections, droppedSeventh, simpleShape, stripItems, type LaneBar, type LaneSection, type StripItem } from './lane';
 
 export interface PlayOptions {
@@ -21,6 +23,8 @@ export interface PlayOptions {
   profile?: Profile;
   /** Playback duration from the player (0 = unknown). */
   durationSec?: number;
+  /** Allow root-changing (relative major/minor) substitutions. Default off. */
+  allowRootChange?: boolean;
 }
 
 export interface EventLabel {
@@ -32,6 +36,8 @@ export interface EventLabel {
   had7: boolean;
   /** Intermediate+ and uncertain: an easier shape that also works ("Em도 돼요"). */
   hint: string | null;
+  /** The chord differs from the original: "F → Fmaj7" and why. */
+  change: { from: string; to: string; text: string; root: boolean } | null;
 }
 
 export interface PlayModel {
@@ -43,6 +49,8 @@ export interface PlayModel {
   big: BigBeat;
   arrangement: Arrangement;
   capoSuggestions: CapoSuggestion[];
+  /** Shape suitability of the shown arrangement (current level). */
+  suitability: LevelSuitability;
   labels: EventLabel[];
   strip: StripItem[];
   stripKeys: string[];
@@ -55,14 +63,6 @@ export interface PlayModel {
 }
 
 const ADVANCED_LEVELS: Level[] = ['intermediate', 'advanced'];
-
-function changeTimes(chart: Chart): number[] {
-  const out: number[] = [];
-  chart.events.forEach((e, i) => {
-    if (i > 0 && e.chord !== chart.events[i - 1].chord) out.push(e.startSec);
-  });
-  return out;
-}
 
 /**
  * Lyrics as stored (cache entries are untrusted): bounded line/word counts, finite and
@@ -88,16 +88,18 @@ export function sanitizeLyrics(l: Lyrics, durationSec: number): Lyrics | null {
 }
 
 export function buildPlayModel(source: Chart, opts: PlayOptions, rawLyrics: Lyrics | null): PlayModel {
-  const { chart, key } = respellChartForKey(source);
-  const changes = changeTimes(chart);
-  const aligned = alignBarPhase(chart.timing, changes);
-  const timing = aligned.timing;
+  const prep = prepareChart(source);
+  const { chart, key, timing, changes } = prep;
   const big = bigBeatInfo(timing);
-  const capoSuggestions = suggestCapo(chart, opts.level, opts.profile);
-  const capo = opts.capo === 'auto' ? (capoSuggestions[0]?.capo ?? 0) : opts.capo;
-  const arrangement = arrangeChart({ ...chart, timing }, { level: opts.level, capo, profile: opts.profile });
+  const manual = opts.capo === 'auto' ? undefined : opts.capo;
+  const capoSuggestions = suggestCapo(chart, opts.level, opts.profile, { allowRootChange: opts.allowRootChange, extraCapo: manual });
+  // The winning capo's arrangement is reused; a manual capo outside the ranked range is arranged here.
+  const ranked = manual === undefined ? capoSuggestions[0] : capoSuggestions.find((s) => s.capo === manual);
+  const capo = manual ?? capoSuggestions[0]?.capo ?? 0;
+  const arrangement = ranked?.arrangement ?? arrangeChart(chart, { level: opts.level, capo, profile: opts.profile, allowRootChange: opts.allowRootChange });
+  const suitability = summarizeArrangement(arrangement, timing, opts.capo === 'auto');
   const labels: EventLabel[] = arrangement.events.map((e) => {
-    if (e.rest || !e.shape) return { name: 'N.C.', sounding: 'N.C.', had7: false, hint: null };
+    if (e.rest || !e.shape) return { name: 'N.C.', sounding: 'N.C.', had7: false, hint: null, change: null };
     const name = capo ? e.shape : (e.sounding ?? e.shape);
     const simple = simpleShape(name);
     return {
@@ -105,6 +107,7 @@ export function buildPlayModel(source: Chart, opts: PlayOptions, rawLyrics: Lyri
       sounding: prettyChord(e.sounding ?? name),
       had7: droppedSeventh(e),
       hint: ADVANCED_LEVELS.includes(opts.level) && e.uncertain && simple !== name ? `${prettyChord(simple)}도 돼요` : null,
+      change: e.change ? { from: prettyChord(e.change.original), to: prettyChord(e.change.sounding), text: e.change.text, root: e.change.rootChanged } : null,
     };
   });
   const { items, keys } = stripItems(arrangement);
@@ -112,7 +115,7 @@ export function buildPlayModel(source: Chart, opts: PlayOptions, rawLyrics: Lyri
   for (const r of chart.coverage) coverEnd = Math.max(coverEnd, r.toSec);
   for (const e of arrangement.events) coverEnd = Math.max(coverEnd, e.endSec);
   const durationSec = Math.max(opts.durationSec ?? 0, coverEnd);
-  const bars = buildLane(arrangement, timing, big, Math.min(durationSec, coverEnd + 0.01), (i) => keys[i] || labels[i].name);
+  const bars = buildLane(arrangement, timing, big, Math.min(durationSec, coverEnd + 0.01), (i) => keys[i] || labels[i].name, (i) => !!arrangement.events[i]?.change);
 
   // Lyrics are optional: anything wrong with them degrades to "no lyrics", never to no chords.
   let lyrics: Lyrics | null = null;
@@ -137,11 +140,12 @@ export function buildPlayModel(source: Chart, opts: PlayOptions, rawLyrics: Lyri
     chart,
     key,
     timing,
-    phase: aligned.estimate,
-    phaseShifted: aligned.shifted,
+    phase: prep.phase,
+    phaseShifted: prep.phaseShifted,
     big,
     arrangement,
     capoSuggestions,
+    suitability,
     labels,
     strip: items,
     stripKeys: keys,

@@ -1,7 +1,8 @@
 /** Side panel: play view (mockup B), chart editor, listening/capture readout, settings. */
 import { uniqueVoicings } from '../../arrange/arrange';
 import { isNoChord } from '../../arrange/chord';
-import type { Level } from '../../arrange/levels';
+import { LEVELS, type Level } from '../../arrange/levels';
+import { VERDICT_TEXT, suitabilityLine, type LevelSuitability } from '../../arrange/suitability';
 import { suggestStrumming } from '../../arrange/strum';
 import { PITCH_CLASS_LABELS } from '../../audio/chroma';
 import { EXAMPLE_CHARTS } from '../../chart/examples';
@@ -25,6 +26,7 @@ import { DraftBook, chartWriteTarget, checkSaveTarget, isDraftEmpty, reattachDra
 import type { Lyrics } from '../../lyrics/types';
 import { keyLabel, prettyChord } from '../../music/key';
 import { DEMO_RECORDING, DemoClock, demoChart, demoLyrics } from '../../play/demo';
+import { LevelFitController, type LevelFitState, type LevelWorkerLike } from '../../play/level-fit';
 import { buildPlayModel, frameAt, type PlayModel } from '../../play/model';
 import type { LyricsReply } from '../lyrics-service';
 import type {
@@ -241,10 +243,29 @@ function currentCapo(): 'auto' | number {
   return settings.capo;
 }
 
+// Other levels' suitability: a dedicated worker, or the main thread after the first render.
+let levelFits = new Map<Level, LevelFitState>();
+const levelFit = new LevelFitController({
+  createWorker: () => new Worker('level-worker.js') as unknown as LevelWorkerLike,
+  onUpdate: (states) => {
+    levelFits = states;
+    renderLevelFit();
+    renderChip();
+  },
+  schedule: (fn) => requestAnimationFrame(() => setTimeout(fn, 0)),
+  onTiming: (ms, lv) => console.debug(`level-fit worker: ${lv.join(',')} in ${ms} ms`),
+});
+
 function recompute(): void {
   const c = demo ? demo.chart : chart;
   const ly = demo ? demo.lyrics : lyrics;
-  const opts = { level: settings.level, capo: currentCapo(), profile: settings.profile, durationSec: demo ? demo.clock.durationSec : player?.duration };
+  const opts = {
+    level: settings.level,
+    capo: currentCapo(),
+    profile: settings.profile,
+    allowRootChange: settings.allowRootChange,
+    durationSec: demo ? demo.clock.durationSec : player?.duration,
+  };
   try {
     model = c ? buildPlayModel(c, opts, ly) : null;
   } catch (e) {
@@ -259,7 +280,45 @@ function recompute(): void {
   }
   screen.setModel(model);
   screen.setLook(settings.lookAheadBars);
+  // Any song or settings change drops pending replies. The current level's line comes from the
+  // model; the worker adds only its "with root changes" count (it also computes the other levels).
+  levelFit.update(c && model ? { chart: c, capo: opts.capo, profile: { ...settings.profile }, allowRootChange: settings.allowRootChange } : null, [...LEVELS]);
   renderStatic();
+}
+
+/** Suitability of a level: the shown arrangement for the current level, else the computed one. */
+function fitOf(level: Level): LevelSuitability | 'pending' | 'error' | null {
+  if (!model) return null;
+  const st = levelFits.get(level);
+  if (level === settings.level) {
+    const hint = st?.status === 'done' ? st.result.hardChordsWithRootChange : null;
+    return { ...model.suitability, hardChordsWithRootChange: hint };
+  }
+  if (!st) return null;
+  return st.status === 'done' ? st.result : st.status;
+}
+
+function renderLevelFit(): void {
+  const ul = document.getElementById('level-fit');
+  if (!ul) return;
+  if (!model) {
+    setHtml(ul, '');
+    return;
+  }
+  const rows = LEVELS.map((level) => {
+    const f = fitOf(level);
+    const cur = level === settings.level ? ' class="cur"' : '';
+    if (f === null || f === 'pending') return `<li${cur}><b>${LEVEL_LABEL[level]}</b> · <span class="pend">계산 중…</span></li>`;
+    if (f === 'error') return `<li${cur}><b>${LEVEL_LABEL[level]}</b> · 계산하지 못했어요</li>`;
+    const line = escapeHtml(suitabilityLine(f, LEVEL_LABEL[level], prettyChord));
+    const sub: string[] = [];
+    if (f.changed) sub.push(`바뀐 코드 ${f.changed}개${f.rootChanged ? ` (근음 바뀜 ${f.rootChanged}개)` : ''}`);
+    if (f.hardBeatShare !== null && f.hardChords.length) sub.push(`어려운 코드 비중 ${Math.round(f.hardBeatShare * 100)}%`);
+    if (f.hardChordsWithRootChange !== null) sub.push(`근음 바꾸기를 켜면 어려운 코드 ${f.hardChordsWithRootChange}개`);
+    const title = f.hardChords.length ? ` title="${escapeHtml(f.hardChords.map((h) => `${prettyChord(h.name)}: ${prettyChord(h.shape)} ${h.frets ?? '운지 없음'}`).join(', '))}"` : '';
+    return `<li${cur}${title} data-v="${f.verdict}">${line.replace(LEVEL_LABEL[level], `<b>${LEVEL_LABEL[level]}</b>`)}${sub.length ? `<small>${escapeHtml(sub.join(' · '))}</small>` : ''}</li>`;
+  });
+  setHtml(ul, rows.join(''));
 }
 
 // ---------- header / static parts ----------
@@ -332,7 +391,8 @@ function capoText(): string {
 }
 
 function renderChip(): void {
-  const t = `${LEVEL_LABEL[settings.level]} · ${capoText()}`;
+  const fit = model?.suitability;
+  const t = `${LEVEL_LABEL[settings.level]} · ${capoText()}${fit ? ` · ${VERDICT_TEXT[fit.verdict]}` : ''}`;
   setText('chip', t);
   $('chip').setAttribute('aria-label', `연주 설정: ${t}. 설정 열기`);
 }
@@ -367,6 +427,7 @@ function renderStatic(): void {
   renderBadge();
   renderChip();
   renderEmpty();
+  renderLevelFit();
   // capo suggestion
   const sug = model?.capoSuggestions ?? [];
   setText('capo-suggest', sug.length ? `추천: ${sug.slice(0, 2).map((s) => `${s.capo === 0 ? '없음' : `${s.capo}프렛`}(${s.shapes.slice(0, 4).map(prettyChord).join(' ')})`).join(' · ')}` : '');
@@ -945,6 +1006,7 @@ function syncSheet(): void {
     for (const b of g.querySelectorAll<HTMLButtonElement>('button')) b.setAttribute('aria-pressed', String(String(settings[k]) === b.dataset.v));
   }
   $('snd-sw').setAttribute('aria-checked', String(settings.showSounding));
+  $('root-sw').setAttribute('aria-checked', String(settings.allowRootChange));
   $('lyrics-sw').setAttribute('aria-checked', String(settings.fetchLyrics));
   document.documentElement.classList.toggle('show-snd', settings.showSounding);
 }
@@ -982,6 +1044,11 @@ function bindSheet(): void {
     settings.showSounding = !settings.showSounding;
     syncSheet();
     persist(false);
+  };
+  $('root-sw').onclick = () => {
+    settings.allowRootChange = !settings.allowRootChange;
+    syncSheet();
+    persist(true);
   };
   $('lyrics-sw').onclick = async () => {
     settings.fetchLyrics = !settings.fetchLyrics;
@@ -1206,6 +1273,7 @@ async function main(): Promise<void> {
   const lv = params.get('level');
   if (lv && lv in LEVEL_LABEL) settings.level = lv as Level;
   if (params.has('snd')) settings.showSounding = true;
+  if (params.has('root')) settings.allowRootChange = true;
   applyTheme();
   screen = new PlayScreen({
     seek: (sec) => void seekTo(sec),

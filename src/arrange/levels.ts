@@ -7,8 +7,10 @@ export interface LevelConfig {
   level: Level;
   /** Keep 7th/6th chords (novice+: "7th 허용"). */
   allowSevenths: boolean;
-  /** Keep 9/11/13 extensions and add-tones. */
+  /** Keep 9/11/13 extensions and every add-tone. */
   allowExtensions: boolean;
+  /** Keep add9 (and so 6/9) even without extensions (novice: LCM Grade 4 Cadd9, Gadd9, Fadd9). */
+  allowAddNine: boolean;
   /** Keep altered tones (b9, #9, #11, b13). */
   allowAlterations: boolean;
   /** Slash bass: kept only when it forms a bass line, or always. */
@@ -32,6 +34,7 @@ export const LEVEL_CONFIGS: Record<Level, LevelConfig> = {
     level: 'beginner',
     allowSevenths: false,
     allowExtensions: false,
+    allowAddNine: false,
     allowAlterations: false,
     slashPolicy: 'structural',
     barreAllowed: false,
@@ -47,6 +50,7 @@ export const LEVEL_CONFIGS: Record<Level, LevelConfig> = {
     level: 'novice',
     allowSevenths: true,
     allowExtensions: false,
+    allowAddNine: true,
     allowAlterations: false,
     slashPolicy: 'structural',
     barreAllowed: false,
@@ -60,6 +64,7 @@ export const LEVEL_CONFIGS: Record<Level, LevelConfig> = {
     level: 'intermediate',
     allowSevenths: true,
     allowExtensions: true,
+    allowAddNine: true,
     allowAlterations: false,
     slashPolicy: 'always',
     barreAllowed: true,
@@ -73,6 +78,7 @@ export const LEVEL_CONFIGS: Record<Level, LevelConfig> = {
     level: 'advanced',
     allowSevenths: true,
     allowExtensions: true,
+    allowAddNine: true,
     allowAlterations: true,
     slashPolicy: 'always',
     barreAllowed: true,
