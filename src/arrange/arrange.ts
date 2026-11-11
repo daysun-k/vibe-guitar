@@ -168,17 +168,19 @@ export interface ChangeRecord {
 
 const CHANGE_ORDER: ChangeCode[] = ['relative', 'colour-seventh', 'sus2', 'sus-to-triad', 'simplify-quality', 'core-triad', 'drop-seventh', 'drop-extension', 'drop-slash', 'merge'];
 
-const CHANGE_TEXT: Record<ChangeCode, string> = {
-  relative: '근음이 바뀌어요. 관계 장·단조 3화음이라 구성음 2개가 같아요. 멜로디와 어긋날 수 있어요',
-  'colour-seventh': '같은 근음에 7음을 더해요',
-  sus2: '같은 근음의 sus2 코드예요',
-  'sus-to-triad': 'sus 음을 3음으로 바꿨어요',
-  'simplify-quality': '감·증화음을 같은 근음의 3화음으로 바꿨어요',
-  'core-triad': '같은 근음의 기본 3화음으로 바꿨어요',
-  'drop-seventh': '7음(6음)을 빼고 3화음으로 쳐요',
-  'drop-extension': '9·11·13 같은 텐션음을 뺐어요',
-  'drop-slash': '베이스음 지정(/)을 뺐어요',
-  merge: '짧게 지나가는 코드를 앞 코드에 합쳤어요',
+const LEVEL_NAME: Record<Level, string> = { beginner: '입문', novice: '초급', intermediate: '중급', advanced: '상급' };
+
+/** Fragments join the reason directly to the resulting shape name. */
+const CHANGE_TEXT: Record<Exclude<ChangeCode, 'merge'>, string> = {
+  relative: '같은 음 두 개를 나누는',
+  'colour-seventh': '7음을 더한',
+  sus2: '같은 근음의 sus2인',
+  'sus-to-triad': 'sus 음을 3음으로 바꾼',
+  'simplify-quality': '감·증화음을 같은 근음의 3화음으로 바꾼',
+  'core-triad': '같은 근음의 기본 3화음인',
+  'drop-seventh': '7음을 빼고',
+  'drop-extension': '9·11·13 같은 텐션음을 빼고',
+  'drop-slash': '베이스음 지정(/)을 빼고',
 };
 
 function hasTensions(c: Chord): boolean {
@@ -209,18 +211,23 @@ export function changeCodes(original: Chord, sounding: Chord): ChangeCode[] {
   return CHANGE_ORDER.filter((c) => out.has(c));
 }
 
-function changeRecord(original: Chord, sounding: Chord, stage: Stage, mergedFrom: string[], capo: number): ChangeRecord | null {
+function changeRecord(original: Chord, sounding: Chord, stage: Stage, mergedFrom: string[], capo: number, level: Level): ChangeRecord | null {
   const codes = changeCodes(original, sounding);
   if (mergedFrom.length) codes.push('merge');
   if (!codes.length) return null;
-  const texts = codes.map((c) => (c === 'merge' ? `짧게 지나가는 코드(${mergedFrom.map((n) => shapeName(n, capo)).join(', ')})를 앞 코드에 합쳤어요` : CHANGE_TEXT[c]));
-  const why = stage === 2 || stage === 3 ? '원래 모양은 이 난이도에서 잡을 운지가 없어요. ' : '';
+  const from = shapeName(formatChord(original), capo);
+  const to = shapeName(formatChord(sounding), capo);
+  const reasons = codes.filter((c): c is Exclude<ChangeCode, 'merge'> => c !== 'merge');
+  const action = reasons.map((c) => c === 'drop-seventh' && original.seventh === '6' ? '6음을 빼고' : CHANGE_TEXT[c]).join(', ');
+  const prefix = stage === 2 || stage === 3 ? `${from} 모양은 ${LEVEL_NAME[level]}에서 어려워서, ` : `${LEVEL_NAME[level]}이라 `;
+  const merge = mergedFrom.length ? `짧게 지나가는 코드(${mergedFrom.map((n) => shapeName(n, capo)).join(', ')})를 앞 코드에 합쳤어요` : '';
+  const main = reasons.length ? `${prefix}${action} ${to} 모양으로 쳐요${codes.includes('relative') ? ' (근음이 바뀌어 멜로디와 어긋날 수 있어요)' : ''}` : '';
   return {
     original: formatChord(original),
     sounding: formatChord(sounding),
     code: codes[0],
     codes,
-    text: why + (codes.length === 1 && codes[0] === 'colour-seventh' ? `원래 ${shapeName(formatChord(original), capo)} 모양인데, 7음을 더한 ${shapeName(formatChord(sounding), capo)} 모양으로 쳐요` : `원래 ${shapeName(formatChord(original), capo)} 모양에서 ${shapeName(formatChord(sounding), capo)} 모양으로 쳐요. ${texts.join(' · ')}`),
+    text: [main, merge].filter(Boolean).join(' · '),
     rootChanged: original.root !== sounding.root,
   };
 }
@@ -488,7 +495,7 @@ function solve(p: Prepared, capo: number, mask: boolean[] | null): Arrangement {
       stage: c.stage,
       hard: c.stage === 4 || !c.voicing || !inLevel(c.voicing, p.levelName),
       shapeLevel,
-      change: changeRecord(plan.original, c.sounding!, c.stage, e.mergedFrom, capo),
+      change: changeRecord(plan.original, c.sounding!, c.stage, e.mergedFrom, capo, p.levelName),
     };
   });
 

@@ -36,7 +36,8 @@ export function chordHTML(name: string, had7 = false): string {
 }
 
 /** Screen-reader text of a change: "원래 코드 F, 바뀐 코드 Fmaj7. <reason>" (no particle after a chord name). */
-export function changeLabel(c: { from: string; to: string; text: string; root: boolean }): string {
+export function changeLabel(c: { from: string; to: string; text: string; root: boolean; badge?: string }): string {
+  if (c.from === c.to && c.badge) return `${c.badge}. ${c.text}`;
   return `원래 모양 ${c.from}, 바뀐 모양 ${c.to}${c.root ? '(근음 바뀜)' : ''}. ${c.text}`;
 }
 
@@ -217,7 +218,7 @@ export class PlayScreen {
       const ch = lab.change;
       // A changed chord: "F→Fmaj7" button; the reason shows on hover, focus and tap.
       const chg = ch
-        ? `<button class="chg-btn${ch.root ? ' root' : ''}" aria-expanded="false" aria-label="${escapeHtml(changeLabel(ch) + (this.concert(ch) ? `. ${this.concert(ch)}` : ''))}">${escapeHtml(ch.from)}→${escapeHtml(ch.to)}${this.concert(ch) ? `<small class="snd">${escapeHtml(this.concert(ch, false))}</small>` : ''}</button><span class="chg-pop" role="tooltip">${escapeHtml(ch.text)}${this.concert(ch) ? `<small class="snd">${escapeHtml(this.concert(ch))}</small>` : ''}</span>`
+        ? `<button class="chg-btn${ch.root ? ' root' : ''}" aria-expanded="false" aria-label="${escapeHtml(changeLabel(ch) + (this.concert(ch) ? `. ${this.concert(ch)}` : ''))}">${escapeHtml(ch.badge)}${this.concert(ch) ? `<small class="snd">${escapeHtml(this.concert(ch, false))}</small>` : ''}</button><span class="chg-pop" role="tooltip">${escapeHtml(ch.text)}${this.concert(ch) ? `<small class="snd">${escapeHtml(this.concert(ch))}</small>` : ''}</span>`
         : '';
       li.classList.toggle('changed', !!ch);
       li.classList.toggle('root', !!ch?.root);
@@ -233,7 +234,7 @@ export class PlayScreen {
     const alt = lab.hint ? `<small class="alt">${escapeHtml(lab.hint)}</small>` : '';
     const ch = lab.change;
     const mark = ch ? `<i class="chg${ch.root ? ' root' : ''}" aria-hidden="true">${ch.root ? '◆' : '●'}</i>` : '';
-    const title = ch ? ` title="${escapeHtml(`${ch.from} → ${ch.to} · ${ch.text}${this.concert(ch) ? ` · ${this.concert(ch)}` : ''}`)}"` : '';
+    const title = ch ? ` title="${escapeHtml(`${ch.badge} · ${ch.text}${this.concert(ch) ? ` · ${this.concert(ch)}` : ''}`)}"` : '';
     return `<span class="sg${ch ? ' changed' : ''}" style="flex:${weight} 1 0"${title}>${chordHTML(lab.name, lab.had7)}${mark}${alt}${snd}</span>`;
   }
 
@@ -260,7 +261,7 @@ export class PlayScreen {
             })
             .join(', ');
           const changes = [...new Set(b.segments.filter((s) => s.event >= 0 && m.labels[s.event].change).map((s) => s.event))].map((ev) => m.labels[ev].change!);
-          const tip = changes.length ? `<span class="chg-tip" aria-hidden="true">${changes.map((c) => `<b>${escapeHtml(c.from)} → ${escapeHtml(c.to)}</b> ${escapeHtml(c.text)}${this.concert(c) ? `<small class="snd">${escapeHtml(this.concert(c))}</small>` : ''}`).join('<br>')}</span>` : '';
+          const tip = changes.length ? `<span class="chg-tip" aria-hidden="true">${changes.map((c) => `<b>${escapeHtml(c.badge)}</b> ${escapeHtml(c.text)}${this.concert(c) ? `<small class="snd">${escapeHtml(this.concert(c))}</small>` : ''}`).join('<br>')}</span>` : '';
           row.push(`<button class="bar${changes.length ? ' has-chg' : ''}" data-k="${k}" data-t="${b.startSec.toFixed(3)}" aria-label="${k + 1}마디, ${escapeHtml(aria)}"><span class="segs">${segs}</span><span class="ticks">${ticks}</span><span class="ph"></span>${tip}</button>`);
         }
         h += `<div class="row4">${row.join('')}</div>`;

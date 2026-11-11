@@ -30,13 +30,43 @@ describe('one shape name on every play surface', () => {
     expect(m.arrangement.events.some((e) => e.mergedFrom.length)).toBe(true);
     const merged = m.arrangement.events.find((e) => e.mergedFrom.length)!;
     for (const n of merged.mergedFrom) expect(merged.change!.text).toContain(shapeName(n, 1));
+    expect(m.labels[m.arrangement.events.indexOf(merged)].change!.badge).toBe('C 합침');
+    expect(merged.change!.text).toBe('짧게 지나가는 코드(C)를 앞 코드에 합쳤어요');
+    for (const l of m.labels) expect((l.change?.text.match(/원래/g) ?? []).length).toBeLessThan(2);
     expect(suitabilityLine(m.suitability, '입문', prettyChord, true)).toContain('실제 A♭m');
     const badge = m.labels.find((l) => l.change?.from === 'Bm')!.change!;
     expect(badge.to).toBe('Bm7');
+    expect(badge.badge).toBe('Bm→Bm7');
+    expect(badge.text).toBe('Bm 모양은 입문에서 어려워서, 7음을 더한 Bm7 모양으로 쳐요');
     expect(badge.concert).toMatchObject({ from: 'Cm', to: 'Cm7' });
     expect(changeConcertLabel(badge, false)).toBe('');
     expect(changeConcertLabel(badge, true)).toBe('실제 Cm → Cm7');
     expect(changeConcertLabel(m.labels[m.arrangement.events.indexOf(merged)].change!, true)).toContain('D♭');
+  });
+  it('names several merges and keeps the arrow when a merge accompanies another change', () => {
+    const chart = synthetic();
+    chart.events[9].startSec = 35.6;
+    chart.events.splice(10, 0, { chord: 'Ab', startSec: 35.8, source: 'manual', confidence: 1 });
+    const merged = buildPlayModel(chart, { level: 'beginner', capo: 1 }, null).labels.find((l) => l.change?.badge.endsWith('합침'))!.change!;
+    expect(merged.badge).toBe('C·G 합침');
+    chart.events[8].chord = 'Cm';
+    const m = buildPlayModel(chart, { level: 'beginner', capo: 1 }, null);
+    const combined = m.labels.find((l) => l.change?.text.includes('짧게') && l.change.from === 'Bm')!.change!;
+    expect(combined.badge).toBe('Bm→Bm7');
+    expect(combined.text).toContain('7음을 더한 Bm7');
+    expect(combined.text).toContain('코드(C, G)를 앞 코드에 합쳤어요');
+    for (const l of m.labels) expect((l.change?.text.match(/원래/g) ?? []).length).toBeLessThan(2);
+  });
+  it('keeps reductions short and names the level and original shape once for root changes', () => {
+    const chart = synthetic();
+    chart.events = ['A', 'C#m', 'D', 'E', 'Gm7'].map((chord, i) => ({ chord, startSec: i * 4, source: 'manual', confidence: 1 }));
+    chart.coverage[0].toSec = 20;
+    const m = buildPlayModel(chart, { level: 'beginner', capo: 0, profile: { ...DEFAULT_PROFILE, capoMin: 0, capoMax: 0 }, allowRootChange: true }, null);
+    const relative = m.labels.find((l) => l.change?.root)!.change!;
+    expect(relative.text).toContain('C♯m 모양은 입문에서 어려워서, 같은 음 두 개를 나누는 E 모양으로 쳐요');
+    expect(relative.text).toContain('멜로디와 어긋날 수 있어요');
+    expect(m.labels.find((l) => l.change?.from === 'Gm7')!.change!.text).toBe('입문이라 7음을 빼고 Gm 모양으로 쳐요');
+    for (const l of m.labels) expect((l.change?.text.match(/원래/g) ?? []).length).toBeLessThan(2);
   });
   it('keeps shape and concert identical at capo zero', () => {
     for (const l of model(0).labels) {

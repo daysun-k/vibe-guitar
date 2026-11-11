@@ -37,7 +37,7 @@ export interface EventLabel {
   /** Intermediate+ and uncertain: an easier shape that also works ("Em도 돼요"). */
   hint: string | null;
   /** The chord differs from the original: "F → Fmaj7" and why. */
-  change: { from: string; to: string; text: string; root: boolean; concert?: { from: string; to: string; text?: string } } | null;
+  change: { from: string; to: string; badge: string; text: string; root: boolean; concert?: { from: string; to: string; text?: string } } | null;
 }
 
 export interface PlayModel {
@@ -107,7 +107,10 @@ export function buildPlayModel(source: Chart, opts: PlayOptions, rawLyrics: Lyri
       sounding: prettyChord(e.sounding ?? name),
       had7: droppedSeventh(e),
       hint: ADVANCED_LEVELS.includes(opts.level) && e.uncertain && simple !== name ? `${prettyChord(simple)}도 돼요` : null,
-      change: e.change ? { from: shapeName(e.change.original, capo), to: prettyChord(e.shape), concert: capo ? { from: prettyChord(e.change.original), to: prettyChord(e.change.sounding), text: e.mergedFrom.length ? `합친 실제 코드: ${e.mergedFrom.map(prettyChord).join(', ')}` : undefined } : undefined, text: e.change.text, root: e.change.rootChanged } : null,
+      change: e.change ? { from: shapeName(e.change.original, capo), to: prettyChord(e.shape),
+        badge: e.change.codes.length === 1 && e.change.code === 'merge' && shapeName(e.change.original, capo) === prettyChord(e.shape)
+          ? `${e.mergedFrom.map((n) => shapeName(n, capo)).join('·')} 합침`
+          : `${shapeName(e.change.original, capo)}→${prettyChord(e.shape)}`, concert: capo ? { from: prettyChord(e.change.original), to: prettyChord(e.change.sounding), text: e.mergedFrom.length ? `합친 실제 코드: ${e.mergedFrom.map(prettyChord).join(', ')}` : undefined } : undefined, text: e.change.text, root: e.change.rootChanged } : null,
     };
   });
   const { items, keys } = stripItems(arrangement);
