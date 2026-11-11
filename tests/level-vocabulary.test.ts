@@ -361,6 +361,17 @@ describe('level-fit worker protocol', () => {
     expect(updates.at(-1)).toBe('novice:done');
   });
 
+  it('the same song and settings again keep the request in flight', () => {
+    const w = new FakeWorker();
+    let last = '';
+    const c = new LevelFitController({ createWorker: () => w, onUpdate: (st) => (last = [...st].map(([l, s]) => `${l}:${s.status}`).join(',')), schedule: (fn) => fn() });
+    c.update(input(songA), ['novice']);
+    c.update(input(songA), ['novice']);
+    expect(w.sent).toHaveLength(1);
+    w.reply({ id: w.sent[0].id, ok: true, results: [fakeResult(songA, 'novice')], ms: 1 });
+    expect(last).toBe('novice:done');
+  });
+
   it('a settings change also makes the pending reply stale, and keys cover every setting', () => {
     const w = new FakeWorker();
     const c = new LevelFitController({ createWorker: () => w, onUpdate: () => {}, schedule: (fn) => fn() });

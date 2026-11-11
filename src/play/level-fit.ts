@@ -90,6 +90,7 @@ export class LevelFitController {
   private readonly inflight = new Map<number, { generation: number; levels: Level[]; keys: string[] }>();
   private states = new Map<Level, LevelFitState>();
   private input: LevelFitInput | null = null;
+  private sig = '';
   private readonly schedule: (fn: () => void) => void;
   private readonly compute: typeof computeLevelFits;
 
@@ -135,6 +136,14 @@ export class LevelFitController {
    * missing ones. `levels` are the levels to compute (the sheet shows all four).
    */
   update(input: LevelFitInput | null, levels: Level[]): void {
+    // Same song and settings (e.g. lyrics arrived): keep the request in flight.
+    const sig = input ? levels.map((l) => levelFitKey(input, l)).join('\n') : '';
+    if (sig && sig === this.sig && [...this.states.values()].some((s) => s.status === 'pending')) {
+      this.input = input;
+      this.o.onUpdate(this.states);
+      return;
+    }
+    this.sig = sig;
     this.generation++;
     this.inflight.clear();
     this.input = input;
