@@ -172,6 +172,19 @@ describe('synthetic D-major loop at beginner', () => {
     expect(off.events[1].hard).toBe(true);
   });
 
+  it('setting off: reports how many hard chords the root-change setting would leave', () => {
+    const chart = chartOf(bars(['A', 'C#m', 'D', 'E']), 'SYNTHETIC-CSM');
+    const off = levelSuitability(chart, 'beginner', { capo: 0, profile: CAPO0 });
+    expect(off.hardChords.map((h) => h.name)).toEqual(['C#m']);
+    expect(off.hardChordsWithRootChange).toBe(0);
+    const on = levelSuitability(chart, 'beginner', { capo: 0, profile: CAPO0, allowRootChange: true });
+    expect(on.verdict).toBe('fit');
+    expect(on.rootChanged).toBe(1);
+    expect(on.hardChordsWithRootChange).toBeNull();
+    // With the full capo range a capo rescues C#m, so the setting would not help: no hint.
+    expect(levelSuitability(chart, 'beginner', { capo: 0 }).hardChordsWithRootChange).toBeNull();
+  });
+
   it('a capo that would make C#m playable forbids the root change, even at a manual capo 0', () => {
     // Capo 4 turns C#m into an Am shape, so capo choice must not trigger a root change at capo 0.
     const a = arrangeEvents(seq(bars(['A', 'C#m', 'D', 'E'])), timing, { level: 'beginner', capo: 0, allowRootChange: true });

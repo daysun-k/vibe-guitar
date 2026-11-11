@@ -280,19 +280,20 @@ function recompute(): void {
   }
   screen.setModel(model);
   screen.setLook(settings.lookAheadBars);
-  // Any song or settings change drops pending replies; the current level is in the model already.
-  levelFit.update(
-    c && model ? { chart: c, capo: opts.capo, profile: { ...settings.profile }, allowRootChange: settings.allowRootChange } : null,
-    LEVELS.filter((l) => l !== settings.level),
-  );
+  // Any song or settings change drops pending replies. The current level's line comes from the
+  // model; the worker adds only its "with root changes" count (it also computes the other levels).
+  levelFit.update(c && model ? { chart: c, capo: opts.capo, profile: { ...settings.profile }, allowRootChange: settings.allowRootChange } : null, [...LEVELS]);
   renderStatic();
 }
 
 /** Suitability of a level: the shown arrangement for the current level, else the computed one. */
 function fitOf(level: Level): LevelSuitability | 'pending' | 'error' | null {
   if (!model) return null;
-  if (level === settings.level) return model.suitability;
   const st = levelFits.get(level);
+  if (level === settings.level) {
+    const hint = st?.status === 'done' ? st.result.hardChordsWithRootChange : null;
+    return { ...model.suitability, hardChordsWithRootChange: hint };
+  }
   if (!st) return null;
   return st.status === 'done' ? st.result : st.status;
 }
