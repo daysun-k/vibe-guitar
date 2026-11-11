@@ -39,25 +39,30 @@ async function run(ep: 'wasm' | 'webgpu' | 'worker'): Promise<void> {
   const url = (f: string) => chrome.runtime.getURL(`models/${f}`);
   const meta = (await (await fetch(url(MODEL_FILES.btcMeta))).json()) as BtcMeta;
   let models: BenchModels;
-  if (ep === 'worker') {
-    const client = new ModelWorkerClient(new Worker(chrome.runtime.getURL('model-worker.js')));
-    const opts = { wasmPaths: chrome.runtime.getURL('ort/'), numThreads: threads };
-    await client.load('beat', url(MODEL_FILES.beat), 'wasm', opts);
-    await client.load('chords', url(MODEL_FILES.chords), 'wasm', opts);
-    models = { beat: client.runner('beat'), chords: client.runner('chords'), chordsMeta: meta.models.large };
-  } else {
-    const make = async (f: string, e: string) => ortRunner(await ort.InferenceSession.create(url(f), { executionProviders: [e] }), ort.Tensor);
-    models = { beat: await make(MODEL_FILES.beat, ep), chords: await make(MODEL_FILES.chords, 'wasm'), chordsMeta: meta.models.large };
+  let client: ModelWorkerClient | null = null;
+  try {
+    if (ep === 'worker') {
+      client = new ModelWorkerClient(new Worker(chrome.runtime.getURL('model-worker.js')));
+      const opts = { wasmPaths: chrome.runtime.getURL('ort/'), numThreads: threads };
+      await client.load('beat', url(MODEL_FILES.beat), 'wasm', opts);
+      await client.load('chords', url(MODEL_FILES.chords), 'wasm', opts);
+      models = { beat: client.runner('beat'), chords: client.runner('chords'), chordsMeta: meta.models.large };
+    } else {
+      const make = async (f: string, e: string) => ortRunner(await ort.InferenceSession.create(url(f), { executionProviders: [e] }), ort.Tensor);
+      models = { beat: await make(MODEL_FILES.beat, ep), chords: await make(MODEL_FILES.chords, 'wasm'), chordsMeta: meta.models.large };
+    }
+    log(`onnxruntime-web ${ort.env.versions?.web ?? ''}; beat ${ep}, chords ${ep === 'worker' ? 'worker' : 'wasm'}; threads ${threads}; ${navigator.userAgent}`);
+    const { result: lat, maxGapMs } = await maxFrameGap(() => measureLatency(models, 5));
+    log(`page frame gap during latency runs: max ${maxGapMs.toFixed(0)} ms`);
+    log(`latency: Beat This! 1500-frame chunk median ${lat.beatChunkMs.median.toFixed(1)} ms (p90 ${lat.beatChunkMs.p90.toFixed(1)}); BTC 108-frame window median ${lat.chordWindowMs.median.toFixed(1)} ms; CQT ${lat.cqtFramesPerSec.toFixed(0)} frames/s; mel ${lat.melFramesPerSec.toFixed(0)} frames/s`);
+    const n = Number((document.getElementById('clips') as HTMLInputElement).value) || 6;
+    const { summary } = await runBench(defaultSpecs().slice(0, n), models, (r, i) =>
+      log(`${i + 1} ${r.id}: majmin ${((100 * r.wcsr.majmin.good) / (r.wcsr.majmin.total || 1)).toFixed(1)}% beatF ${r.beatF.f.toFixed(3)}`),
+    );
+    log(JSON.stringify(summary, null, 2));
+  } finally {
+    client?.terminate(); // each run loads its own models; do not keep old ones in memory
   }
-  log(`onnxruntime-web ${ort.env.versions?.web ?? ''}; beat ${ep}, chords ${ep === 'worker' ? 'worker' : 'wasm'}; threads ${threads}; ${navigator.userAgent}`);
-  const { result: lat, maxGapMs } = await maxFrameGap(() => measureLatency(models, 5));
-  log(`page frame gap during latency runs: max ${maxGapMs.toFixed(0)} ms`);
-  log(`latency: Beat This! 1500-frame chunk median ${lat.beatChunkMs.median.toFixed(1)} ms (p90 ${lat.beatChunkMs.p90.toFixed(1)}); BTC 108-frame window median ${lat.chordWindowMs.median.toFixed(1)} ms; CQT ${lat.cqtFramesPerSec.toFixed(0)} frames/s; mel ${lat.melFramesPerSec.toFixed(0)} frames/s`);
-  const n = Number((document.getElementById('clips') as HTMLInputElement).value) || 6;
-  const { summary } = await runBench(defaultSpecs().slice(0, n), models, (r, i) =>
-    log(`${i + 1} ${r.id}: majmin ${((100 * r.wcsr.majmin.good) / (r.wcsr.majmin.total || 1)).toFixed(1)}% beatF ${r.beatF.f.toFixed(3)}`),
-  );
-  log(JSON.stringify(summary, null, 2));
 }
 
 document.getElementById('run-wasm')!.onclick = () => void run('wasm').catch((e) => log(String(e)));

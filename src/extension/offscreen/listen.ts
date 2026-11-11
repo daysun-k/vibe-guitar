@@ -39,13 +39,16 @@ function positionNow(p: PlayerStateMessage, nowMs: number): number {
 export type AudioClock = () => { ctxTime: number; epochMs: number } | null;
 
 
-interface Models {
+export interface ListenModels {
   recognizer: Recognizer;
   beat: ModelRunner;
   backend: string;
+  /** Called once if the model worker dies; the models are unusable afterwards. */
+  onFailure(listener: (e: Error) => void): void;
+  dispose(): void;
 }
 
-async function createModels(): Promise<Models> {
+async function createModels(): Promise<ListenModels> {
   const client = new ModelWorkerClient(new Worker(chrome.runtime.getURL('model-worker.js')));
   try {
     const opts = { wasmPaths: chrome.runtime.getURL('ort/'), numThreads: self.crossOriginIsolated ? Math.min(4, navigator.hardwareConcurrency || 1) : 1 };
@@ -74,7 +77,13 @@ async function createModels(): Promise<Models> {
         backend = `wasm (worker; webgpu unavailable: ${e instanceof Error ? e.message : String(e)})`;
       }
     }
-    return { recognizer: new Recognizer(beat, chords, meta.models.large), beat, backend };
+    return {
+      recognizer: new Recognizer(beat, chords, meta.models.large),
+      beat,
+      backend,
+      onFailure: (l) => client.onFailure(l),
+      dispose: () => client.terminate(),
+    };
   } catch (e) {
     client.terminate();
     throw e;
@@ -87,7 +96,7 @@ export class ListeningController {
   private session: ListeningSession | null = null;
   private recording: Recording | null = null;
   private readonly placer = new AudioPlacer(CAPTURE_LATENCY_SEC);
-  private models: Models | null = null;
+  private models: ListenModels | null = null;
   private modelState: ModelState = 'idle';
   private modelError: string | undefined;
   private backend = '';
@@ -104,6 +113,7 @@ export class ListeningController {
   constructor(
     private readonly send: (msg: unknown) => void,
     private readonly clock: AudioClock,
+    private readonly makeModels: () => Promise<ListenModels> = createModels,
   ) {}
 
   private get idleReason(): string | null {
@@ -136,8 +146,18 @@ export class ListeningController {
     this.modelState = 'loading';
     this.modelError = undefined;
     try {
-      this.models = await createModels();
-      this.backend = this.models.backend;
+      const models = await this.makeModels();
+      // A crashed worker answers nothing more: drop it so the next start() loads a new one.
+      models.onFailure((e) => {
+        if (this.models !== models) return;
+        this.models = null;
+        this.modelState = 'error';
+        this.modelError = e.message;
+        models.dispose();
+        this.pushState();
+      });
+      this.models = models;
+      this.backend = models.backend;
       this.modelState = 'ready';
     } catch (e) {
       this.modelState = 'error';

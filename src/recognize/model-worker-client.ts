@@ -43,6 +43,7 @@ export class ModelWorkerClient {
   private nextId = 1;
   private readonly pending = new Map<number, Pending>();
   private failure: Error | null = null;
+  private readonly failureListeners: ((e: Error) => void)[] = [];
 
   constructor(private readonly worker: WorkerLike) {
     worker.addEventListener('message', (e: MessageEvent<ModelWorkerResponse>) => {
@@ -55,10 +56,19 @@ export class ModelWorkerClient {
     });
     worker.addEventListener('error', (e: ErrorEvent) => {
       // A crashed worker answers nothing more: fail what is waiting and every later call.
-      this.failure = new Error(`model worker failed: ${e.message || 'unknown error'}`);
-      for (const p of this.pending.values()) p.reject(this.failure);
+      if (this.failure) return;
+      const failure = new Error(`model worker failed: ${e.message || 'unknown error'}`);
+      this.failure = failure;
+      for (const p of this.pending.values()) p.reject(failure);
       this.pending.clear();
+      for (const l of this.failureListeners) l(failure);
     });
+  }
+
+  /** Called once if the worker crashes (not after terminate()); immediately if it already has. */
+  onFailure(listener: (e: Error) => void): void {
+    if (this.failure && !this.terminated) listener(this.failure);
+    else if (!this.failure) this.failureListeners.push(listener);
   }
 
   private call(req: Unnumbered<ModelWorkerRequest>, transfer: Transferable[] = []): Promise<ModelWorkerResponse & { ok: true }> {
@@ -87,7 +97,11 @@ export class ModelWorkerClient {
     };
   }
 
+  private terminated = false;
+
   terminate(): void {
+    this.terminated = true;
+    this.failureListeners.length = 0;
     this.failure ??= new Error('model worker terminated');
     for (const p of this.pending.values()) p.reject(this.failure);
     this.pending.clear();

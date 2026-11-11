@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { ListeningController, type ListenModels } from '../src/extension/offscreen/listen';
 import { ModelWorkerClient, type ModelWorkerRequest, type ModelWorkerResponse, type WorkerLike } from '../src/recognize/model-worker-client';
 
 /** A fake worker: records requests and lets the test answer them in any order. */
@@ -98,5 +99,55 @@ describe('offscreen listening keeps inference off the shared main thread', () =>
     expect(listen).not.toMatch(/from 'onnxruntime-web'/);
     expect(listen).toMatch(/new Worker\(chrome\.runtime\.getURL\('model-worker\.js'\)\)/);
     expect(worker).toMatch(/from 'onnxruntime-web'/);
+  });
+});
+
+describe('listening recovers from a crashed model worker', () => {
+  it('drops the dead models, reports an error, and loads a new worker on the next start', async () => {
+    vi.useFakeTimers();
+    try {
+      const workers: FakeWorker[] = [];
+      const makeModels = async (): Promise<ListenModels> => {
+        const w = new FakeWorker();
+        workers.push(w);
+        const client = new ModelWorkerClient(w);
+        return {
+          recognizer: {} as ListenModels['recognizer'],
+          beat: client.runner('beat'),
+          backend: 'wasm (worker)',
+          onFailure: (l) => client.onFailure(l),
+          dispose: () => client.terminate(),
+        };
+      };
+      const sent: { modelState?: string; modelError?: string }[] = [];
+      const c = new ListeningController((m) => sent.push(m as { modelState?: string }), () => null, makeModels);
+      const flush = () => vi.advanceTimersByTimeAsync(0);
+
+      c.start(7);
+      await flush();
+      expect(workers).toHaveLength(1);
+
+      workers[0].crash('worker script error');
+      expect(sent.at(-1)).toMatchObject({ modelState: 'error', modelError: 'model worker failed: worker script error' });
+      expect(workers[0].terminated).toBe(true);
+
+      c.stop();
+      c.start(7);
+      await flush();
+      expect(workers).toHaveLength(2); // a fresh worker, not the dead one
+      c.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a terminated client never reports a crash', () => {
+    const w = new FakeWorker();
+    const c = new ModelWorkerClient(w);
+    const seen: Error[] = [];
+    c.onFailure((e) => seen.push(e));
+    c.terminate();
+    w.crash('late');
+    expect(seen).toEqual([]);
   });
 });
