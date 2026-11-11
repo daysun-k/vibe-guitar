@@ -35,9 +35,9 @@ export function chordHTML(name: string, had7 = false): string {
   return `<span class="cn">${m[1]}${m[2] ? `<span class="acc">${m[2]}</span>` : ''}${m[3] ? `<span class="q">${escapeHtml(m[3])}</span>` : ''}${sup}</span>`;
 }
 
-/** Screen-reader text of a change: "원래 F에서 Fmaj7로 바꿈. <reason>". */
+/** Screen-reader text of a change: "원래 코드 F, 바뀐 코드 Fmaj7. <reason>" (no particle after a chord name). */
 export function changeLabel(c: { from: string; to: string; text: string; root: boolean }): string {
-  return `원래 ${c.from}에서 ${c.to}로 바꿈${c.root ? '(근음 바뀜)' : ''}. ${c.text}`;
+  return `원래 코드 ${c.from}, 바뀐 코드 ${c.to}${c.root ? '(근음 바뀜)' : ''}. ${c.text}`;
 }
 
 /** Keeps `el` near 30 % of the scroller unless the user scrolled away ("현재 위치로" brings it back). */

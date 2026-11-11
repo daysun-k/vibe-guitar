@@ -278,10 +278,10 @@ textarea{width:100%;resize:vertical}
 .chg-tip{display:none;position:absolute;top:calc(100% + 4px);left:0;z-index:6;width:max-content;max-width:260px;padding:7px 9px;border-radius:9px;
   background:var(--ink);color:var(--bg);font-size:11.5px;line-height:1.35;white-space:normal;box-shadow:var(--shadow);pointer-events:none}
 .chg-tip b{font-weight:600}
-.bar.has-chg:hover,.bar.has-chg:focus-visible{overflow:visible;z-index:6}
+.bar.has-chg:hover,.bar.has-chg:focus-visible{overflow:visible;z-index:6;opacity:1}
 .bar.has-chg:hover .chg-tip,.bar.has-chg:focus-visible .chg-tip{display:block}
 /* Strip: "F→Fmaj7" under the name; the reason on hover, focus and tap. */
-.dias .chg-btn{font-size:11px;line-height:1.2;padding:2px 7px;border-radius:99px;border:1px solid var(--accent-line);background:var(--accent-soft);color:var(--accent-ink);white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.dias .chg-btn{font-size:11px;line-height:1.2;padding:2px 7px;border-radius:99px;border:1px solid var(--accent-line);background:var(--accent-soft);color:var(--ink);white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
 .dias .chg-btn.root{border-color:var(--warn);background:transparent;color:var(--warn);border-style:dashed}
 .dias .chg-btn.root::before{content:'◆ '}
 .dias .chg-pop{display:none;position:absolute;top:100%;left:0;right:0;z-index:6;margin-top:2px;padding:7px 9px;border-radius:9px;background:var(--ink);color:var(--bg);font-size:11.5px;line-height:1.35;box-shadow:var(--shadow)}

@@ -312,7 +312,7 @@ function renderLevelFit(): void {
     const line = escapeHtml(suitabilityLine(f, LEVEL_LABEL[level], prettyChord));
     const sub: string[] = [];
     if (f.changed) sub.push(`바뀐 코드 ${f.changed}개${f.rootChanged ? ` (근음 바뀜 ${f.rootChanged}개)` : ''}`);
-    if (f.hardBeatShare !== null && f.hardChords.length) sub.push(`어려운 코드가 ${Math.round(f.hardBeatShare * 100)}%`);
+    if (f.hardBeatShare !== null && f.hardChords.length) sub.push(`어려운 코드 비중 ${Math.round(f.hardBeatShare * 100)}%`);
     if (f.hardChordsWithRootChange !== null) sub.push(`근음 바꾸기를 켜면 어려운 코드 ${f.hardChordsWithRootChange}개`);
     const title = f.hardChords.length ? ` title="${escapeHtml(f.hardChords.map((h) => `${prettyChord(h.name)}: ${prettyChord(h.shape)} ${h.frets ?? '운지 없음'}`).join(', '))}"` : '';
     return `<li${cur}${title} data-v="${f.verdict}">${line.replace(LEVEL_LABEL[level], `<b>${LEVEL_LABEL[level]}</b>`)}${sub.length ? `<small>${escapeHtml(sub.join(' · '))}</small>` : ''}</li>`;

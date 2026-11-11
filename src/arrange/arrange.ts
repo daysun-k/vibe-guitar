@@ -212,7 +212,7 @@ function changeRecord(original: Chord, sounding: Chord, stage: Stage, mergedFrom
   const codes = changeCodes(original, sounding);
   if (mergedFrom.length) codes.push('merge');
   if (!codes.length) return null;
-  const texts = codes.map((c) => (c === 'merge' ? `짧게 지나가는 ${mergedFrom.join(', ')}을(를) 앞 코드에 합쳤어요` : CHANGE_TEXT[c]));
+  const texts = codes.map((c) => (c === 'merge' ? `짧게 지나가는 코드(${mergedFrom.join(', ')})를 앞 코드에 합쳤어요` : CHANGE_TEXT[c]));
   const why = stage === 2 || stage === 3 ? '원래 코드는 이 난이도에서 잡을 운지가 없어요. ' : '';
   return {
     original: formatChord(original),
