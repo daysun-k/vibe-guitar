@@ -114,6 +114,41 @@ describe('chord types per level', () => {
 
 const D_LOOP = ['D', 'A', 'Bm', 'G', 'F#m', 'D', 'A', 'Bm', 'G', 'F#m'];
 
+describe('stage 4 keeps the level-simplified chord', () => {
+  const one = (chord: string, level: Level, profile = CAPO0) => arrangeEvents(seq([[chord, 4]]), timing, { level, capo: 0, profile });
+
+  it('Bb7 at capo 0: beginner plays Bb xx3331 (7th dropped, hard); novice Bb; intermediate keeps Bb7', () => {
+    const beg = one('Bb7', 'beginner');
+    const e = beg.events[0];
+    expect(e.sounding).toBe('Bb');
+    expect(fretString(e.voicing!.frets)).toBe('xx3331');
+    expect(e.stage).toBe(4);
+    expect(e.hard).toBe(true);
+    expect(e.change).toMatchObject({ original: 'Bb7', sounding: 'Bb', code: 'drop-seventh', rootChanged: false });
+    const s = summarizeArrangement(beg, timing, false);
+    expect(s.hardChords.map((h) => h.name)).toEqual(['Bb']);
+    expect(s.hardBeatShare).toBeCloseTo(1);
+    const nov = one('Bb7', 'novice').events[0];
+    expect(nov.sounding).toBe('Bb');
+    expect(nov.hard).toBe(false);
+    const mid = one('Bb7', 'intermediate', P({ capoMin: 0, capoMax: 0, canBarre: true })).events[0];
+    expect(mid.sounding).toBe('Bb7');
+    expect(mid.change).toBeNull();
+  });
+
+  it('C#m9: novice drops the extension with a reason; advanced keeps C#m9 on its shape', () => {
+    const nov = one('C#m9', 'novice').events[0];
+    expect(parseChord(nov.sounding!).extension).toBeNull();
+    expect(nov.change?.codes).toContain('drop-extension');
+    expect(nov.change?.text).toBeTruthy();
+    expect(voicingsForChord(parseChord('C#m9')).length).toBeGreaterThan(0);
+    const adv = one('C#m9', 'advanced', P({ capoMin: 0, capoMax: 0, canBarre: true })).events[0];
+    expect(adv.sounding).toBe('C#m9');
+    expect(adv.change).toBeNull();
+    expect(adv.voicing).not.toBeNull();
+  });
+});
+
 describe('synthetic D-major loop at beginner', () => {
   const chart = chartOf(bars(D_LOOP), 'SYNTHETIC-D-LOOP');
 

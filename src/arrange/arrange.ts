@@ -307,8 +307,10 @@ function planEvent(original: Chord | null, ctx: ChordContext, level: LevelConfig
   const s1 = expand(first, 1, true);
   const s2 = s1.length ? [] : expand([...second.values()], 2, true);
   const s3 = s1.length || s2.length ? [] : expand(third, 3, true);
-  // Stage 4: the original on its easiest out-of-level shape; a same-root change only when the
-  // original has no shape at all; no shape anywhere: unplayable.
+  // Stage 4: the stage-1 candidates (the chord after the level's mandatory simplification, plus
+  // the kept-7th option) on their easiest out-of-level shape, counted hard. Example: beginner with
+  // capo range 0 plays Bb7 as Bb xx3331, marked "drop 7th". A same-root change only when those
+  // candidates have no shape at all; no shape anywhere: unplayable.
   let s4: Candidate[] = [];
   if (!s1.length && !s2.length) {
     s4 = expand(first, 4, false);
