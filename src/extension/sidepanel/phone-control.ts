@@ -310,6 +310,15 @@ export function songIdOf(demo: { run: number; key: string } | null, recordingKey
   return demo ? JSON.stringify(['demo', demo.run, demo.key]) : JSON.stringify(['rec', recordingKey]);
 }
 
+/**
+ * The song a model is built for (ShownModel.builtFor): the demo run's, or, with the real player, the
+ * recording of the chart the model is built from, never a label kept beside the chart (a late save
+ * reply may have put another song's chart there). `chartFor` only names it when there is no chart.
+ */
+export function modelSongId(demo: { run: number; key: string } | null, chartRecordingKey: string | null, chartFor: string): string {
+  return songIdOf(demo, chartRecordingKey ?? chartFor);
+}
+
 /** The player target: which song, model and player commands would act on right now, or null. */
 export function playerTargetKey(s: TargetParts): string | null {
   if (s.modelVersion === null || !songViewReady(s)) return null;

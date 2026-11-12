@@ -15,7 +15,7 @@ import {
 } from '../src/phone/protocol';
 import { Pairing } from '../src/phone/pairing';
 import { PhoneLink, type SocketLike } from '../src/extension/sidepanel/phone-link';
-import { ShownModel, playerTargetKey, songViewReady, restartTargetSec, type TargetParts, runPhoneCommand, type CommandContext, type ObservedPlayer, type PanelTransport, type TransportResult } from '../src/extension/sidepanel/phone-control';
+import { ShownModel, modelSongId, playerTargetKey, songIdOf, songViewReady, restartTargetSec, type TargetParts, runPhoneCommand, type CommandContext, type ObservedPlayer, type PanelTransport, type TransportResult } from '../src/extension/sidepanel/phone-control';
 import { playToggle, type PlayToggleEnv } from '../src/extension/sidepanel/play-toggle';
 import type { PlayerControlMessage, PlayerControlResult } from '../src/extension/messages';
 import { DEFAULT_SETTINGS, normalizeSettings } from '../src/extension/storage';
@@ -1650,7 +1650,7 @@ describe('S6-R7-01: a chart or model replaced for the same song stops commands f
     const src = readFileSync(new URL('../src/extension/sidepanel/sidepanel.ts', import.meta.url), 'utf8');
     // `const model = …` in renderModelState is a local, not the shown model.
     const assigns = [...src.matchAll(/(?<![\w.]|const )model = (.*);/g)].map((x) => x[1]);
-    expect(assigns).toEqual(['shownModel.replace(next, songIdOf(demo, chartFor))']);
+    expect(assigns).toEqual(['shownModel.replace(next, modelSongId(demo, c ? recordingKey(c.recording) : null, chartFor))']);
     expect(src).toMatch(/modelVersion: model \? shownModel\.version : null/);
     expect(src).toMatch(/new ShownModel<PlayModel>\(\(\) => phoneSongChanging\(\)\)/);
   });
@@ -1758,5 +1758,78 @@ describe('S6-R8-01: while the demo is being left, the demo model is never publis
     expect(exit.indexOf('phoneSongChanging();')).toBeGreaterThan(-1);
     expect(exit.indexOf('phoneSongChanging();')).toBeLessThan(exit.indexOf('demo = null'));
     expect(exit.indexOf('demo = null')).toBeLessThan(exit.indexOf('await '));
+  });
+});
+
+// ---------- S6-R9-01: a late save reply never labels another song's chart as the current song's ----------
+describe('S6-R9-01: the shown model is labelled with the recording of the chart it was built from', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("A's chart shown after B loaded (late save reply): not ready, no target, restart sends nothing", async () => {
+    const p = gatePanel({ countIn: false });
+    const s = { link: null as PhoneLink | null, model: null as Bars | null };
+    const shown = new ShownModel<Bars>(() => s.link?.songChanging());
+    // Song B is current and its chart (bar start 6) is loaded: chartKey = chartFor = B.
+    const cur = { chartKey: 'youtube:B', chartFor: 'youtube:B' };
+    const parts = (): TargetParts => ({
+      modelVersion: s.model ? shown.version : null,
+      modelFor: shown.builtFor,
+      songId: songIdOf(null, cur.chartKey),
+      demo: null,
+      chartLoaded: cur.chartFor === cur.chartKey,
+      tab: 101,
+      recordingKey: cur.chartKey,
+      chartKey: cur.chartKey,
+    });
+    /** recompute() as sidepanel.ts labels it, from the chart's own recording. */
+    const recompute = (chartRecording: string, m: Bars) => (s.model = shown.replace(m, modelSongId(null, chartRecording, cur.chartFor)));
+    p.player.target = () => playerTargetKey(parts());
+    p.transport.restartTarget = () => (s.model ? restartTargetSec(null, s.model.bars, p.st.position) : null);
+    const MODEL_6: Bars = { bars: [{ startSec: 0 }, { startSec: 6 }] };
+    recompute('youtube:B', MODEL_6);
+    const h = wiredHarness(p);
+    s.link = h.link;
+    publish(h, SONG_B, p.player.target());
+
+    // A's example-chart save reply arrives late and A's chart (bar start 9) is shown (pre-fix attachExample).
+    recompute('youtube:A', MODEL_9);
+    expect(songViewReady(parts()), 'syncPhoneSong publishes nothing').toBe(false);
+    expect(p.player.target()).toBeNull();
+    // Even a revision published now is bound to no target.
+    publish(h, SONG_A, p.player.target());
+    h.ws.rx({ t: 'cmd', id: 1, epoch: h.epoch, rev: h.rev, cmd: 'restart', from: ID_A, grant: h.grant() });
+    await finish(p);
+    expect(p.sent).toEqual([]);
+    expect(h.results().at(-1)).toMatchObject({ id: 1, ok: false });
+
+    // B's chart shown again: ready, and restart goes to B's bar.
+    recompute('youtube:B', MODEL_6);
+    expect(songViewReady(parts())).toBe(true);
+    publish(h, SONG_B, p.player.target());
+    h.ws.rx({ t: 'cmd', id: 2, epoch: h.epoch, rev: h.rev, cmd: 'restart', from: ID_A, grant: h.grant() });
+    await finish(p);
+    expect(p.sent).toEqual(['seek 6']);
+  });
+
+  it('modelSongId: the chart recording decides, chartFor only without a chart, the demo run for a demo', () => {
+    expect(modelSongId(null, 'youtube:A', 'youtube:B')).toBe(songIdOf(null, 'youtube:A'));
+    expect(modelSongId(null, null, 'youtube:B')).toBe(songIdOf(null, 'youtube:B'));
+    const demo = { run: 2, key: 'K' };
+    expect(modelSongId(demo, 'youtube:A', 'youtube:B')).toBe(songIdOf(demo, ''));
+  });
+
+  it('sidepanel.ts: doSave and attachExample show a saved chart only if it is still the current song', () => {
+    const src = readFileSync(new URL('../src/extension/sidepanel/sidepanel.ts', import.meta.url), 'utf8');
+    for (const fn of ['async function doSave', 'async function attachExample', 'async function importJson']) {
+      const body = src.slice(src.indexOf(fn), src.indexOf('\n}\n', src.indexOf(fn)));
+      const after = body.slice(body.indexOf('await saveChart('));
+      expect(after.indexOf('=== chartKey'), fn).toBeGreaterThan(-1);
+      expect(after.indexOf('=== chartKey'), `${fn}: checked before the chart is shown`).toBeLessThan(after.indexOf('chart = '));
+    }
   });
 });

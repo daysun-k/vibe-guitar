@@ -65,7 +65,7 @@ import { ChordFixer } from './fix';
 import { OVERVIEW_EMPTY, renderOverviewHtml } from './overview';
 import { capoReason, unplayableLine, PlayScreen, formatTime, type LoopMarks } from './play';
 import { PhoneLink, phoneStatusText, type PhoneStatus, type PlaybackSample } from './phone-link';
-import { ShownModel, playerTargetKey, songIdOf, songViewReady, type TargetParts, restartTargetSec, runPhoneCommand, type CommandContext, type ObservedPlayer, type PanelTransport } from './phone-control';
+import { ShownModel, modelSongId, playerTargetKey, songIdOf, songViewReady, type TargetParts, restartTargetSec, runPhoneCommand, type CommandContext, type ObservedPlayer, type PanelTransport } from './phone-control';
 import type { CommandOutcome, PhoneCommand, PhoneEntry } from '../../phone/protocol';
 import { buildSongView } from '../../phone/song-view';
 
@@ -378,7 +378,7 @@ function recompute(): void {
     }
   }
   // The only place the model is replaced: phone commands for the previous model stop first (VGT-16).
-  model = shownModel.replace(next, songIdOf(demo, chartFor));
+  model = shownModel.replace(next, modelSongId(demo, c ? recordingKey(c.recording) : null, chartFor));
   screen.setModel(model);
   screen.setLook(settings.lookAheadBars);
   if (shownKey() !== fixModelKey) {
@@ -870,8 +870,11 @@ async function doSave(): Promise<void> {
     const stamps = $<HTMLInputElement>('quantize').checked ? quantizeStamps(editor.stamps, timing, 2, keep) : editor.stamps;
     const { chart: built, preservation, changed } = buildChartDetailed({ recording: r, timing, chords: editor.chords, stamps, durationSec: player?.duration || undefined, existing });
     await saveChart(built);
-    chart = built;
-    recompute();
+    // The song may have changed while the save was pending: keep what was saved, show only the current song's.
+    if (!demo && recordingKey(built.recording) === chartKey) {
+      chart = built;
+      recompute();
+    }
     const kept =
       preservation === 'kept'
         ? changed
@@ -942,8 +945,11 @@ async function attachExample(): Promise<void> {
   const ex = EXAMPLE_CHARTS[Number($<HTMLSelectElement>('example-select').value)];
   const c = attachChartToRecording(ex, r);
   await saveChart(c);
-  chart = c;
-  recompute();
+  // The song may have changed while the save was pending: keep what was saved, show only the current song's.
+  if (!demo && recordingKey(c.recording) === chartKey) {
+    chart = c;
+    recompute();
+  }
   setStatus('io-status', '예시 코드표를 현재 곡에 연결했습니다(타이밍은 가짜입니다).', false);
 }
 
