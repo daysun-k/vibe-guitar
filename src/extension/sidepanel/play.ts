@@ -40,13 +40,15 @@ export function formatTime(sec: number): string {
   return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 }
 
-/** Chord name with small accidental / quality and an optional superscript 7. */
-export function chordHTML(name: string, had7 = false): string {
+/**
+ * Chord name with small accidental / quality. A dropped 7th is shown only by the change mark
+ * (●) and its tooltip: a superscript 7 after the name read as a 7th chord ("G⁷" looked like G7).
+ */
+export function chordHTML(name: string): string {
   if (!name || name === 'N.C.' || name === '—') return '<span class="cn">—</span>';
   const m = /^([A-G])([♭♯]?)(.*)$/.exec(name);
   if (!m) return `<span class="cn">${escapeHtml(name)}</span>`;
-  const sup = had7 ? '<sup class="h7" title="원곡은 7화음, 입문에서는 줄였어요">7</sup>' : '';
-  return `<span class="cn">${m[1]}${m[2] ? `<span class="acc">${m[2]}</span>` : ''}${m[3] ? `<span class="q">${escapeHtml(m[3])}</span>` : ''}${sup}</span>`;
+  return `<span class="cn">${m[1]}${m[2] ? `<span class="acc">${m[2]}</span>` : ''}${m[3] ? `<span class="q">${escapeHtml(m[3])}</span>` : ''}</span>`;
 }
 
 /** Screen-reader text of a change: "원래 코드 F, 바뀐 코드 Fmaj7. <reason>" (no particle after a chord name). */
@@ -251,7 +253,7 @@ export class PlayScreen {
     const ch = lab.change;
     const mark = ch ? `<i class="chg${ch.root ? ' root' : ''}" aria-hidden="true">${ch.root ? '◆' : '●'}</i>` : '';
     const title = ch ? ` title="${escapeHtml(`${ch.badge} · ${ch.text}${this.concert(ch) ? ` · ${this.concert(ch)}` : ''}`)}"` : '';
-    return `<span class="sg${ch ? ' changed' : ''}" style="flex:${weight} 1 0"${title}>${chordHTML(lab.name, lab.had7)}${mark}${alt}${snd}</span>`;
+    return `<span class="sg${ch ? ' changed' : ''}" style="flex:${weight} 1 0"${title}>${chordHTML(lab.name)}${mark}${alt}${snd}</span>`;
   }
 
   private buildLane(m: PlayModel): void {

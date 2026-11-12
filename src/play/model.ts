@@ -32,7 +32,7 @@ export interface EventLabel {
   name: string;
   /** Sounding chord when a capo is used (else equal to name). */
   sounding: string;
-  /** Beginner reduction removed a 7th (tiny superscript 7). */
+  /** Beginner reduction removed a 7th (shown through the change mark, not next to the name). */
   had7: boolean;
   /** Intermediate+ and uncertain: an easier shape that also works ("Em도 돼요"). */
   hint: string | null;
