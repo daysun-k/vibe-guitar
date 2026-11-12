@@ -65,7 +65,7 @@ import { ChordFixer } from './fix';
 import { OVERVIEW_EMPTY, renderOverviewHtml } from './overview';
 import { capoReason, unplayableLine, PlayScreen, formatTime, type LoopMarks } from './play';
 import { PhoneLink, phoneStatusText, type PhoneStatus, type PlaybackSample } from './phone-link';
-import { ShownModel, playerTargetKey, restartTargetSec, runPhoneCommand, type CommandContext, type ObservedPlayer, type PanelTransport } from './phone-control';
+import { ShownModel, playerTargetKey, songIdOf, songViewReady, type TargetParts, restartTargetSec, runPhoneCommand, type CommandContext, type ObservedPlayer, type PanelTransport } from './phone-control';
 import type { CommandOutcome, PhoneCommand, PhoneEntry } from '../../phone/protocol';
 import { buildSongView } from '../../phone/song-view';
 
@@ -378,7 +378,7 @@ function recompute(): void {
     }
   }
   // The only place the model is replaced: phone commands for the previous model stop first (VGT-16).
-  model = shownModel.replace(next);
+  model = shownModel.replace(next, songIdOf(demo, chartFor));
   screen.setModel(model);
   screen.setLook(settings.lookAheadBars);
   if (shownKey() !== fixModelKey) {
@@ -1343,7 +1343,8 @@ function phoneSample(): PlaybackSample | null {
 function syncPhoneSong(): void {
   if (!phone.isEnabled) return;
   // The new song's chart is still loading: phones keep the previous view, and commands stay stale.
-  if (!demo && chartFor !== chartKey) return;
+  // Also while leaving a demo: until the real song's model is built, phones keep the previous view.
+  if (!songViewReady(phoneTargetParts())) return;
   const r = shownRecording();
   const from = { model, snd: settings.showSounding, title: r?.title ?? '', artist: r?.artist ?? '', target: phonePlayer.target() };
   const p = phoneSongFrom;
@@ -1368,17 +1369,22 @@ const phonePlayer: ObservedPlayer = {
   position: () => positionNow(false),
   rate: currentRate,
   isAd: () => !demo && !!player?.isAd,
-  // The same tab sendControl would use, so an unchanged target means the same tab gets the command.
-  target: () =>
-    playerTargetKey({
-      modelVersion: model ? shownModel.version : null,
-      demo,
-      chartLoaded: chartFor === chartKey,
-      tab: player && hasChrome ? controlTabId(playerTabId, activeTabId) : null,
-      recordingKey: recordingKey(player?.recording ?? null),
-      chartKey,
-    }),
+  target: () => playerTargetKey(phoneTargetParts()),
 };
+
+/** What the phone target is made of. The tab is the one sendControl would use, so an unchanged target means the same tab gets the command. */
+function phoneTargetParts(): TargetParts {
+  return {
+    modelVersion: model ? shownModel.version : null,
+    modelFor: shownModel.builtFor,
+    songId: songIdOf(demo, chartKey),
+    demo,
+    chartLoaded: chartFor === chartKey,
+    tab: player && hasChrome ? controlTabId(playerTabId, activeTabId) : null,
+    recordingKey: recordingKey(player?.recording ?? null),
+    chartKey,
+  };
+}
 
 /** countInRun of the count-in the phone started (cancelCountIn stops only that one). */
 let phoneCountInRun = -1;

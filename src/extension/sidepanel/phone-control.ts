@@ -249,12 +249,14 @@ export function landedAt(target: number, player: Pick<ObservedPlayer, 'position'
 }
 
 /**
- * The play model the panel shows. `replace` is the only way it changes: when it is another model, the
- * phone's song is marked as changing first (synchronously), then the version goes up, so a phone
- * revision published for the previous model never acts on this one.
+ * The play model the panel shows and the song it was built for (`builtFor`: a recording's or a demo
+ * run's song id, see TargetParts.songId). `replace` is the only way it changes: when it is another
+ * model or another song, the phone's song is marked as changing first (synchronously), then the
+ * version goes up, so a phone revision published for the previous model never acts on this one.
  */
 export class ShownModel<M> {
   private current: M | null = null;
+  private forId = '';
   private n = 0;
   constructor(private readonly beforeReplace: () => void) {}
 
@@ -262,10 +264,15 @@ export class ShownModel<M> {
     return this.n;
   }
 
-  replace(next: M | null): M | null {
-    if (next !== this.current) {
+  get builtFor(): string {
+    return this.forId;
+  }
+
+  replace(next: M | null, builtFor: string): M | null {
+    if (next !== this.current || builtFor !== this.forId) {
       this.beforeReplace();
       this.current = next;
+      this.forId = builtFor;
       this.n++;
     }
     return next;
@@ -276,6 +283,14 @@ export class ShownModel<M> {
 export interface TargetParts {
   /** ShownModel.version, or null without a model. */
   modelVersion: number | null;
+  /** ShownModel.builtFor: the song the shown model was built for. */
+  modelFor: string;
+  /**
+   * The song player commands would act on right now (the demo run's, or the player's recording's).
+   * While it is not the one the shown model was built for (e.g. the demo was left and the real song's
+   * model is not built yet), the phone's song is not ready: nothing is published and commands are stale.
+   */
+  songId: string;
   demo: { run: number; key: string } | null;
   /** The chart shown was loaded for the current recording (not the previous song's, still loading). */
   chartLoaded: boolean;
@@ -285,9 +300,19 @@ export interface TargetParts {
   chartKey: string;
 }
 
+/** The shown model belongs to the song player commands would act on, so its view may be published. */
+export function songViewReady(s: Pick<TargetParts, 'modelFor' | 'songId' | 'demo' | 'chartLoaded'>): boolean {
+  return s.modelFor === s.songId && (!!s.demo || s.chartLoaded);
+}
+
+/** A demo run's or a recording's song id (TargetParts.songId, ShownModel.builtFor). */
+export function songIdOf(demo: { run: number; key: string } | null, recordingKey: string): string {
+  return demo ? JSON.stringify(['demo', demo.run, demo.key]) : JSON.stringify(['rec', recordingKey]);
+}
+
 /** The player target: which song, model and player commands would act on right now, or null. */
 export function playerTargetKey(s: TargetParts): string | null {
-  if (s.modelVersion === null) return null;
+  if (s.modelVersion === null || !songViewReady(s)) return null;
   if (s.demo) return JSON.stringify(['demo', s.demo.run, s.demo.key, s.modelVersion]);
   if (!s.chartLoaded || s.tab === null) return null;
   return JSON.stringify(['tab', s.tab, s.recordingKey, s.chartKey, s.modelVersion]);

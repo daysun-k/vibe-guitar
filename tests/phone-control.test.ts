@@ -15,7 +15,7 @@ import {
 } from '../src/phone/protocol';
 import { Pairing } from '../src/phone/pairing';
 import { PhoneLink, type SocketLike } from '../src/extension/sidepanel/phone-link';
-import { ShownModel, playerTargetKey, restartTargetSec, runPhoneCommand, type CommandContext, type ObservedPlayer, type PanelTransport, type TransportResult } from '../src/extension/sidepanel/phone-control';
+import { ShownModel, playerTargetKey, songViewReady, restartTargetSec, type TargetParts, runPhoneCommand, type CommandContext, type ObservedPlayer, type PanelTransport, type TransportResult } from '../src/extension/sidepanel/phone-control';
 import { playToggle, type PlayToggleEnv } from '../src/extension/sidepanel/play-toggle';
 import type { PlayerControlMessage, PlayerControlResult } from '../src/extension/messages';
 import { DEFAULT_SETTINGS, normalizeSettings } from '../src/extension/storage';
@@ -1546,6 +1546,9 @@ describe('S6-R7-02: an ad that starts before the outcome is observed is reported
 type Bars = { bars: { startSec: number }[] };
 const MODEL_8: Bars = { bars: [{ startSec: 0 }, { startSec: 8 }] };
 const MODEL_9: Bars = { bars: [{ startSec: 0 }, { startSec: 9 }] };
+/** Song ids (what songIdOf makes; only their equality matters here). */
+const REC_A = 'rec youtube:A';
+const DEMO_B = 'demo 1 B';
 
 /** The panel's model, target and 처음부터 as sidepanel.ts wires them, for one recording in tab 101. */
 function modelPanel(marked: boolean) {
@@ -1554,9 +1557,9 @@ function modelPanel(marked: boolean) {
   const shown = new ShownModel<Bars>(() => {
     if (marked) m.link?.songChanging();
   });
-  m.model = shown.replace(MODEL_8);
+  m.model = shown.replace(MODEL_8, REC_A);
   p.player.target = () =>
-    playerTargetKey({ modelVersion: m.model ? shown.version : null, demo: null, chartLoaded: true, tab: 101, recordingKey: 'youtube:A', chartKey: 'youtube:A' });
+    playerTargetKey({ modelVersion: m.model ? shown.version : null, modelFor: shown.builtFor, songId: REC_A, demo: null, chartLoaded: true, tab: 101, recordingKey: 'youtube:A', chartKey: 'youtube:A' });
   p.st.target = 'unused';
   p.transport.restartTarget = () => (m.model ? restartTargetSec(null, m.model.bars, p.st.position) : null);
   // sentTo records the panel's real target.
@@ -1583,7 +1586,7 @@ describe('S6-R7-01: a chart or model replaced for the same song stops commands f
       m.link = h.link;
       publish(h, SONG_A, p.player.target());
       // A chart reload, save, import, chord fix or settings change: recompute() replaces the model.
-      m.model = shown.replace(MODEL_9);
+      m.model = shown.replace(MODEL_9, REC_A);
       h.ws.rx({ t: 'cmd', id: 1, epoch: h.epoch, rev: h.rev, cmd: 'restart', from: ID_A, grant: h.grant() });
       await finish(p);
       expect(p.sent).toEqual([]);
@@ -1602,13 +1605,13 @@ describe('S6-R7-01: a chart or model replaced for the same song stops commands f
     const p = gatePanel({ countIn: false, loopStart: 5 });
     let link: PhoneLink | null = null;
     const shown = new ShownModel<Bars>(() => link?.songChanging());
-    shown.replace(MODEL_8);
+    shown.replace(MODEL_8, REC_A);
     const h = wiredHarness(p);
     link = h.link;
     h.cmd(1);
     await settle();
     expect(p.sent).toEqual(['seek 5']);
-    shown.replace(MODEL_9);
+    shown.replace(MODEL_9, REC_A);
     await finish(p);
     expect(p.sent).toEqual(['seek 5']);
     expect(h.results().at(-1)).toMatchObject({ id: 1, ok: false, code: 'stale' });
@@ -1618,23 +1621,28 @@ describe('S6-R7-01: a chart or model replaced for the same song stops commands f
     const order: string[] = [];
     let current: Bars | null = null;
     const shown = new ShownModel<Bars>(() => order.push(`changing (shown ${current === MODEL_8 ? '8' : current === MODEL_9 ? '9' : 'none'})`));
-    current = shown.replace(MODEL_8);
+    current = shown.replace(MODEL_8, REC_A);
     const v = shown.version;
-    current = shown.replace(MODEL_8);
+    current = shown.replace(MODEL_8, REC_A);
     expect(shown.version).toBe(v);
-    current = shown.replace(MODEL_9);
-    current = shown.replace(null);
+    current = shown.replace(MODEL_9, REC_A);
+    current = shown.replace(null, REC_A);
     expect(order).toEqual(['changing (shown none)', 'changing (shown 8)', 'changing (shown 9)']);
     expect(shown.version).toBe(v + 2);
+    // S6-R8-01: the same model object for another song is a replacement too.
+    current = shown.replace(MODEL_9, REC_A);
+    current = shown.replace(MODEL_9, DEMO_B);
+    expect(shown.builtFor).toBe(DEMO_B);
+    expect(order.length).toBe(5);
   });
 
   it('the target changes with the model version, and is null while the chart shown is the previous song\'s', () => {
-    const base = { modelVersion: 3, demo: null, chartLoaded: true, tab: 101, recordingKey: 'youtube:A', chartKey: 'youtube:A' };
+    const base = { modelVersion: 3, modelFor: REC_A, songId: REC_A, demo: null, chartLoaded: true, tab: 101, recordingKey: 'youtube:A', chartKey: 'youtube:A' };
     expect(playerTargetKey(base)).not.toBe(playerTargetKey({ ...base, modelVersion: 4 }));
     expect(playerTargetKey({ ...base, chartLoaded: false })).toBeNull();
     expect(playerTargetKey({ ...base, modelVersion: null })).toBeNull();
     expect(playerTargetKey({ ...base, tab: null })).toBeNull();
-    const demo = { ...base, demo: { run: 1, key: 'd' } };
+    const demo = { ...base, demo: { run: 1, key: 'd' }, modelFor: DEMO_B, songId: DEMO_B };
     expect(playerTargetKey(demo)).not.toBe(playerTargetKey({ ...demo, modelVersion: 4 }));
   });
 
@@ -1642,8 +1650,113 @@ describe('S6-R7-01: a chart or model replaced for the same song stops commands f
     const src = readFileSync(new URL('../src/extension/sidepanel/sidepanel.ts', import.meta.url), 'utf8');
     // `const model = …` in renderModelState is a local, not the shown model.
     const assigns = [...src.matchAll(/(?<![\w.]|const )model = (.*);/g)].map((x) => x[1]);
-    expect(assigns).toEqual(['shownModel.replace(next)']);
+    expect(assigns).toEqual(['shownModel.replace(next, songIdOf(demo, chartFor))']);
     expect(src).toMatch(/modelVersion: model \? shownModel\.version : null/);
     expect(src).toMatch(/new ShownModel<PlayModel>\(\(\) => phoneSongChanging\(\)\)/);
+  });
+});
+
+// ---------- S6-R8-01: leaving a demo never publishes the demo's model for the real player ----------
+/**
+ * The real song A plays in tab 101 while the demo of song B (bar start 9; A's is 8) is shown, as
+ * sidepanel.ts wires it: the model records the song it was built for, the target and syncPhoneSong
+ * check it against the song commands would act on now.
+ */
+function demoExitPanel() {
+  const p = gatePanel({ countIn: false });
+  const s = { link: null as PhoneLink | null, model: null as Bars | null, inDemo: true };
+  const shown = new ShownModel<Bars>(() => s.link?.songChanging());
+  const parts = (): TargetParts => ({
+    modelVersion: s.model ? shown.version : null,
+    modelFor: shown.builtFor,
+    songId: s.inDemo ? DEMO_B : REC_A,
+    demo: s.inDemo ? { run: 1, key: 'B' } : null,
+    chartLoaded: true,
+    tab: 101,
+    recordingKey: 'youtube:A',
+    chartKey: 'youtube:A',
+  });
+  s.model = shown.replace(MODEL_9, DEMO_B);
+  p.player.target = () => playerTargetKey(parts());
+  p.transport.restartTarget = () => (s.model ? restartTargetSec(null, s.model.bars, p.st.position) : null);
+  const send = p.env.send;
+  p.env.send = (msg) => {
+    p.st.target = p.player.target();
+    return send(msg);
+  };
+  /** exitDemo(): marks the phone's song as changing, then the demo ends; the real model comes after an await. */
+  const exitDemo = () => {
+    s.link?.songChanging();
+    s.inDemo = false;
+  };
+  /** recompute() once the tab query answered: the real song's model. */
+  const buildReal = () => (s.model = shown.replace(MODEL_8, REC_A));
+  return { p, s, parts, exitDemo, buildReal };
+}
+
+describe('S6-R8-01: while the demo is being left, the demo model is never published or used for the real player', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('a frame during the tab query publishes nothing; commands are stale; after the real model they act on song A', async () => {
+    const d = demoExitPanel();
+    const h = wiredHarness(d.p);
+    d.s.link = h.link;
+    // syncPhoneSong during the demo: demo B is published for the demo target.
+    expect(songViewReady(d.parts())).toBe(true);
+    publish(h, SONG_B, d.p.player.target());
+    const demoRev = h.rev;
+    d.exitDemo();
+    // Frames while refreshActiveTab() is pending (longer than the 250 ms publish delay).
+    expect(songViewReady(d.parts()), 'syncPhoneSong publishes nothing').toBe(false);
+    expect(d.p.player.target(), 'no target while the model is the demo song').toBeNull();
+    h.advance(1000);
+    h.ws.rx({ t: 'cmd', id: 1, epoch: h.epoch, rev: demoRev, cmd: 'restart', from: ID_A, grant: h.grant() });
+    await finish(d.p);
+    expect(d.p.sent).toEqual([]);
+    expect(h.results().at(-1)).toMatchObject({ id: 1, ok: false, code: 'stale' });
+
+    d.buildReal();
+    expect(songViewReady(d.parts())).toBe(true);
+    publish(h, SONG_A, d.p.player.target());
+    h.ws.rx({ t: 'cmd', id: 2, epoch: h.epoch, rev: h.rev, cmd: 'restart', from: ID_A, grant: h.grant() });
+    await finish(d.p);
+    expect(d.p.sent).toEqual(['seek 8']);
+    expect(h.results().at(-1)).toMatchObject({ id: 2, ok: true });
+  });
+
+  it('even a revision published in that window (the reviewer\'s harness) never seeks the real player to the demo bar', async () => {
+    const d = demoExitPanel();
+    const h = wiredHarness(d.p);
+    d.s.link = h.link;
+    publish(h, SONG_B, d.p.player.target());
+    d.exitDemo();
+    // What 24f4900's syncPhoneSong did on a frame here: a new revision with the current target.
+    publish(h, SONG_B, d.p.player.target());
+    h.ws.rx({ t: 'cmd', id: 1, epoch: h.epoch, rev: h.rev, cmd: 'restart', from: ID_A, grant: h.grant() });
+    await finish(d.p);
+    expect(d.p.sent).toEqual([]);
+    expect(h.results().at(-1)).toMatchObject({ id: 1, ok: false });
+  });
+
+  it('the model built for another song than the current one gives no target and is not ready', () => {
+    const base = { modelVersion: 3, modelFor: DEMO_B, songId: REC_A, demo: null, chartLoaded: true, tab: 101, recordingKey: 'youtube:A', chartKey: 'youtube:A' };
+    expect(playerTargetKey(base)).toBeNull();
+    expect(playerTargetKey({ ...base, modelFor: REC_A })).not.toBeNull();
+  });
+
+  it('sidepanel.ts: syncPhoneSong checks songViewReady, the target uses the song ids, and exitDemo marks not ready before its await', () => {
+    const src = readFileSync(new URL('../src/extension/sidepanel/sidepanel.ts', import.meta.url), 'utf8');
+    const sync = src.slice(src.indexOf('function syncPhoneSong'), src.indexOf('function phoneSongChanging'));
+    expect(sync).toMatch(/if \(!songViewReady\(phoneTargetParts\(\)\)\) return;/);
+    expect(src).toMatch(/modelFor: shownModel\.builtFor,\s+songId: songIdOf\(demo, chartKey\)/);
+    const exit = src.slice(src.indexOf('async function exitDemo'));
+    expect(exit.indexOf('phoneSongChanging();')).toBeGreaterThan(-1);
+    expect(exit.indexOf('phoneSongChanging();')).toBeLessThan(exit.indexOf('demo = null'));
+    expect(exit.indexOf('demo = null')).toBeLessThan(exit.indexOf('await '));
   });
 });
