@@ -6,10 +6,13 @@
  * The token is 128 random bits created at start, kept in memory and never written anywhere.
  * It is an access check for a trusted home LAN, not encryption: traffic is plain HTTP/WebSocket.
  * The relay keeps only the latest song view and anchor in memory and forwards them; nothing is stored.
+ * VGT-16: it also keeps the pairing state (see pairing.ts) and forwards a control command only from
+ * the approved viewer connection to the current publisher, after checking it (switch, approval,
+ * duplicate id, rate, song revision). Results go back only to the connection that asked.
  */
 import http from 'node:http';
 import os from 'node:os';
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, randomInt } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 import type { Duplex } from 'node:stream';
 import {
@@ -19,13 +22,19 @@ import {
   SongAssembler,
   isNewer,
   publisherAllowed,
+  TokenBucket,
   tokenMatches,
+  validatePanelMessage,
   validatePublisherMessage,
   validateViewerMessage,
   viewerHostAllowed,
   viewerOriginAllowed,
   type AnchorMessage,
+  type CommandFailure,
+  type CommandMessage,
+  type PanelMessage,
 } from './protocol';
+import { Pairing } from './pairing';
 import { OP_CLOSE, OP_PING, OP_PONG, OP_TEXT, closeFrame, decodeText, encodeFrame, parseFrames, textFrame } from './ws-frame';
 
 const WS_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
@@ -65,6 +74,18 @@ export interface Relay {
 
 export function newToken(): string {
   return randomBytes(16).toString('base64url');
+}
+
+/** Id of one viewer connection: 12 base-36 characters, never shown to anyone but the panel. */
+function newConnId(): string {
+  return Array.from(randomBytes(12), (b) => (b % 36).toString(36)).join('');
+}
+
+interface ViewerInfo {
+  id: string;
+  /** Highest command id seen on this connection (ids must increase). */
+  lastCmd: number;
+  bucket: TokenBucket;
 }
 
 /**
@@ -247,7 +268,8 @@ export async function startRelay(opts: RelayOptions): Promise<Relay> {
   let lanHost = `${host}:${opts.port ?? DEFAULT_VIEWER_PORT}`;
   const token = newToken();
 
-  const viewers = new Set<Conn>();
+  const viewers = new Map<Conn, ViewerInfo>();
+  const pairing = new Pairing(randomInt);
   let publisher: Conn | null = null;
   const song = new SongAssembler();
   let lastAnchor: AnchorMessage | null = null;
@@ -272,8 +294,62 @@ export async function startRelay(opts: RelayOptions): Promise<Relay> {
     }, opts.idleStopMs);
   };
 
-  const toViewers = (text: string) => viewers.forEach((v) => v.send(text));
+  const toViewers = (text: string) => viewers.forEach((_info, v) => v.send(text));
   const tellPublisherCount = () => publisher?.send(JSON.stringify({ t: 'viewers', n: viewers.size }));
+  const tellPublisherPhones = () => publisher?.send(JSON.stringify({ t: 'phones', list: pairing.list() }));
+  /** Tells every phone its pairing state and the panel the list (after any pairing change). */
+  const tellPairing = () => {
+    viewers.forEach((info, v) => v.send(JSON.stringify(pairing.stateFor(info.id))));
+    tellPublisherPhones();
+  };
+  const viewerById = (id: string) => [...viewers].find(([, info]) => info.id === id)?.[0] ?? null;
+
+  /** A command from a viewer: forwarded to the publisher only when every check passes. */
+  const onCommand = (conn: Conn, info: ViewerInfo, m: CommandMessage) => {
+    const fail = (code: CommandFailure) => conn.send(JSON.stringify({ t: 'result', id: m.id, ok: false, code }));
+    if (!publisher) return fail('no-panel');
+    if (!pairing.controlOn) return fail('off');
+    if (!pairing.isApproved(info.id)) return fail('not-approved');
+    if (m.id <= info.lastCmd) return fail('duplicate');
+    info.lastCmd = m.id;
+    if (!info.bucket.take()) return fail('rate');
+    const cur = song.current;
+    if (!cur || cur.epoch !== m.epoch || cur.rev !== m.rev) return fail('stale');
+    log(`phone command ${m.cmd} forwarded`);
+    publisher.send(JSON.stringify({ ...m, from: info.id }));
+  };
+
+  /** Pairing decisions, the control switch and command results from the publisher. */
+  const onPanelMessage = (m: PanelMessage) => {
+    switch (m.t) {
+      case 'control':
+        if (pairing.setControl(m.on)) {
+          log(`phone control ${m.on ? 'allowed' : 'off'}`);
+          tellPairing();
+        }
+        return;
+      case 'approve':
+        if (pairing.approve(m.id, m.code)) {
+          log(`phone ${m.code} approved`);
+          tellPairing();
+        }
+        return;
+      case 'reject':
+        if (pairing.reject(m.id, m.code)) tellPairing();
+        return;
+      case 'revoke':
+        if (pairing.revoke()) {
+          log('phone approval revoked');
+          tellPairing();
+        }
+        return;
+      case 'result': {
+        const { to, ...rest } = m;
+        viewerById(to)?.send(JSON.stringify(rest));
+        return;
+      }
+    }
+  };
 
   // ---------- viewer endpoint (LAN) ----------
   const securityHeaders = {
@@ -333,25 +409,32 @@ export async function startRelay(opts: RelayOptions): Promise<Relay> {
     }
     if (viewers.size >= maxViewers) return reject(socket, 503, 'Too Many Viewers');
     if (!acceptUpgrade(req, socket)) return;
+    const me: ViewerInfo = { id: newConnId(), lastCmd: 0, bucket: new TokenBucket() };
     const conn: Conn = new Conn(
       socket,
       (text) => {
         const m = validateViewerMessage(text);
         if (!m) return conn.close(1008, 'bad message');
+        if (m.t === 'cmd') return onCommand(conn, me, m);
         conn.send(JSON.stringify({ t: 'pong', id: m.id, c: m.c, s: Date.now() }));
       },
       () => {
         viewers.delete(conn);
+        pairing.leave(me.id);
         log(`viewer left (${viewers.size} connected)`);
         tellPublisherCount();
+        tellPublisherPhones();
       },
     );
-    viewers.add(conn);
+    viewers.set(conn, me);
+    pairing.join(me.id);
     log(`viewer joined from ${req.socket.remoteAddress} (${viewers.size} connected)`);
     conn.send(JSON.stringify({ t: 'publisher', connected: publisher !== null }));
+    conn.send(JSON.stringify(pairing.stateFor(me.id)));
     for (const p of song.current?.parts ?? []) conn.send(JSON.stringify(p));
     if (lastAnchor) conn.send(JSON.stringify(lastAnchor));
     tellPublisherCount();
+    tellPublisherPhones();
     conn.start(head);
   }));
 
@@ -376,7 +459,11 @@ export async function startRelay(opts: RelayOptions): Promise<Relay> {
       socket,
       (text) => {
         const m = validatePublisherMessage(text);
-        if (!m) return conn.close(1008, 'bad message');
+        if (!m) {
+          const c = validatePanelMessage(text);
+          if (!c) return conn.close(1008, 'bad message');
+          return onPanelMessage(c);
+        }
         if (m.t === 'anchor') {
           if (lastAnchor && !isNewer({ epoch: lastAnchor.epoch, n: lastAnchor.seq }, { epoch: m.epoch, n: m.seq })) return;
           lastAnchor = m;
@@ -394,6 +481,8 @@ export async function startRelay(opts: RelayOptions): Promise<Relay> {
         lastAnchor = null;
         log('publisher left');
         toViewers(JSON.stringify({ t: 'publisher', connected: false }));
+        // The approval belongs to that panel session: a closed or replaced panel ends it.
+        if (pairing.setControl(false)) tellPairing();
         armIdleStop();
       },
     );
@@ -402,6 +491,7 @@ export async function startRelay(opts: RelayOptions): Promise<Relay> {
     log(`publisher connected (${info.origin})`);
     toViewers(JSON.stringify({ t: 'publisher', connected: true }));
     tellPublisherCount();
+    tellPublisherPhones();
     conn.start(head);
   }));
 
@@ -417,7 +507,7 @@ export async function startRelay(opts: RelayOptions): Promise<Relay> {
 
   const idle = setInterval(() => {
     const now = Date.now();
-    for (const c of [...viewers, ...(publisher ? [publisher] : [])]) if (now - c.lastRx > IDLE_MS) c.close(1001, 'idle');
+    for (const c of [...viewers.keys(), ...(publisher ? [publisher] : [])]) if (now - c.lastRx > IDLE_MS) c.close(1001, 'idle');
   }, 5000);
   idle.unref();
 
@@ -428,7 +518,7 @@ export async function startRelay(opts: RelayOptions): Promise<Relay> {
     clearInterval(idle);
     // Stop listening first; the callbacks fire once every connection is gone (upgraded sockets included).
     const serversClosed = Promise.all([new Promise((r) => viewerServer.close(r)), new Promise((r) => pubServer.close(r))]);
-    const live = () => [...viewers, ...(publisher ? [publisher] : [])];
+    const live = () => [...viewers.keys(), ...(publisher ? [publisher] : [])];
     closing = (async () => {
       const first = live();
       for (const c of first) c.close(1001, 'relay stopping');
