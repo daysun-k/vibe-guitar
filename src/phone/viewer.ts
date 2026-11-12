@@ -36,6 +36,9 @@ let reconnects = 0;
 let lostAt = 0;
 let lastOutageMs = 0;
 let hiddenCount = 0;
+let lastAnyRx = 0;
+/** The relay sends a pong every 2 s and states every 1 s; silence this long means a dead link. */
+const SILENCE_MS = 6000;
 const changes: Change[] = [];
 let pendingMarks: MarkMessage[] = [];
 const errors: number[] = [];
@@ -45,10 +48,21 @@ function ping() {
   if (open) ws!.send(JSON.stringify({ t: 'ping', id: ++pingId, c: now() }));
 }
 
+function lost() {
+  if (open) {
+    reconnects++;
+    lostAt = now();
+  }
+  open = false;
+  setTimeout(connect, backoff);
+  backoff = Math.min(5000, backoff * 2);
+}
+
 function connect() {
   ws = new WebSocket(`ws://${location.host}/viewer?t=${encodeURIComponent(token)}`);
   ws.onopen = () => {
     open = true;
+    lastAnyRx = now();
     backoff = 500;
     if (lostAt) lastOutageMs = now() - lostAt;
     lostAt = 0;
@@ -56,6 +70,7 @@ function connect() {
     for (let i = 0; i < 8; i++) setTimeout(ping, i * 120);
   };
   ws.onmessage = (ev) => {
+    lastAnyRx = now();
     let m: RelayToViewer;
     try {
       m = JSON.parse(String(ev.data)) as RelayToViewer;
@@ -81,15 +96,16 @@ function connect() {
       matchMarks();
     }
   };
-  ws.onclose = () => {
-    if (open) {
-      reconnects++;
-      lostAt = now();
-    }
-    open = false;
-    setTimeout(connect, backoff);
-    backoff = Math.min(5000, backoff * 2);
-  };
+  ws.onclose = lost;
+}
+
+/** A silently dead TCP link (e.g. Wi-Fi dropped) may never fire onclose; drop it ourselves. */
+function watchdog() {
+  if (!open || now() - lastAnyRx <= SILENCE_MS) return;
+  const dead = ws!;
+  dead.onclose = dead.onmessage = dead.onopen = null;
+  dead.close();
+  lost();
 }
 
 function matchMarks() {
@@ -191,7 +207,10 @@ async function tryWakeLock() {
   }
 }
 
-setInterval(ping, 2000);
+setInterval(() => {
+  watchdog();
+  ping();
+}, 2000);
 connect();
 void tryWakeLock();
 requestAnimationFrame(frame);
