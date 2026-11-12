@@ -282,24 +282,46 @@ export function clockSample(c0: number, s: number, c1: number): ClockSample {
   return { rtt: c1 - c0, offset: s - (c0 + c1) / 2 };
 }
 
+/**
+ * Clock granularity allowed per sample: the relay stamps with Date.now() (whole ms, floored) and a
+ * phone browser may floor performance.now() to 1 ms. Each sample's interval is widened by this much.
+ */
+export const CLOCK_RESOLUTION_MS = 1;
+
 export interface ClockEstimate {
   offset: number;
-  /** Lowest RTT seen; the offset is uncertain by at most half of it. */
+  /**
+   * Error bound in ms: |true offset - offset| <= bound whenever every sample's interval
+   * `offset_i ± (rtt_i / 2 + CLOCK_RESOLUTION_MS)` holds (true for any delay asymmetry).
+   */
+  bound: number;
+  /** False when the sample intervals do not overlap (clock drift or a stall); bound is then a best guess. */
+  consistent: boolean;
+  /** Lowest RTT seen. */
   rtt: number;
   samples: number;
 }
 
 /**
- * NTP-style estimate: take the lowest-RTT third of the recent samples (at least one, at most 5)
- * and use the median of their offsets. Low-RTT samples bound the asymmetric-delay error best.
+ * Each round trip proves the true offset lies in `offset_i ± (rtt_i / 2 + resolution)`, whatever the
+ * split between the two one-way delays. The estimate is the middle of the intersection of those
+ * intervals and the bound is half its width. If they do not intersect, fall back to the lowest-RTT
+ * sample and mark the estimate inconsistent. Callers should pass recent samples only (drift).
  */
 export function estimateOffset(samples: ClockSample[]): ClockEstimate | null {
   const good = samples.filter((s) => Number.isFinite(s.rtt) && s.rtt >= 0 && Number.isFinite(s.offset));
   if (!good.length) return null;
-  const byRtt = [...good].sort((a, b) => a.rtt - b.rtt);
-  const k = Math.max(1, Math.min(5, Math.ceil(byRtt.length / 3)));
-  const best = byRtt.slice(0, k);
-  return { offset: median(best.map((s) => s.offset)), rtt: byRtt[0]!.rtt, samples: good.length };
+  let lo = -Infinity;
+  let hi = Infinity;
+  let best = good[0]!;
+  for (const s of good) {
+    const half = s.rtt / 2 + CLOCK_RESOLUTION_MS;
+    lo = Math.max(lo, s.offset - half);
+    hi = Math.min(hi, s.offset + half);
+    if (s.rtt < best.rtt) best = s;
+  }
+  if (lo <= hi) return { offset: (lo + hi) / 2, bound: (hi - lo) / 2, consistent: true, rtt: best.rtt, samples: good.length };
+  return { offset: best.offset, bound: best.rtt / 2 + CLOCK_RESOLUTION_MS, consistent: false, rtt: best.rtt, samples: good.length };
 }
 
 export function median(xs: number[]): number {

@@ -107,6 +107,44 @@ check('publisher from a web page Origin rejected', (await wsConnect('127.0.0.1',
 check('publisher without Origin rejected', (await wsConnect('127.0.0.1', pubPort, '/publish', { Host: `127.0.0.1:${pubPort}` })).status === 403);
 check('publisher with foreign Host rejected', (await wsConnect('127.0.0.1', pubPort, '/publish', { ...pubHeaders, Host: `evil.example:${pubPort}` })).status === 403);
 
+// ---------- malformed input must not stop the relay (review s3-r1 F1, F2) ----------
+function raw(host, port, bytes) {
+  return new Promise((resolve) => {
+    const chunks = [];
+    const sock = net.connect({ host, port }, () => sock.write(bytes));
+    const done = () => {
+      clearTimeout(timer);
+      sock.destroy();
+      resolve(Buffer.concat(chunks));
+    };
+    const timer = setTimeout(done, 800);
+    sock.on('data', (c) => chunks.push(c));
+    sock.on('close', done);
+    sock.on('error', done);
+  });
+}
+const statusOf = (b) => Number(/^HTTP\/1\.1 (\d{3})/.exec(b.toString('latin1'))?.[1]);
+const closeCodeOf = (b) => {
+  const at = b.indexOf('\r\n\r\n');
+  if (at < 0) return null;
+  const frames = R.parseFrames(new Uint8Array(b.subarray(at + 4)), 1 << 20, false).frames;
+  const c = frames.find((f) => f.opcode === R.OP_CLOSE);
+  return c ? (c.payload[0] << 8) | c.payload[1] : null;
+};
+const upgradeReq = (p, host, origin) =>
+  `GET ${p} HTTP/1.1\r\nHost: ${host}\r\nOrigin: ${origin}\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: ${randomBytes(16).toString('base64')}\r\n\r\n`;
+const badFrame = Buffer.from(R.encodeFrame(R.OP_TEXT, new TextEncoder().encode('{}'), randomBytes(4)));
+check('GET // on the viewer page rejected (400)', statusOf(await raw(lanIp, lanPort, `GET // HTTP/1.1\r\nHost: ${relay.lanHost}\r\n\r\n`)) === 400);
+check('viewer upgrade with target // rejected (400)', statusOf(await raw(lanIp, lanPort, upgradeReq('//', relay.lanHost, `http://${relay.lanHost}`))) === 400);
+check('publisher upgrade with target // rejected (400)', statusOf(await raw('127.0.0.1', pubPort, upgradeReq('//', `127.0.0.1:${pubPort}`, EXT_ORIGIN))) === 400);
+{
+  const v = await raw(lanIp, lanPort, Buffer.concat([Buffer.from(upgradeReq(`/viewer${tokenQ}`, relay.lanHost, `http://${relay.lanHost}`)), badFrame]));
+  check('viewer handshake + invalid frame in one write: closed 1008', statusOf(v) === 101 && closeCodeOf(v) === 1008, `status ${statusOf(v)}, close ${closeCodeOf(v)}`);
+  const p = await raw('127.0.0.1', pubPort, Buffer.concat([Buffer.from(upgradeReq('/publish', `127.0.0.1:${pubPort}`, EXT_ORIGIN)), badFrame]));
+  check('publisher handshake + invalid frame in one write: closed 1008', statusOf(p) === 101 && closeCodeOf(p) === 1008, `status ${statusOf(p)}, close ${closeCodeOf(p)}`);
+}
+check('relay still serving after malformed input', (await get(lanIp, lanPort, `/${tokenQ}`)) === 200);
+
 // ---------- broadcast ----------
 const song = R.syntheticSong();
 const epoch = 'probecheck01';
@@ -138,7 +176,7 @@ const rtts = samples.map((s) => s.rtt).sort((a, b) => a - b);
 const est = R.estimateOffset(samples);
 const pct = (xs, p) => xs[Math.min(xs.length - 1, Math.floor(p * xs.length))];
 console.log(`RTT via ${relay.lanHost} (n=${rtts.length}): min ${rtts[0].toFixed(3)} median ${R.median(rtts).toFixed(3)} p95 ${pct(rtts, 0.95).toFixed(3)} max ${rtts.at(-1).toFixed(3)} ms`);
-console.log(`clock offset estimate: ${est.offset.toFixed(3)} ms (viewer clock = performance.timeOrigin+now, relay = Date.now; ±${(est.rtt / 2).toFixed(3)} ms)`);
+console.log(`clock offset estimate: ${est.offset.toFixed(3)} ms (viewer clock = performance.timeOrigin+now, relay = Date.now; ±${est.bound.toFixed(3)} ms, consistent ${est.consistent})`);
 
 // ---------- extrapolation error during playback ----------
 // Publisher: polls its own clock and sends a mark when its chord index changes (like the probe page).

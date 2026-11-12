@@ -156,9 +156,56 @@ describe('clock offset', () => {
     ];
     const est = estimateOffset(samples)!;
     expect(est.offset).toBe(1000);
+    expect(est.bound).toBe(6); // rtt 10 / 2 + 1 ms resolution
+    expect(est.consistent).toBe(true);
     expect(est.rtt).toBe(10);
     expect(est.samples).toBe(6);
     expect(estimateOffset([])).toBeNull();
+  });
+
+  it('review s3-r1 F3: the shown bound covers the true offset', () => {
+    // True offset 0: one fast symmetric round trip, five slow ones that returned late.
+    const samples = [
+      { rtt: 2, offset: 0 },
+      { rtt: 100, offset: 40 },
+      { rtt: 100, offset: 40 },
+      { rtt: 102, offset: 40 },
+      { rtt: 104, offset: 40 },
+      { rtt: 106, offset: 40 },
+    ];
+    const est = estimateOffset(samples)!;
+    expect(Math.abs(0 - est.offset)).toBeLessThanOrEqual(est.bound);
+    expect(est.offset).toBe(0);
+    expect(est.bound).toBe(2);
+  });
+
+  it('bound holds for any delay asymmetry and floored clocks (randomized)', () => {
+    let seed = 42;
+    const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31);
+    for (let trial = 0; trial < 500; trial++) {
+      const theta = (rnd() - 0.5) * 1e6; // relay clock minus phone clock
+      const samples = [];
+      let t = 1e6 + rnd() * 1e5; // phone true time
+      for (let i = 0; i < 1 + Math.floor(rnd() * 15); i++) {
+        const up = rnd() * (rnd() < 0.2 ? 300 : 20);
+        const down = rnd() * (rnd() < 0.2 ? 300 : 20);
+        const c0 = Math.floor(t);
+        const s = Math.floor(t + up + theta); // relay Date.now() floors
+        const c1 = Math.floor(t + up + down);
+        samples.push(clockSample(c0, s, c1));
+        t += 2000 * rnd();
+      }
+      const est = estimateOffset(samples)!;
+      expect(est.consistent).toBe(true);
+      expect(Math.abs(theta - est.offset)).toBeLessThanOrEqual(est.bound + 1e-9);
+    }
+  });
+
+  it('marks non-overlapping samples as inconsistent and falls back to the fastest one', () => {
+    const est = estimateOffset([{ rtt: 2, offset: 0 }, { rtt: 2, offset: 50 }])!;
+    expect(est.consistent).toBe(false);
+    expect(est.offset).toBe(0);
+    expect(est.bound).toBe(2);
   });
 });
 

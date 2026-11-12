@@ -79,7 +79,7 @@ function connect() {
     }
     if (m.t === 'pong') {
       samples.push(clockSample(m.c, m.s, now()));
-      if (samples.length > 30) samples.shift();
+      if (samples.length > 15) samples.shift(); // about 30 s: keeps clock drift well under 1 ms
       clock = estimateOffset(samples);
     } else if (m.t === 'publisher') {
       publisherConnected = m.connected;
@@ -184,7 +184,7 @@ function frame() {
   setText(
     'debug',
     [
-      `offset ${clock ? clock.offset.toFixed(1) : '–'} ms · RTT min ${clock ? clock.rtt.toFixed(1) : '–'} ms (±${clock ? (clock.rtt / 2).toFixed(1) : '–'}) · samples ${clock?.samples ?? 0}`,
+      `offset ${clock ? clock.offset.toFixed(1) : '–'} ±${clock ? clock.bound.toFixed(1) : '–'} ms${clock && !clock.consistent ? ' (불일치)' : ''} · RTT min ${clock ? clock.rtt.toFixed(1) : '–'} ms · samples ${clock?.samples ?? 0}`,
       `change error n=${e.n} median|e| ${f(e.medianAbs)} ms · worst ${f(e.worstAbs)} ms · mean ${f(e.mean)} ms`,
       `reconnects ${reconnects}${lastOutageMs ? ` (last outage ${(lastOutageMs / 1000).toFixed(1)} s)` : ''} · hidden ${hiddenCount} · seq ${state?.seq ?? '–'}`,
     ].join('\n'),

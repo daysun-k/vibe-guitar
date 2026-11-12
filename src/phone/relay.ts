@@ -9,6 +9,7 @@
 import http from 'node:http';
 import os from 'node:os';
 import { createHash, randomBytes } from 'node:crypto';
+import type { AddressInfo } from 'node:net';
 import type { Duplex } from 'node:stream';
 import {
   MAX_MESSAGE_BYTES,
@@ -75,14 +76,20 @@ class Conn {
 
   constructor(
     private socket: Duplex,
-    head: Buffer,
     private onText: (text: string) => void,
     private onGone: () => void,
   ) {
     (socket as Duplex & { setNoDelay?: (on: boolean) => void }).setNoDelay?.(true);
-    socket.on('data', (chunk: Buffer) => this.feed(chunk));
     socket.on('close', () => this.gone());
     socket.on('error', () => this.gone());
+  }
+
+  /**
+   * Starts reading. Called only after the caller has stored this object, because frames that
+   * arrived together with the handshake (`head`) run the callbacks, which refer to it.
+   */
+  start(head: Buffer) {
+    this.socket.on('data', (chunk: Buffer) => this.feed(chunk));
     if (head.length) this.feed(head);
   }
 
@@ -105,7 +112,11 @@ class Conn {
       if (this.recent.length > MAX_MSGS_PER_SEC) return this.close(1008, 'rate limit');
       const text = decodeText(f.payload);
       if (text === null) return this.close(1007, 'invalid utf-8');
-      this.onText(text);
+      try {
+        this.onText(text);
+      } catch {
+        return this.close(1011, 'internal error');
+      }
     }
     if (r.error) this.close(r.error.code, r.error.reason);
   }
@@ -159,6 +170,15 @@ function acceptUpgrade(req: http.IncomingMessage, socket: Duplex): boolean {
   return true;
 }
 
+/** Parses a request target; null (= reject the request) instead of throwing on input like `//`. */
+export function parseRequestUrl(raw: string | undefined, base: string): URL | null {
+  try {
+    return new URL(raw ?? '/', base);
+  } catch {
+    return null;
+  }
+}
+
 function listen(server: http.Server, port: number, host: string): Promise<void> {
   return new Promise((resolve, rejectP) => {
     server.once('error', rejectP);
@@ -174,10 +194,10 @@ export async function startRelay(opts: RelayOptions): Promise<Relay> {
   const host = opts.host ?? pickLanAddress();
   if (!host) throw new Error('no private LAN IPv4 address found (is Wi-Fi on?); pass --host <ip>');
   if (host === '0.0.0.0' || host === '::') throw new Error('refusing to bind the viewer endpoint to all interfaces');
-  const port = opts.port ?? 47822;
-  const pubPort = opts.pubPort ?? 47821;
   const maxViewers = opts.maxViewers ?? 4;
-  const lanHost = `${host}:${port}`;
+  // Final values are read back after listen() so port 0 (any free port, used by tests) works.
+  let pubPort = opts.pubPort ?? 47821;
+  let lanHost = `${host}:${opts.port ?? 47822}`;
   const token = newToken();
 
   const viewers = new Set<Conn>();
@@ -200,7 +220,8 @@ export async function startRelay(opts: RelayOptions): Promise<Relay> {
     };
     if (!viewerHostAllowed({ host: req.headers.host, origin: undefined }, lanHost)) return deny(421, 'wrong host');
     if (req.method !== 'GET') return deny(405, 'method not allowed');
-    const url = new URL(req.url ?? '/', `http://${lanHost}`);
+    const url = parseRequestUrl(req.url, `http://${lanHost}`);
+    if (!url) return deny(400, 'bad request');
     if (url.pathname === '/viewer.js') {
       res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8', ...securityHeaders });
       return res.end(opts.viewerJs);
@@ -217,9 +238,20 @@ export async function startRelay(opts: RelayOptions): Promise<Relay> {
     });
     res.end(opts.viewerHtml);
   });
-  viewerServer.on('upgrade', (req: http.IncomingMessage, socket: Duplex, head: Buffer) => {
+  // A bug in a handler must reject that one request, never stop the relay process.
+  type UpgradeHandler = (req: http.IncomingMessage, socket: Duplex, head: Buffer) => void;
+  const guarded = (fn: UpgradeHandler): UpgradeHandler => (req, socket, head) => {
+    try {
+      fn(req, socket, head);
+    } catch (e) {
+      log(`upgrade handler error: ${(e as Error).message}`);
+      socket.destroy();
+    }
+  };
+  viewerServer.on('upgrade', guarded((req, socket, head) => {
     const info = { host: req.headers.host, origin: req.headers.origin };
-    const url = new URL(req.url ?? '/', `http://${lanHost}`);
+    const url = parseRequestUrl(req.url, `http://${lanHost}`);
+    if (!url) return reject(socket, 400, 'Bad Request');
     if (url.pathname !== '/viewer' || !viewerHostAllowed(info, lanHost)) return reject(socket, 404, 'Not Found');
     if (!viewerOriginAllowed(info, lanHost)) return reject(socket, 403, 'Forbidden');
     if (!tokenMatches(token, url.searchParams.get('t'))) {
@@ -230,7 +262,6 @@ export async function startRelay(opts: RelayOptions): Promise<Relay> {
     if (!acceptUpgrade(req, socket)) return;
     const conn: Conn = new Conn(
       socket,
-      head,
       (text) => {
         const m = validateViewerMessage(text);
         if (!m) return conn.close(1008, 'bad message');
@@ -247,16 +278,18 @@ export async function startRelay(opts: RelayOptions): Promise<Relay> {
     conn.send(JSON.stringify({ t: 'publisher', connected: publisher !== null }));
     if (lastState) conn.send(JSON.stringify(lastState));
     tellPublisherCount();
-  });
+    conn.start(head);
+  }));
 
   // ---------- publisher endpoint (loopback) ----------
   const pubServer = http.createServer((_req, res) => {
     res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8', ...securityHeaders });
     res.end('publisher endpoint: WebSocket only');
   });
-  pubServer.on('upgrade', (req: http.IncomingMessage, socket: Duplex, head: Buffer) => {
+  pubServer.on('upgrade', guarded((req, socket, head) => {
     const info = { host: req.headers.host, origin: req.headers.origin };
-    const url = new URL(req.url ?? '/', 'http://127.0.0.1');
+    const url = parseRequestUrl(req.url, 'http://127.0.0.1');
+    if (!url) return reject(socket, 400, 'Bad Request');
     if (url.pathname !== '/publish') return reject(socket, 404, 'Not Found');
     if (!publisherAllowed(info, pubPort, opts.extensionId)) {
       log(`publisher rejected (origin ${info.origin ?? 'none'})`);
@@ -266,7 +299,6 @@ export async function startRelay(opts: RelayOptions): Promise<Relay> {
     publisher?.close(4000, 'replaced by a newer publisher');
     const conn: Conn = new Conn(
       socket,
-      head,
       (text) => {
         const m = validatePublisherMessage(text);
         if (!m) return conn.close(1008, 'bad message');
@@ -288,15 +320,18 @@ export async function startRelay(opts: RelayOptions): Promise<Relay> {
     log(`publisher connected (${info.origin})`);
     toViewers(JSON.stringify({ t: 'publisher', connected: true }));
     tellPublisherCount();
-  });
+    conn.start(head);
+  }));
 
   await listen(pubServer, pubPort, '127.0.0.1');
+  pubPort = (pubServer.address() as AddressInfo).port;
   try {
-    await listen(viewerServer, port, host);
+    await listen(viewerServer, opts.port ?? 47822, host);
   } catch (e) {
     pubServer.close();
     throw e;
   }
+  lanHost = `${host}:${(viewerServer.address() as AddressInfo).port}`;
 
   const idle = setInterval(() => {
     const now = Date.now();
