@@ -270,9 +270,10 @@ export async function runPhoneCommand(cmd: PhoneCommand, player: ObservedPlayer,
 /**
  * A seek command (처음부터 to 0 or loop A, 이전 마디, 다음 마디) counts as done once one observation
  * taken after the seek was sent has the position p in
- *   target - BAR_EARLY_SEC <= p <= target + rate * elapsed + SEEK_SLACK_SEC
- * (rate: the current playback rate, 0 while paused; elapsed: seconds since just before the seek went
- * out), within CONTROL_OBSERVE_MS; otherwise the caller reports timeout. Nothing else is extrapolated.
+ *   target - BAR_EARLY_SEC <= p <= target + allowance + SEEK_SLACK_SEC
+ * where allowance starts at 0 just before the seek goes out and grows, per observation interval, by
+ * max(rate at the interval's start, rate at its end) x its length (rate 0 while paused). Within
+ * CONTROL_OBSERVE_MS; otherwise the caller reports timeout. Nothing else is extrapolated.
  * - The lower bound is the bar lookup's own BAR_EARLY_SEC: a position still in the bar before the
  *   target (a seek accepted but not applied, or observed early) never counts (S6-R12-01).
  * - The upper bound grows with what playback can have added since the seek, so a correct seek seen
@@ -283,12 +284,20 @@ export async function runPhoneCommand(cmd: PhoneCommand, player: ObservedPlayer,
  *   target now", which is then true.
  */
 export function landedAt(target: number, player: Pick<ObservedPlayer, 'position' | 'rate' | 'playing'>, now: () => number): () => boolean {
-  const sentAt = now();
+  const rateNow = () => (player.playing() ? player.rate() : 0);
+  // Playback progress the position may show since the seek: per observation interval, the larger of
+  // the rates at its two ends times its length (a rate change never rewrites progress already made).
+  let lastT = now();
+  let lastRate = rateNow();
+  let allowanceSec = 0;
   return () => {
-    const elapsedSec = Math.max(0, now() - sentAt) / 1000;
-    const rate = player.playing() ? player.rate() : 0;
+    const t = now();
+    const r = rateNow();
+    allowanceSec += (Math.max(lastRate, r) * Math.max(0, t - lastT)) / 1000;
+    lastT = t;
+    lastRate = r;
     const p = player.position();
-    return p >= target - BAR_EARLY_SEC && p <= target + rate * elapsedSec + SEEK_SLACK_SEC;
+    return p >= target - BAR_EARLY_SEC && p <= target + allowanceSec + SEEK_SLACK_SEC;
   };
 }
 

@@ -594,6 +594,23 @@ describe('runPhoneCommand: the outcome follows the observed player state', () =>
     expect(prev.calls).toEqual(['seek 0.01']);
   });
 
+  it('S6-R14-01: 0.5x -> 1x at 2.5 s with a dropped seek is not success (allowance follows the rate per interval)', async () => {
+    // Target 10 from 11.5: at 2.5 s the position is 12.75; real progress is 1.25 s, so the bound is ~11.6.
+    const opts = { playing: true, rate: 0.5, position: 11.5, noSeek: true, target10: true };
+    const f = fakePanel(opts);
+    f.schedule(2500, () => (opts.rate = 1));
+    expect(await f.run('restart')).toEqual({ ok: false, code: 'timeout' });
+  });
+
+  it('S6-R14-01: 2x -> 0.5x just before the first observation keeps the progress already made', async () => {
+    // The seek to 10 lands; the first observation (300 ms) shows 10.6 after 2x playback; the rate dropped at 290 ms.
+    const opts = { playing: true, rate: 2, position: 9, lagMs: 300, landAt: 10.61 };
+    const f = fakePanel(opts);
+    f.schedule(290, () => (opts.rate = 0.5));
+    expect(await f.run('next-bar')).toEqual({ ok: true, state: 'playing' });
+    expect(f.calls).toEqual(['seek 10.01']);
+  });
+
   it('S6-R13: the window: never below target - BAR_EARLY_SEC, above it only by what playback can have added', async () => {
     // Paused: a position 0.4 s past the target is not the seek's result.
     expect(await fakePanel({ position: 9, landAt: 10.41 }).run('next-bar')).toEqual({ ok: false, code: 'timeout' });

@@ -252,7 +252,8 @@ player. A command runs through the panel's own play button and bar-click seek (c
 "pause cancels the count-in" included), and the phone hears the outcome only after the panel saw the player
 change (up to 3 s); 처음부터, 이전 마디 and 다음 마디 count only once an observation after the seek has
 the position between 0.1 s before the target (the same 0.1 s the bar lookup uses, so a position still in the
-bar before never counts) and the target plus what playback can have added since the seek plus 0.35 s (so a
+bar before never counts) and the target plus what playback can have added since the seek (summed per
+observation interval at the higher of the speeds at its two ends) plus 0.35 s (so a
 correct seek seen late at a high speed counts). If a seek is dropped while playing and normal playback
 carries the position into that range before the 3 s are up, it counts as success: the position is then at
 the target. Only the panel
