@@ -7,7 +7,8 @@
  * VGT-16: with control allowed (setControl), it tells the relay, mirrors the relay's list of phones
  * and their pairing codes, sends the panel's 승인 / 거절 / 승인 해제, and checks every forwarded
  * command again (switch, grant, song revision, duplicate id, rate, one at a time) before handing it
- * to `onCommand`. The outcome goes back only over the same socket.
+ * to `onCommand`. The outcome goes back only over the same socket. A song change while a command runs
+ * aborts it with SONG_CHANGED, so it sends nothing further to the player (the phone hears `stale`).
  *
  * The panel alone decides who may control: it holds one grant {connection, number}, set only by its
  * own 승인 (with a new number) and cleared at once by every way control ends. The relay stamps each
@@ -35,6 +36,7 @@ import {
   type SongPartMessage,
 } from '../../phone/protocol';
 import type { SongView } from '../../phone/song-view';
+import { SONG_CHANGED } from './phone-control';
 
 export type PhoneStatus =
   | { kind: 'off' }
@@ -239,6 +241,11 @@ export class PhoneLink {
     const json = JSON.stringify(view ?? EMPTY_SONG);
     if (json === this.songJson) return;
     this.songJson = json;
+    // A command started for the previous song must not act on this one.
+    for (const r of [...this.running]) {
+      this.running.delete(r);
+      r.ctl.abort(SONG_CHANGED);
+    }
     this.o.clearTimer(this.songTimer);
     this.songTimer = this.o.setTimer(() => {
       this.songTimer = null;

@@ -187,7 +187,10 @@ export type CommandFailure =
   | 'off'
   /** This connection is not the approved phone. */
   | 'not-approved'
-  /** The song (or the panel) changed since the phone got it. */
+  /**
+   * The song (or the panel) changed since the phone got it, or the song or the player's tab changed
+   * while the command ran (nothing further was sent to the player).
+   */
   | 'stale'
   /** Request id already seen on this connection. */
   | 'duplicate'

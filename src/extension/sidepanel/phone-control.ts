@@ -8,9 +8,11 @@
  * content script answers before play/seek has actually happened, and a phone tap does not count as a
  * user gesture on the Mac's page: the browser's autoplay rule may keep the video paused.
  *
- * Authorization gate: the command's AbortSignal (aborted when the phone loses the right to control)
- * is checked immediately before every player command and count-in start the command causes; once it
- * is aborted nothing further is sent and the phone (if still connected) gets `cancelled`.
+ * Authorization gate: checked immediately before every player command and count-in start the command
+ * causes. It fails once the command's AbortSignal is aborted (the phone lost the right to control, or
+ * the song the phone saw changed) or once the panel's player target (song, tab, recording) is no
+ * longer the one captured when the command started. Then nothing further is sent, and the phone (if
+ * still connected) gets `cancelled` (control lost) or `stale` (song or tab changed).
  */
 import { CONTROL_OBSERVE_MS, type CommandFailure, type CommandOutcome, type PhoneCommand } from '../../phone/protocol';
 import type { PlayerControlResult } from '../messages';
@@ -24,8 +26,11 @@ export interface ObservedPlayer {
   position(): number;
   rate(): number;
   isAd(): boolean;
-  /** A song is shown and the player it plays in may be controlled from this panel. */
-  hasTarget(): boolean;
+  /**
+   * Which song and player commands would act on right now (demo, or tab + recording + chart), or null
+   * when no song is shown or its player may not be controlled from this panel.
+   */
+  target(): string | null;
 }
 
 export type { TransportResult };
@@ -62,6 +67,9 @@ export interface RunOptions {
 
 const fail = (code: CommandFailure): CommandOutcome => ({ ok: false, code });
 
+/** The AbortSignal reason PhoneLink uses when the song the phone saw changed. */
+export const SONG_CHANGED: CommandFailure = 'stale';
+
 /** A seek landed this close before its target counts (players round to frames). */
 export const SEEK_EARLY_SEC = 0.35;
 /** ... and at most this far after it (observed, never extrapolated from the rate). */
@@ -70,12 +78,32 @@ export const SEEK_LATE_SEC = 0.6;
 const LANDED_SAMPLES = 2;
 
 /** Pauses the player if it plays (e.g. started on the Mac during a count-in) and reports what it shows. */
-async function settlePaused(player: ObservedPlayer, transport: PanelTransport, allowed: () => boolean, observeMs: number, pollMs: number, now: () => number, sleep: (ms: number) => Promise<void>): Promise<CommandOutcome> {
+async function settlePaused(player: ObservedPlayer, transport: PanelTransport, g: Gate, observeMs: number, pollMs: number, now: () => number, sleep: (ms: number) => Promise<void>): Promise<CommandOutcome> {
   if (!player.playing()) return { ok: true, state: 'paused' };
-  const r = await transport.toggle(() => {}, allowed);
-  if (r.cancelled) return fail('cancelled');
+  const r = await transport.toggle(() => {}, g.allowed);
+  if (r.cancelled) return g.refused();
   if (!r.ok) return fail('failed');
-  return (await waitUntil(() => !player.playing(), observeMs, pollMs, now, sleep)) ? { ok: true, state: 'paused' } : fail('timeout');
+  if (await waitUntil(() => g.moved() || !player.playing(), observeMs, pollMs, now, sleep)) return g.moved() ? fail('stale') : { ok: true, state: 'paused' };
+  return fail('timeout');
+}
+
+interface Gate {
+  /** The authorization gate (see the file comment). */
+  allowed: () => boolean;
+  /** The song or player target changed since the command started (what is observed is another song's). */
+  moved: () => boolean;
+  /** The failure to report once the gate failed. */
+  refused: () => CommandOutcome;
+}
+
+function gate(player: ObservedPlayer, signal: AbortSignal | undefined): Gate {
+  const start = player.target();
+  const moved = () => player.target() !== start || (!!signal?.aborted && signal.reason === SONG_CHANGED);
+  return {
+    allowed: () => !signal?.aborted && !moved(),
+    moved,
+    refused: () => fail(moved() ? 'stale' : 'cancelled'),
+  };
 }
 
 /** Polls `pred` until it holds or `ms` passed. */
@@ -105,18 +133,18 @@ export async function runPhoneCommand(cmd: PhoneCommand, player: ObservedPlayer,
   const sleep = o.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const observeMs = o.observeMs ?? CONTROL_OBSERVE_MS;
   const pollMs = o.pollMs ?? 50;
-  /** The authorization gate (see the file comment). */
-  const allowed = () => !o.signal?.aborted;
-  if (!allowed()) return fail('cancelled');
+  const g = gate(player, o.signal);
+  const { allowed } = g;
+  if (!allowed()) return g.refused();
   if (player.isAd()) return fail('ad');
-  if (!player.hasTarget()) return fail('no-target');
+  if (player.target() === null) return fail('no-target');
 
   if (cmd === 'toggle') {
     // Pause during a count-in cancels it. The player itself may still play (started on the Mac
     // meanwhile): then it is paused as well, and only an observed pause is reported.
     if (player.countingIn()) {
       await transport.toggle(() => {}, allowed);
-      return settlePaused(player, transport, allowed, observeMs, pollMs, now, sleep);
+      return settlePaused(player, transport, g, observeMs, pollMs, now, sleep);
     }
     const want = !player.playing();
     let countIn = false;
@@ -135,20 +163,20 @@ export async function runPhoneCommand(cmd: PhoneCommand, player: ObservedPlayer,
     } finally {
       o.signal?.removeEventListener('abort', onAbort);
     }
-    if (r.cancelled) return allowed() ? { ok: true, state: player.playing() ? 'playing' : 'paused' } : fail('cancelled');
+    if (r.cancelled) return allowed() ? { ok: true, state: player.playing() ? 'playing' : 'paused' } : g.refused();
     if (!r.ok) return fail('failed');
-    if (await waitUntil(() => player.playing() === want, observeMs, pollMs, now, sleep)) return { ok: true, state: want ? 'playing' : 'paused' };
+    if (await waitUntil(() => g.moved() || player.playing() === want, observeMs, pollMs, now, sleep)) return g.moved() ? fail('stale') : { ok: true, state: want ? 'playing' : 'paused' };
     return fail(want ? 'autoplay' : 'timeout');
   }
 
   const target = transport.restartTarget();
   if (target === null) return fail('no-target');
   // seek() sends synchronously, so this is the check immediately before the seek goes out.
-  if (!allowed()) return fail('cancelled');
+  if (!allowed()) return g.refused();
   const r = await transport.seek(target);
   if (!r.ok) return fail('failed');
   const landed = landedAt(target, player);
-  if (await waitUntil(landed, observeMs, pollMs, now, sleep)) return { ok: true, state: player.playing() ? 'playing' : 'paused' };
+  if (await waitUntil(() => g.moved() || landed(), observeMs, pollMs, now, sleep)) return g.moved() ? fail('stale') : { ok: true, state: player.playing() ? 'playing' : 'paused' };
   return fail('timeout');
 }
 

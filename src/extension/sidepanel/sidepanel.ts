@@ -119,7 +119,9 @@ let lyrics: Lyrics | null = null;
 let lyricsNote = '';
 const lyricsAsker = new LyricsAsker();
 /** Demo playback: a simulated clock replaying a stored or synthetic chart. */
-let demo: { clock: DemoClock; chart: Chart; lyrics: Lyrics | null; key: string } | null = null;
+/** `run` tells one demo playback from the next (a phone command never follows into another one). */
+let demo: { clock: DemoClock; chart: Chart; lyrics: Lyrics | null; key: string; run: number } | null = null;
+let demoRuns = 0;
 /** Count-in in progress (cancelled by pressing play again or seeking). */
 let countInRun = 0;
 let countingIn = false;
@@ -1284,7 +1286,7 @@ async function startDemo(preferKey?: string): Promise<void> {
   const rate = Number(params.get('rate'));
   if (isPracticeRate(rate)) clock.rate = rate;
   clearLoop(); // a loop belongs to one playback: the real player's or one demo's
-  demo = { clock, chart: pick.chart, lyrics: await demoLyricsFor(pick.chart), key: pick.key };
+  demo = { clock, chart: pick.chart, lyrics: await demoLyricsFor(pick.chart), key: pick.key, run: ++demoRuns };
   $('demo-bar').hidden = false;
   showTab('play');
   closeSheet();
@@ -1340,7 +1342,13 @@ const phonePlayer: ObservedPlayer = {
   position: () => positionNow(false),
   rate: currentRate,
   isAd: () => !demo && !!player?.isAd,
-  hasTarget: () => !!model && (!!demo || (!!player && hasChrome && controlTabId(playerTabId, activeTabId) !== null)),
+  // The same tab sendControl would use, so an unchanged target means the same tab gets the command.
+  target: () => {
+    if (!model) return null;
+    if (demo) return JSON.stringify(['demo', demo.run, demo.key]);
+    const tab = player && hasChrome ? controlTabId(playerTabId, activeTabId) : null;
+    return tab === null ? null : JSON.stringify(['tab', tab, recordingKey(player!.recording), chartKey]);
+  },
 };
 
 /** countInRun of the count-in the phone started (cancelCountIn stops only that one). */

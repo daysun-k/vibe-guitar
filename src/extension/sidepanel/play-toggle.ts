@@ -2,10 +2,11 @@
  * The play button's steps (pause; or loop-start seek and play; or count-in preparation, beats and
  * play), apart from the panel's DOM so they can be tested with a fake player.
  *
- * VGT-16: a phone command passes `allowed`, its one authorization gate. It is checked immediately
- * before every player command (pause, seek, play) and before the count-in starts; once it fails,
- * nothing further reaches the player and the result is `cancelled`. The panel's own button passes
- * nothing and is never gated.
+ * VGT-16: a phone command passes `allowed`, its one authorization gate (control still held, and the
+ * same song and player target as when the command started). It is checked immediately before every
+ * player command (pause, seek, play) and before the count-in starts; once it fails, nothing further
+ * reaches the player and the result is `cancelled`. The panel's own button passes nothing and is
+ * never gated.
  */
 import type { PlayerControlMessage, PlayerControlResult } from '../messages';
 import { prepareCountIn, runCountIn } from './countin-prep';
@@ -79,7 +80,7 @@ export async function playToggle(env: PlayToggleEnv, o: { onCountIn?: () => void
         return s;
       }
     }
-    // Checked again after the seek's reply: approval may have ended while it was pending.
+    // Checked again after the seek's reply: approval may have ended, or the song or tab changed, meanwhile.
     const r = await send({ type: 'player-control', action: 'play' });
     if (!r.ok && !r.cancelled) env.status(`이 플레이어는 패널에서 재생할 수 없어요 (${why(r)}).`);
     return r;
