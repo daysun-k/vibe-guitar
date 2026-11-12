@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import type { Chart, Provenance } from '../src/chart/types';
 import { accuracyExport, accuracyOverview, accuracyTotals, type AccuracyPair } from '../src/eval/overview';
 import {
+  MAX_CHANGES,
   REPORT_CONFIDENT_CHANGES,
   ReportInputError,
   barChartSvg,
@@ -53,6 +54,36 @@ describe('accuracy report: input validation', () => {
     const bad = exported([songA]);
     (bad.rows as Record<string, unknown>[])[0].majmin = { score: 'high' };
     expect(() => parseAccuracyExport(bad, 'x.json')).toThrow(/1번째 곡의 majmin/);
+  });
+
+  it('rejects out-of-range scores and counts with the same clear message, never a RangeError', () => {
+    const withRow = (patch: Record<string, unknown>, at = 0) => {
+      const v = exported([songA, songC]);
+      Object.assign((v.rows as Record<string, unknown>[])[at], patch);
+      return () => parseAccuracyExport(v, 'x.json');
+    };
+    const clear = /x\.json: 정확도 모아 보기의 "결과 내보내기" 파일이 아니에요/;
+    for (const bad of [
+      withRow({ majmin: { score: 1.2, evaluatedSec: 10 } }),
+      withRow({ root: { score: -0.1, evaluatedSec: 10 } }),
+      withRow({ sevenths: { score: 0.5, evaluatedSec: -1 } }),
+      withRow({ timing: { medianOffsetMs: 100, matched: -3, unmatched: 0 } }),
+      withRow({ timing: { medianOffsetMs: 100, matched: 2, unmatched: -1 } }),
+      withRow({ timing: { medianOffsetMs: 100, matched: 1.5, unmatched: 0 } }),
+      withRow({ timing: { medianOffsetMs: 100, matched: 1e12, unmatched: 0 } }),
+      withRow({ timing: { medianOffsetMs: 100, matched: MAX_CHANGES, unmatched: 1 } }),
+      // An edited row's timing is checked too, even though the report then ignores it.
+      withRow({ timing: { medianOffsetMs: 0, matched: -1, unmatched: 0 } }, 1),
+      withRow({ manualEvents: 30, events: 16 }),
+    ]) {
+      expect(bad).toThrow(ReportInputError);
+      expect(bad).toThrow(clear);
+    }
+    const totals = exported([songA]);
+    ((totals.totals as Record<string, Record<string, unknown>>).manual).timing = { medianOffsetMs: 1, matched: -1, unmatched: 0 };
+    expect(() => parseAccuracyExport(totals, 'x.json')).toThrow(/totals\.manual timing/);
+    // Edge values stay valid.
+    expect(withRow({ majmin: { score: 0, evaluatedSec: 0 }, root: { score: 1, evaluatedSec: 32 }, sevenths: { score: null, evaluatedSec: 0 } })).not.toThrow();
   });
 
   it('copies only known numbers and names, so nothing extra (such as lyrics) reaches the report', () => {
@@ -152,6 +183,21 @@ describe('accuracy report: HTML', () => {
     const notes = meaningNotes(t, 0).join('\n');
     expect(notes).toContain('메이저인지 마이너인지');
     expect(notes).toContain('7th 포함 정확도');
+  });
+
+  it('an edited-only report says its headline is the edited charts and does not claim they were left out', () => {
+    const only = renderAccuracyReport(mergeExports([parsed([songC])]), { generatedAt: new Date('2026-11-12T00:00:00Z') });
+    const headline = only.slice(only.indexOf('한눈에 보기'), only.indexOf('추천 싱크 오프셋'));
+    expect(headline).toContain('고친 코드표 1곡 기준');
+    expect(headline).toContain('실제보다 높게 나와요');
+    expect(headline).toContain('75%'); // the edited chart's 장·단 score is the headline
+    expect(only).not.toContain('큰 숫자에는 넣지 않고');
+    expect(only).toContain('위의 큰 숫자는 고친 코드표 1곡으로만 계산했어요');
+    // With a hand-made chart present, the edited one is left out of the headline and the text says so.
+    expect(html).toContain('큰 숫자에는 넣지 않고');
+    const mixed = mergeExports([parsed([songA, songC])]).overview;
+    expect(meaningNotes(mixed.totals.manual, 1).join('')).toContain('큰 숫자에는 넣지 않고');
+    expect(meaningNotes(mixed.totals.edited, 1, true).join('')).not.toContain('큰 숫자에는 넣지 않고');
   });
 
   it('escapes song names', () => {

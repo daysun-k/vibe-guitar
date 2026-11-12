@@ -33,21 +33,23 @@ type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !Array.isArray(v);
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const isCount = (v: unknown): v is number => isNum(v) && Number.isInteger(v) && v >= 0;
+/** More chord changes than any real song (one every 0.1 s for over 2 hours): larger counts are not an export. */
+export const MAX_CHANGES = 100_000;
 
 function notExport(name: string, why: string): ReportInputError {
   return new ReportInputError(`${name}: 정확도 모아 보기의 "결과 내보내기" 파일이 아니에요 (${why}).`);
 }
 
 function wcsrFrom(v: unknown, name: string, where: string): WcsrResult {
-  if (!isObj(v) || !(v.score === null || isNum(v.score)) || !(isNum(v.evaluatedSec) && v.evaluatedSec >= 0))
-    throw notExport(name, `${where} 값이 올바르지 않아요`);
+  if (!isObj(v) || !(v.score === null || (isNum(v.score) && v.score >= 0 && v.score <= 1)) || !(isNum(v.evaluatedSec) && v.evaluatedSec >= 0))
+    throw notExport(name, `${where} 값이 올바르지 않아요 (score는 0~1 또는 null, evaluatedSec는 0 이상이어야 해요)`);
   return { score: v.score === null ? NaN : v.score, evaluatedSec: v.evaluatedSec };
 }
 
 function timingFrom(v: unknown, name: string, where: string): ChangeTiming | null {
   if (v === null) return null;
-  if (!isObj(v) || !(v.medianOffsetMs === null || isNum(v.medianOffsetMs)) || !isCount(v.matched) || !isCount(v.unmatched))
-    throw notExport(name, `${where} timing 값이 올바르지 않아요`);
+  if (!isObj(v) || !(v.medianOffsetMs === null || isNum(v.medianOffsetMs)) || !isCount(v.matched) || !isCount(v.unmatched) || v.matched + v.unmatched > MAX_CHANGES)
+    throw notExport(name, `${where} timing 값이 올바르지 않아요 (matched와 unmatched는 0 이상의 정수, 합계 ${MAX_CHANGES}개 이하여야 해요)`);
   return { medianMs: v.medianOffsetMs === null ? NaN : v.medianOffsetMs, matched: v.matched, unmatched: v.unmatched };
 }
 
@@ -67,9 +69,11 @@ function rowFrom(v: unknown, name: string, i: number): AccuracyRow {
   if (typeof v.id !== 'string' || !v.id) throw notExport(name, `${where}에 id가 없어요`);
   if (v.referenceKind !== 'manual' && v.referenceKind !== 'edited') throw notExport(name, `${where}의 referenceKind가 올바르지 않아요`);
   if (v.referenceFrom !== 'main' && v.referenceFrom !== 'backup') throw notExport(name, `${where}의 referenceFrom이 올바르지 않아요`);
-  if (!isCount(v.manualEvents) || !isCount(v.events) || !(isNum(v.overlapSec) && v.overlapSec >= 0))
+  if (!isCount(v.manualEvents) || !isCount(v.events) || v.manualEvents > v.events || !(isNum(v.overlapSec) && v.overlapSec >= 0))
     throw notExport(name, `${where}의 숫자 값이 올바르지 않아요`);
-  const timing = v.referenceKind === 'manual' ? timingFrom(v.timing, name, where) : null;
+  // Validated for every row; an edited reference's timing is then dropped (its times are the auto chart's).
+  const parsedTiming = timingFrom(v.timing, name, where);
+  const timing = v.referenceKind === 'manual' ? parsedTiming : null;
   // Only known fields are copied: anything else in the file (it has no lyrics or audio) is dropped.
   return {
     source: v.source as RecordingSource,
@@ -287,7 +291,8 @@ function syncSection(a: SyncAdvice, timingExact: boolean): string {
 }
 
 /** Plain-language reading of the totals for a beginner. */
-export function meaningNotes(t: AccuracyTotals, editedSongs: number): string[] {
+/** editedInHeadline: the headline is the edited charts themselves (no hand-made chart in the report). */
+export function meaningNotes(t: AccuracyTotals, editedSongs: number, editedInHeadline = false): string[] {
   const notes: string[] = [];
   const mm = t.majmin.score;
   const root = t.root.score;
@@ -310,7 +315,9 @@ export function meaningNotes(t: AccuracyTotals, editedSongs: number): string[] {
     if (Math.abs(ms) < 50) notes.push(`코드가 바뀌는 시점은 자동 코드표와 직접 만든 코드표가 거의 같아요(중앙값 ${signed(ms)} ms).`);
     else notes.push(`자동 코드표가 코드를 보통 ${Math.abs(ms)} ms ${ms > 0 ? '늦게' : '일찍'} 바꿔요. 위의 추천 싱크 오프셋으로 맞출 수 있어요.`);
   }
-  if (editedSongs)
+  if (editedSongs && editedInHeadline)
+    notes.push(`위의 큰 숫자는 고친 코드표 ${editedSongs}곡으로만 계산했어요. 고친 코드표는 손대지 않은 코드와 시간이 자동 코드표 그대로라서 일치율이 실제보다 높게 나와요. 직접 만든 코드표가 있는 곡을 더하면 더 믿을 수 있는 숫자가 나와요.`);
+  else if (editedSongs)
     notes.push(`고친 코드표 ${editedSongs}곡은 손대지 않은 코드와 시간이 자동 코드표 그대로라서 일치율이 실제보다 높게 나와요. 그래서 위의 큰 숫자에는 넣지 않고 따로 보여 드려요.`);
   return notes;
 }
@@ -369,7 +376,7 @@ export function renderAccuracyReport(m: MergedAccuracy, opts: ReportOptions): st
   const o = m.overview;
   const manual = o.totals.manual;
   const headline = manual.songs ? manual : o.totals.all;
-  const headlineLabel = manual.songs ? `직접 만든 코드표 ${manual.songs}곡 기준` : `고친 코드표 ${o.totals.edited.songs}곡 기준 (직접 만든 코드표가 없어요)`;
+  const headlineLabel = manual.songs ? `직접 만든 코드표 ${manual.songs}곡 기준` : `고친 코드표 ${o.totals.edited.songs}곡 기준 (직접 만든 코드표가 없어서 고친 코드표로 계산했어요. 실제보다 높게 나와요)`;
   const rows = [...o.rows].sort((a, b) => (a.referenceKind === b.referenceKind ? 0 : a.referenceKind === 'manual' ? -1 : 1));
   const date = (iso: string) => escapeHtml(iso.slice(0, 10));
   const parts: string[] = [];
@@ -398,7 +405,7 @@ export function renderAccuracyReport(m: MergedAccuracy, opts: ReportOptions): st
       `<section class="card"><h2>곡별 장·단 정확도</h2>${barChartSvg(rows)}${o.totals.edited.songs ? '<p class="muted small">연한 막대는 고친 코드표예요(실제보다 높게 나와요).</p>' : ''}</section>`,
     );
     parts.push(`<section class="card"><h2>곡별 결과</h2>${songTable(rows)}<p class="muted small">바뀌는 시점: 자동 코드표가 코드를 바꾼 순간 − 직접 만든 코드표가 바꾼 순간의 중앙값. 양수면 자동이 늦어요.</p></section>`);
-    parts.push(`<section class="card"><h2>이 숫자가 뜻하는 것</h2><ul class="notes">${meaningNotes(headline, o.totals.edited.songs).map((n) => `<li>${n}</li>`).join('')}</ul></section>`);
+    parts.push(`<section class="card"><h2>이 숫자가 뜻하는 것</h2><ul class="notes">${meaningNotes(headline, o.totals.edited.songs, !manual.songs).map((n) => `<li>${n}</li>`).join('')}</ul></section>`);
   }
   parts.push(
     `<section class="card small"><h2>용어와 계산 방법</h2><dl class="glossary"><dt>장·단 코드 이름</dt><dd>C와 Cm처럼 메이저·마이너까지 맞아야 맞은 것으로 쳐요. 연주에 가장 중요한 숫자예요.</dd><dt>근음</dt><dd>코드의 뿌리음(C, G, A …)만 맞으면 맞은 것으로 쳐요.</dd><dt>7th 포함</dt><dd>G7, Am7 같은 7th까지 구분해서 맞아야 맞은 것으로 쳐요.</dd><dt>비교한 시간</dt><dd>두 코드표가 모두 코드를 적어 둔 시간이에요. 길수록 숫자를 더 믿을 수 있어요.</dd></dl><p class="muted">입력 파일: ${m.inputs.map((i) => `${escapeHtml(i.name)} (${date(i.exportedAt)}, ${i.songs}곡)`).join(', ')}. 코드 변화 맞춤 범위 ±${m.changeWindowsSec.map((s) => escapeHtml(String(s))).join(' / ')}초.${m.changeWindowsSec.length > 1 ? ' 파일마다 맞춤 범위가 달라서 바뀌는 시점은 비교하기 어려울 수 있어요.' : ''}</p></section>`,
