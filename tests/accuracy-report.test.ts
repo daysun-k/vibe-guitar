@@ -86,6 +86,19 @@ describe('accuracy report: input validation', () => {
     expect(withRow({ majmin: { score: 0, evaluatedSec: 0 }, root: { score: 1, evaluatedSec: 32 }, sevenths: { score: null, evaluatedSec: 0 } })).not.toThrow();
   });
 
+  it('rejects a negative or non-finite changeWindowSec from a hand-edited export with the same clear message', () => {
+    const withWindow = (w: unknown) => () => parseAccuracyExport({ ...exported([songA]), changeWindowSec: w }, 'x.json');
+    const clear = /x\.json: 정확도 모아 보기의 "결과 내보내기" 파일이 아니에요 \(changeWindowSec 값이 올바르지 않아요 \(0 이상의 숫자여야 해요\)\)/;
+    for (const w of [-0.5, -1e-9, Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY, Number.NaN, '0.3']) {
+      expect(withWindow(w)).toThrow(ReportInputError);
+      expect(withWindow(w)).toThrow(clear);
+    }
+    expect(withWindow(undefined)).toThrow(/changeWindowSec가 없어요/);
+    // A normal export's window and the edge value 0 stay valid.
+    expect(parsed([songA]).changeWindowSec).toBeGreaterThanOrEqual(0);
+    expect(withWindow(0)).not.toThrow();
+  });
+
   it('copies only known numbers and names, so nothing extra (such as lyrics) reaches the report', () => {
     const v = exported([songA]);
     (v.rows as Record<string, unknown>[])[0].lyrics = '비밀 가사 한 줄';

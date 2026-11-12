@@ -101,7 +101,9 @@ export function parseAccuracyExport(value: unknown, name: string): ParsedExport 
   if (value.format !== EXPORT_FORMAT) throw notExport(name, `format이 "${EXPORT_FORMAT}"가 아니에요`);
   if (value.version !== 1) throw notExport(name, `지원하지 않는 version ${JSON.stringify(value.version)}`);
   if (typeof value.exportedAt !== 'string' || Number.isNaN(Date.parse(value.exportedAt))) throw notExport(name, 'exportedAt 날짜가 없어요');
-  if (!isNum(value.changeWindowSec)) throw notExport(name, 'changeWindowSec가 없어요');
+  if (value.changeWindowSec === undefined || value.changeWindowSec === null) throw notExport(name, 'changeWindowSec가 없어요');
+  // Normal exports always carry a finite window >= 0; a hand-edited file may not.
+  if (!isNum(value.changeWindowSec) || value.changeWindowSec < 0) throw notExport(name, 'changeWindowSec 값이 올바르지 않아요 (0 이상의 숫자여야 해요)');
   if (!Array.isArray(value.rows)) throw notExport(name, 'rows 목록이 없어요');
   const rows = value.rows.map((r, i) => rowFrom(r, name, i));
   const totals = value.totals;

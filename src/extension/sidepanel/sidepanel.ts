@@ -65,7 +65,7 @@ import { ChordFixer } from './fix';
 import { OVERVIEW_EMPTY, renderOverviewHtml } from './overview';
 import { capoReason, unplayableLine, PlayScreen, formatTime, type LoopMarks } from './play';
 import { PhoneLink, phoneStatusText, type PhoneStatus, type PlaybackSample } from './phone-link';
-import { ShownModel, modelSongId, playerTargetKey, songIdOf, songViewReady, type TargetParts, restartTargetSec, barStepTargetSec, runPhoneCommand, type CommandContext, type ObservedPlayer, type PanelTransport } from './phone-control';
+import { ShownModel, modelSongId, playerTargetKey, songIdOf, songViewReady, type TargetParts, restartTargetSec, barStepTargetSec, runPhoneCommand, panelClock, type CommandContext, type ObservedPlayer, type PanelTransport, type WrapSample } from './phone-control';
 import type { CommandOutcome, PhoneCommand, PhoneEntry } from '../../phone/protocol';
 import { buildSongView } from '../../phone/song-view';
 
@@ -1076,7 +1076,7 @@ function stopCountIn(): void {
 
 async function seekTo(sec: number): Promise<PlayerControlResult> {
   stopCountIn();
-  jumper.seeked(Math.max(0, sec), Date.now());
+  jumper.seeked(Math.max(0, sec), panelClock());
   const r = await sendControl({ type: 'player-control', action: 'seek', time: Math.max(0, sec) });
   if (!r.ok) setText('countin-status', `이동하지 못했어요 (${r.reason ?? '알 수 없음'}).`);
   else setText('countin-status', '');
@@ -1115,7 +1115,7 @@ const playToggleEnv: PlayToggleEnv = {
   },
   loopStartOutside: () => (practiceLoop && !insideLoop(practiceLoop, positionNow(false)) ? loopStartTarget(practiceLoop) : null),
   rate: currentRate,
-  seeked: (sec) => jumper.seeked(sec, Date.now()),
+  seeked: (sec) => jumper.seeked(sec, panelClock()),
   status: (text) => setText('countin-status', text),
   beat: (left, accent) => {
     $('countin').querySelector('b')!.textContent = String(left);
@@ -1258,17 +1258,19 @@ function syncLoop(): void {
 }
 
 /** The position observed just before the last loop jump back to A, and when (see ObservedPlayer.wrapSample). */
-let loopWrap: { at: number; position: number } | null = null;
+let loopWrap: WrapSample | null = null;
 
 /** Jumps back to A when playback crossed the end of B (decided from the observed position). */
 function checkLoop(): void {
   if (!jumper.active || countingIn) return;
   const positionSec = positionNow(false);
-  const nowMs = Date.now();
+  // Monotonic, like the seek-sent time a phone command compares the wrap with (S6-R15-02).
+  const nowMs = panelClock();
   const target = jumper.observe({ positionSec, playing: isPlaying(), isAd: !demo && !!player?.isAd, nowMs });
   if (target === null) return;
   // A phone seek command still waiting for its outcome may have landed before this jump (S6-R14-02).
-  loopWrap = { at: nowMs, position: positionSec };
+  // Bound to the player target it was taken for: a command for another tab or song never takes it.
+  loopWrap = { at: nowMs, position: positionSec, target: phonePlayer.target() };
   lastT = -10;
   void sendControl({ type: 'player-control', action: 'seek', time: target }).then((r) => {
     if (!r.ok) setText('countin-status', `반복 구간 처음으로 돌아가지 못했어요 (${r.reason ?? '알 수 없음'}).`);
