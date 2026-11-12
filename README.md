@@ -4,9 +4,11 @@ Personal tool: while a song plays on YouTube / YouTube Music / Apple Music (desk
 show time-synced acoustic guitar chords, fingering diagrams, and skill-level arrangements
 (easier voicings, capo, strumming suggestions).
 
-Personal use only; not distributed. Audio never leaves the browser. The only off-device request
-is the optional lyrics lookup: song title, artist and duration go to [LRCLIB](https://lrclib.net),
-once per recording (setting "가사 가져오기", on by default).
+Personal use only; not distributed. Audio never leaves the browser. Besides the optional lyrics lookup
+(song title, artist and duration go to [LRCLIB](https://lrclib.net), once per recording; setting
+"가사 가져오기", on by default), data leaves the browser only when "휴대폰 악보대" is on (off by default):
+then the shown chords, bars and playback position go through a relay on this Mac (`npm run phone`) to a
+phone on the local network. Audio and lyrics never do. See [Phone music stand](#phone-music-stand-휴대폰-악보대).
 
 - Proposal: [docs/proposal.md](docs/proposal.md)
 - Phase 0 manual checklist: [docs/phase0-test-checklist.md](docs/phase0-test-checklist.md)
@@ -15,7 +17,8 @@ once per recording (setting "가사 가져오기", on by default).
 
 A Chrome MV3 extension driven by hand-made chord charts, plus listening mode: in-browser beat/downbeat
 and chord recognition on the captured tab audio (slice 2). No server; audio never leaves the browser.
-The only runtime network call is the lyrics lookup described in [Lyrics](#lyrics-lrclib).
+The only runtime network calls are the lyrics lookup described in [Lyrics](#lyrics-lrclib) and, when turned
+on, the loopback connection to the [phone music stand](#phone-music-stand-휴대폰-악보대) relay.
 
 | Path | What |
 |---|---|
@@ -27,6 +30,8 @@ The only runtime network call is the lyrics lookup described in [Lyrics](#lyrics
 | `src/music/` | Key estimation + key-aware spelling (`key.ts`), big beats for compound meter and bar-phase correction (`meter.ts`) |
 | `src/lyrics/` | LRCLIB client and parsers (`lrclib.ts`), lyric↔chart offset, chord-over-word placement, pinned line (`align.ts`) |
 | `src/play/` | Play-view model (`model.ts`), lane/sections/strip (`lane.ts`), demo clock and synthetic demo song (`demo.ts`) |
+| `src/phone/` | Phone music stand: song view (`song-view.ts`), wire protocol and timing (`protocol.ts`), relay (`relay.ts`), WebSocket frames, QR encoder, phone page (`viewer.ts/html`) |
+| `scripts/phone.mjs`, `scripts/phone-check.mjs` | `npm run phone` (relay + QR) and `npm run phone-check` (scripted relay checks) |
 | `src/eval/metrics.ts` | WCSR (majmin/root/sevenths), beat F-measure, chart-vs-chart comparison |
 | `src/bench/` | Synthetic labeled set and benchmark core (Node script and in-extension bench page) |
 | `scripts/fetch-models.mjs` | Downloads the pinned models (sha256-checked) into `models/` (gitignored) |
@@ -164,6 +169,55 @@ steps) and keeps the shift with the most chord changes within ±0.15 s of a word
 total distance). The shift is used only when it beats the unshifted lyrics by 3+ changes and the scan's
 median (chance level) by 25 % and 4+ changes; otherwise it stays 0.
 
+## Phone music stand (휴대폰 악보대)
+
+Stand a phone next to the guitar like a music stand: it shows the current chord and the next one side by
+side with their diagrams, the big beats left until the change, the bar/section and "카포 N 모양" when a capo
+is used, while the song plays on the Mac. Portrait and landscape both work.
+
+**Run it**
+
+1. `npm run build`, reload the extension, then in the panel: 연주 설정 › **휴대폰 악보대** on. The sheet shows
+   연결 안 됨 / 연결됨 · 휴대폰 n대.
+2. In a terminal in this repository: `npm run phone`. It prints a QR code and `http://192.168.x.x:47822/?t=…`.
+   The first time, macOS may ask whether node may accept incoming connections: allow it (or later in System
+   Settings › Network › Firewall › Options). Wrong Wi-Fi address picked: `npm run phone -- --host 192.168.x.x`.
+3. Put the phone on **the same home Wi-Fi** and scan the QR code (or type the address).
+4. Turn off the phone's auto-lock while playing (the page says so once): plain http on the home network cannot
+   use the browser's keep-screen-on feature. iPhone: 설정 › 디스플레이 및 밝기 › 자동 잠금 › 안 함; Android:
+   설정 › 디스플레이 › 화면 자동 꺼짐. Turn it back afterwards.
+5. Stop with **Ctrl+C** in the terminal, or switch 휴대폰 악보대 off (the panel then never connects). Each run
+   makes a new token, so scan the new QR code after a restart.
+
+**What is sent, and where.** The side panel (a visible extension page; it exists only while the panel is open)
+connects to `ws://127.0.0.1:47821/publish` on this Mac. It sends a *song view* built from the same play model
+the panel draws (arranged chord events with the same shape names and diagram fingerings, sounding names, bars,
+section names such as "1절"/"후렴", the beat grid, capo, the 실제 음 이름 보기 setting, title and artist) and
+small *anchors* (position, rate, paused, ad, loop range, sequence number, sampling time) on every play/pause,
+seek, rate, ad or loop change and once a second. Never sent: audio, lyrics, chart history, drafts or storage
+keys. The relay keeps only the latest song view and anchor in memory, forwards them to the phone and writes
+nothing to disk. The phone extrapolates `position + rate × elapsed` from the anchor, using a clock offset it
+measures with pings to the relay, and holds the chord while paused (shows "광고 중" during ads).
+
+**Security choices.** The publisher port listens on `127.0.0.1` only and accepts only a WebSocket whose `Host`
+is the loopback address and whose `Origin` is this extension (by default the id Chrome gives an unpacked
+extension loaded from this repository's `dist/` folder; `--extension-id <id>` for another folder,
+`--any-extension` to accept any Chrome extension on this Mac). The phone port listens on one LAN IPv4
+address (never `0.0.0.0`) and needs a per-run 128-bit token from the QR URL on both the page and its
+WebSocket, plus an exact `Host` (DNS rebinding) and `Origin` match. The token is access control, **not
+encryption**: traffic is plain http, so use it only on a trusted home Wi-Fi, not on public Wi-Fi. Frames over
+8 KiB, malformed or unknown messages, more than 40 messages a second, more than 4 phones and 20 s of silence
+close the connection; a song view larger than one frame is sent in up to 16 parts and checked as a whole
+before any phone sees it. The phone page is read-only (it can only send clock pings), served with
+`Cache-Control: no-store` and a CSP that allows only its own script and WebSocket. No manifest change: the
+extension pages' CSP has no `connect-src` limit, so `ws://127.0.0.1` needs no permission.
+
+**Checks.** `npm run phone-check` starts the relay on this Mac's LAN address, checks the access rules and
+malformed input, publishes the real demo song view (also split into parts), and measures how far a scripted
+phone's extrapolated chord changes land from the panel's (same Mac, so Wi-Fi delay is not included; the
+target is ≤ 100 ms; on the development Mac the worst case was under 2 ms). Real-phone steps:
+[checklist section G](docs/phase0-test-checklist.md#g-phone-music-stand-휴대폰-악보대--real-phone).
+
 ## Demo playback and screenshots
 
 `sidepanel.html?demo=1` (or "데모 재생" in the settings sheet, or the empty-state button) replays a chart with a
@@ -173,7 +227,8 @@ placeholder lyrics 0.4 s early) that exercises the spelling, phase and offset fi
 cached lyrics only (no request in demo mode). Query parameters: `t=<sec>`, `play`, `rate=0.5|0.75`,
 `loop=<a>-<b>` (mark bars a–b, 1-based, as the loop),
 `theme=light|dark`, `level=beginner|novice|intermediate|advanced`, `capo=auto|0..7`, `snd` (sounding
-names), `sheet=1`, `lyrics=0`, `mute` (no count-in click).
+names), `sheet=1`, `lyrics=0`, `mute` (no count-in click), `phone` (휴대폰 악보대 switch on; connects to
+`127.0.0.1` only).
 
 Opened outside the extension (file://) the page runs the synthetic demo with default settings, which is
 how `node scripts/screens.mjs` (after `npm run build`) writes `docs/screens/*.png` at 400 and 600 px, light
