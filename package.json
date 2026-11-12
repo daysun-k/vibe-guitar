@@ -10,7 +10,9 @@
     "build": "node scripts/build.mjs",
     "watch": "node scripts/build.mjs --watch",
     "fetch-models": "node scripts/fetch-models.mjs",
-    "bench": "node scripts/bench.mjs"
+    "bench": "node scripts/bench.mjs",
+    "phone": "node scripts/phone.mjs",
+    "phone-check": "node scripts/phone-check.mjs"
   },
   "devDependencies": {
     "@types/chrome": "^0.3.7",

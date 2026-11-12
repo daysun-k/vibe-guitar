@@ -192,6 +192,45 @@ Screenshots of the synthetic demo: [docs/screens/](screens/) (`node scripts/scre
 - [ ] "코드 고치기" panel (see D2): at 400 px the picker, the grid rows around the marked bar and the transport
       all fit; light and dark both readable.
 
+## G. Phone music stand (휴대폰 악보대) — real phone
+
+Setup and what is sent: README [Phone music stand](../README.md#phone-music-stand-휴대폰-악보대). Use a trusted
+home Wi-Fi only (the token is access control, not encryption).
+
+- [ ] 연주 설정 › 휴대폰 악보대 is off on a fresh profile. Off: the service worker and panel DevTools Network panels
+      show no connection to 127.0.0.1. On without `npm run phone`: the sheet says 연결 안 됨 and the panel keeps
+      retrying quietly (Chrome logs at most one failed-connection line per attempt; attempts slow to every 15 s).
+- [ ] `npm run phone`: QR code, phone address and "받는 확장: <id>" printed. The sheet turns to 연결됨 · 휴대폰 0대.
+      If it stays 연결 안 됨 and the terminal logs "publisher rejected", restart with the
+      `--extension-id <id>` it suggests (the extension was loaded from another folder).
+- [ ] The first time, macOS asks whether node may accept incoming connections: allow. Phone on the same Wi-Fi,
+      scan the QR code: the page loads and the sheet shows 휴대폰 1대. A wrong or missing token shows a 403 page.
+- [ ] First visit: the auto-lock notice appears; 확인 hides it and it stays hidden on the next visit. Turn
+      auto-lock off (iPhone: 설정 › 디스플레이 및 밝기 › 자동 잠금 › 안 함; Android: 설정 › 디스플레이 › 화면 자동 꺼짐)
+      and back on after testing.
+- [ ] Play a song with a chart: the phone shows the same current and next shape names and diagrams as the
+      panel's strip, "N박 뒤에 바뀜" with filled dots counting big beats (2 per bar in 6/8), and the section ·
+      bar line. Readable at arm's length, portrait and landscape (rotate the phone).
+- [ ] Capo: set 카포 2 in the panel: the phone shows "카포 2 모양" and the same shape names. 실제 음 이름 보기 on:
+      "실제 …" appears under both names, as in the panel; off: it disappears within a second.
+- [ ] Change 난이도, 카포 and fix one chord (코드 고치기): the phone follows within about a second.
+      데모 재생 also drives the phone; leaving the demo returns to the live song.
+- [ ] Pause: the phone freezes ("일시정지" in the status line). Seek by clicking a bar, change speed to 0.5×
+      and 0.75×, set a 구간 반복 loop: the phone follows the jumps, the slower countdown and the loop wrap.
+- [ ] An ad on YouTube: the phone shows "광고 중" and resumes after the ad.
+- [ ] Timing by eye with the phone next to the panel: chord changes look simultaneous. Optional, most exact:
+      film both screens in slow motion (240 fps ≈ 4.2 ms per frame) and count frames between the two changes
+      (target ≤ 100 ms).
+- [ ] Recovery: Ctrl+C the relay while playing: the phone says it lost the Mac and keeps retrying; restart it
+      and scan the new QR code (new token). Turn the phone's Wi-Fi off and on: it reconnects by itself (it drops
+      a link that stays silent for 6 s). Close the side panel: the phone says the panel's switch is off; reopen it.
+- [ ] Two Chrome windows with the panel open: only one feeds the phone; the other's sheet says another
+      window's panel is sending. Focusing that window takes over.
+- [ ] Stop: Ctrl+C prints "stopping relay…" and returns; `lsof -nP -iTCP:47821 -iTCP:47822` shows nothing.
+
+Please note: phone model / browser, Mac on Wi-Fi or wired, how far apart the changes looked (or the slow-motion
+numbers), whether the screen stayed on, and whether arm's-length reading was comfortable.
+
 ## F. Known limits to keep in mind while testing
 
 - Example charts have fake timings; use them only to try the UI.
@@ -202,3 +241,6 @@ Screenshots of the synthetic demo: [docs/screens/](screens/) (`node scripts/scre
 - Section names are guessed from lyric repetition (repeated lines → 후렴); a pre-chorus or a verse with
   repeated lines can be labelled wrongly.
 - Lyrics depend on LRCLIB's timing for one release; the offset estimate fixes a constant shift only.
+- 휴대폰 악보대 uses plain http on the home network: no keep-screen-on (turn auto-lock off by hand) and no
+  encryption. The phone follows the Mac's clock (anchors carry Mac time and the phone measures its clock offset
+  with pings), so steady Wi-Fi delay cancels out; very jittery Wi-Fi makes that offset, and the changes, less exact.
