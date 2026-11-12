@@ -64,6 +64,8 @@ import { prepareCountIn, runCountIn } from './countin-prep';
 import { ChordFixer } from './fix';
 import { OVERVIEW_EMPTY, renderOverviewHtml } from './overview';
 import { capoReason, unplayableLine, PlayScreen, formatTime, type LoopMarks } from './play';
+import { PhoneLink, phoneStatusText, type PhoneStatus, type PlaybackSample } from './phone-link';
+import { buildSongView } from '../../phone/song-view';
 
 // ---------- DOM helpers ----------
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
@@ -131,6 +133,10 @@ let loopNote = '';
 const jumper = new LoopJumper();
 /** Speed the user chose in the panel, for the recording and tab it was chosen on (another recording there goes back to 1x). */
 let practiceRate: { key: string; tabId: number | null; rate: number } | null = null;
+/** 휴대폰 악보대 (VGT-13): publisher to the local relay, and what its song view was built from. */
+let phone: PhoneLink;
+let phoneSongFrom: { model: PlayModel | null; snd: boolean; title: string; artist: string } | null = null;
+let phoneSongPos = 0;
 
 // ---------- player sync ----------
 function snapshot(): PlayerSnapshot | null {
@@ -587,6 +593,8 @@ function loop(now: number): void {
     }
     checkLoop();
     renderHeader();
+    syncPhoneSong();
+    phone.tick();
     if (model && (demo || (player && !player.isAd))) {
       const t = positionNow();
       const playing = demo ? demo.clock.playing : !!player && !player.paused;
@@ -1320,9 +1328,45 @@ async function exitDemo(): Promise<void> {
   void reloadChart();
 }
 
+// ---------- 휴대폰 악보대 (VGT-13) ----------
+/** What the phone extrapolates from: the panel's own position (sync offset included), rate and state. */
+function phoneSample(): PlaybackSample | null {
+  if (!model) return null;
+  const loop = practiceLoop ? { a: loopStartTarget(practiceLoop), b: practiceLoop.endSec } : null;
+  if (demo) return { position: demo.clock.t, rate: demo.clock.rate, paused: !demo.clock.playing || countingIn, ad: false, loop };
+  if (!player) return null;
+  // During an ad the player's clock is the ad's: the phone keeps the song position from before it.
+  if (!player.isAd) phoneSongPos = positionNow();
+  return { position: phoneSongPos, rate: player.playbackRate, paused: player.paused || countingIn, ad: player.isAd, loop };
+}
+
+/** Rebuilds the song view when the model, 실제 음 이름 보기 or the title changes (not every frame). */
+function syncPhoneSong(): void {
+  if (!phone.isEnabled) return;
+  const r = shownRecording();
+  const from = { model, snd: settings.showSounding, title: r?.title ?? '', artist: r?.artist ?? '' };
+  const p = phoneSongFrom;
+  if (p && p.model === from.model && p.snd === from.snd && p.title === from.title && p.artist === from.artist) return;
+  phoneSongFrom = from;
+  phone.setSong(model ? buildSongView(model, { title: from.title, artist: from.artist, showSounding: from.snd }) : null);
+}
+
+function renderPhoneStatus(s: PhoneStatus): void {
+  $('phone-status').hidden = s.kind === 'off';
+  setText('phone-state', phoneStatusText(s));
+}
+
+function syncPhone(): void {
+  $('phone-sw').setAttribute('aria-checked', String(settings.phoneStand));
+  if (settings.phoneStand && !phone.isEnabled) phoneSongFrom = null;
+  phone.setEnabled(settings.phoneStand);
+  syncPhoneSong();
+}
+
 // ---------- settings sheet ----------
 let lastFocus: Element | null = null;
 function openSheet(): void {
+  phone.retryNow();
   lastFocus = document.activeElement;
   $('scrim').classList.add('open');
   $('sheet').classList.add('open');
@@ -1355,6 +1399,7 @@ function syncSheet(): void {
   $('snd-sw').setAttribute('aria-checked', String(settings.showSounding));
   $('root-sw').setAttribute('aria-checked', String(settings.allowRootChange));
   $('lyrics-sw').setAttribute('aria-checked', String(settings.fetchLyrics));
+  syncPhone();
   document.documentElement.classList.toggle('show-snd', settings.showSounding);
   screen.setSounding(settings.showSounding);
 }
@@ -1409,6 +1454,11 @@ function bindSheet(): void {
     // cancelled by OFF); player updates still never retry on their own.
     if (on) lyricsAsker.fetchTurnedOn(chartKey);
     void requestLyrics();
+  };
+  $('phone-sw').onclick = () => {
+    settings.phoneStand = !settings.phoneStand;
+    syncSheet();
+    persist(false);
   };
   $('demo-btn').onclick = () => void startDemo();
   $('badge').onclick = (e) => {
@@ -1626,7 +1676,10 @@ async function main(): Promise<void> {
   if (lv && lv in LEVEL_LABEL) settings.level = lv as Level;
   if (params.has('snd')) settings.showSounding = true;
   if (params.has('root')) settings.allowRootChange = true;
+  if (params.has('phone')) settings.phoneStand = true; // screenshots: the switch on (connects to 127.0.0.1 only)
   applyTheme();
+  phone = new PhoneLink({ onStatus: renderPhoneStatus, sample: phoneSample });
+  addEventListener('focus', () => phone.retryNow());
   screen = new PlayScreen({
     seek: (sec) => void seekTo(sec),
     togglePlay: () => void togglePlay(),

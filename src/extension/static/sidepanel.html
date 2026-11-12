@@ -278,6 +278,9 @@
       <button class="switch" id="snd-sw" role="switch" aria-checked="false" aria-label="실제 음 이름 보기"><i></i></button></div>
     <div class="field"><span>가사 가져오기<small>곡 제목·아티스트·길이만 lrclib.net으로 보내요</small></span>
       <button class="switch" id="lyrics-sw" role="switch" aria-checked="true" aria-label="가사 가져오기"><i></i></button></div>
+    <div class="field"><span>휴대폰 악보대<small>같은 Wi-Fi 휴대폰에 지금·다음 코드를 보여 줘요</small></span>
+      <button class="switch" id="phone-sw" role="switch" aria-checked="false" aria-label="휴대폰 악보대"><i></i></button></div>
+    <p class="phone-status" id="phone-status" hidden><b id="phone-state" aria-live="polite">연결 안 됨</b>Mac 터미널에서 <code>npm run phone</code>을 실행하고, 나온 QR 코드를 휴대폰 카메라로 열어요. 코드와 재생 위치만 이 Mac의 중계를 거쳐 보내고, 소리와 가사는 보내지 않아요.</p>
     <div class="field"><span>추천 반주<small id="strum"></small></span></div>
     <div class="field"><span>데모 재생<small>재생기 없이 저장된 코드표를 가상 시계로 틀어 봐요</small></span>
       <button class="btn" id="demo-btn">데모 재생</button></div>

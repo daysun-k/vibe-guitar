@@ -26,6 +26,8 @@ export interface Settings {
   syncOffsetMs: number;
   /** Allow root-changing substitutions (relative major/minor triad). Owner's choice: off by default. */
   allowRootChange: boolean;
+  /** 휴대폰 악보대: publish chords and position to the local relay (`npm run phone`). Off by default. */
+  phoneStand: boolean;
   profile: Profile;
 }
 
@@ -40,6 +42,7 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: 'auto',
   syncOffsetMs: 0,
   allowRootChange: false,
+  phoneStand: false,
   profile: DEFAULT_PROFILE,
 };
 
@@ -55,7 +58,7 @@ export function normalizeSettings(raw: unknown): Settings {
   const s = (raw && typeof raw === 'object' ? raw : {}) as Partial<Settings>;
   const countInBars = s.countInBars === 0 || s.countInBars === 1 || s.countInBars === 2 ? s.countInBars : s.countIn === false ? 0 : 1;
   const { countIn: _legacy, ...rest } = s;
-  return { ...DEFAULT_SETTINGS, ...rest, countInBars, allowRootChange: s.allowRootChange === true, profile: { ...DEFAULT_PROFILE, ...(s.profile ?? {}) } };
+  return { ...DEFAULT_SETTINGS, ...rest, countInBars, allowRootChange: s.allowRootChange === true, phoneStand: s.phoneStand === true, profile: { ...DEFAULT_PROFILE, ...(s.profile ?? {}) } };
 }
 
 export async function saveSettings(s: Settings): Promise<void> {
