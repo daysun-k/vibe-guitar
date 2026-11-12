@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>Vibe Guitar 휴대폰 보면대 시험 (VGT-13)</title>
+<style>
+  body{margin:0;background:#131210;color:#F2ECE1;font:16px/1.45 system-ui,-apple-system,"Apple SD Gothic Neo",sans-serif}
+  main{max-width:960px;margin:0 auto;padding:24px}
+  h1{font-size:22px;margin:0 0 8px}
+  p{margin:6px 0;color:#CFC6B6}
+  .stage{display:flex;align-items:baseline;gap:32px;margin:24px 0;padding:16px 0;border-top:2px solid #2F2B26;border-bottom:2px solid #2F2B26}
+  #cur{font:800 160px/1 ui-rounded,"SF Pro Rounded",system-ui,sans-serif}
+  .next{font-size:28px;color:#CFC6B6}
+  #next{font:800 64px/1 ui-rounded,system-ui,sans-serif;color:#F2ECE1;margin:0 12px}
+  #when{font-weight:700;font-variant-numeric:tabular-nums}
+  button{font:600 16px system-ui,sans-serif;padding:10px 14px;margin:4px 6px 4px 0;border-radius:8px;border:2px solid #4A443B;background:#1C1A17;color:#F2ECE1;cursor:pointer}
+  button:hover{border-color:#F28C4E}
+  input{font:16px ui-monospace,Menlo,monospace;width:80px;padding:6px;background:#1C1A17;color:#F2ECE1;border:2px solid #4A443B;border-radius:6px}
+  #status{font:14px ui-monospace,Menlo,monospace;color:#CFC6B6;margin-top:16px}
+  #flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none}
+  #flash.on{animation:fl .15s steps(1,end)}
+  @keyframes fl{from{opacity:1}to{opacity:0}}
+</style>
+</head>
+<body>
+<main>
+  <h1>휴대폰 보면대 연결 시험 (VGT-13, 합성 코드 진행)</h1>
+  <p>이 페이지는 실제 곡이 아니라 90 BPM 합성 코드 진행을 Mac 시계로 재생하고, 같은 시각 정보를 <code>npm run phone</code> 중계 프로그램에 보냅니다. 소리와 가사는 쓰지 않습니다.</p>
+  <p>코드가 바뀔 때마다 화면 전체가 하얗게 번쩍입니다. 휴대폰도 같은 순간에 번쩍이므로, 둘을 함께 슬로 모션으로 찍으면 실제 차이를 볼 수 있습니다.</p>
+  <div class="stage"><div id="cur">–</div><div class="next">다음<span id="next">–</span><span id="when"></span></div></div>
+  <div>
+    <button id="play">재생</button>
+    <button id="back">5초 뒤로</button><button id="fwd">5초 앞으로</button><button id="start">처음으로</button>
+  </div>
+  <div>
+    속도 <button id="rate-05">0.5배</button><button id="rate-075">0.75배</button><button id="rate-1">1배</button>
+  </div>
+  <div>
+    <button id="loop">구간 반복 켜기 (5–8마디)</button><button id="jump">반복 시작점으로 이동</button>
+  </div>
+  <p>중계 포트 <input id="port" value="47821" /> (기본값 그대로 두세요) · 단축키: 스페이스 재생/일시정지, ←/→ 5초 이동</p>
+  <div id="status">시작 중</div>
+</main>
+<div id="flash"></div>
+<script src="phone-probe.js"></script>
+</body>
+</html>

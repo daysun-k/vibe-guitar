@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="referrer" content="no-referrer" />
+<title>Vibe Guitar 보면대 (시험)</title>
+<style>
+  :root{--bg:#131210;--ink:#F2ECE1;--ink-2:#CFC6B6;--accent:#F28C4E;--line:#2F2B26;color-scheme:dark}
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:18px/1.35 system-ui,-apple-system,"Apple SD Gothic Neo",sans-serif;-webkit-text-size-adjust:100%}
+  main{min-height:100%;display:flex;flex-direction:column;padding:max(16px,env(safe-area-inset-top)) 20px max(16px,env(safe-area-inset-bottom))}
+  .status{font-size:22px;font-weight:700;color:var(--accent)}
+  .bar{font-size:20px;color:var(--ink-2);margin-top:4px}
+  .cur{font:800 min(40vw,34vh)/1 ui-rounded,"SF Pro Rounded",system-ui,sans-serif;letter-spacing:-.02em;margin:auto 0 0;text-align:center}
+  .nextrow{display:flex;align-items:baseline;justify-content:center;gap:16px;margin:12px 0 auto;border-top:2px solid var(--line);padding-top:12px}
+  .lbl{font-size:24px;color:var(--ink-2)}
+  .next{font:800 min(16vw,13vh)/1 ui-rounded,"SF Pro Rounded",system-ui,sans-serif}
+  .when{font-size:28px;font-weight:700;font-variant-numeric:tabular-nums}
+  .lock{font-size:18px;color:var(--ink);border:2px solid var(--accent);padding:10px 12px;margin:12px 0 8px}
+  .debug{font:14px/1.4 ui-monospace,Menlo,monospace;color:var(--ink-2);white-space:pre-wrap;margin:0}
+  body.stale .cur,body.stale .next{opacity:.35}
+  #flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none}
+  #flash.on{animation:fl .15s steps(1,end)}
+  @keyframes fl{from{opacity:1}to{opacity:0}}
+</style>
+</head>
+<body>
+<main>
+  <div id="status" class="status">연결 중</div>
+  <div id="bar" class="bar"></div>
+  <div id="cur" class="cur" aria-live="polite">–</div>
+  <div class="nextrow"><span class="lbl">다음</span><span id="next" class="next">–</span><span id="when" class="when"></span></div>
+  <p id="lock" class="lock">화면 자동 잠금을 꺼 주세요. iPhone: 설정 › 디스플레이 및 밝기 › 자동 잠금 › 안 함. Android: 설정 › 디스플레이 › 화면 자동 꺼짐. 시험이 끝나면 되돌려 주세요.</p>
+  <pre id="debug" class="debug"></pre>
+</main>
+<div id="flash"></div>
+<script src="/viewer.js"></script>
+</body>
+</html>

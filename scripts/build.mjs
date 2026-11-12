@@ -20,6 +20,8 @@ const entryPoints = {
   bench: 'src/extension/bench/bench.ts',
   sidepanel: 'src/extension/sidepanel/sidepanel.ts',
   'level-worker': 'src/extension/sidepanel/level-worker.ts',
+  // VGT-13 spike: phone-as-music-stand probe publisher page.
+  'phone-probe': 'src/extension/phone-probe/phone-probe.ts',
 };
 
 await rm(dist, { recursive: true, force: true });
@@ -79,6 +81,8 @@ if (!watch) {
     'level-worker.js',
     'bench.html',
     'bench.js',
+    'phone-probe.html',
+    'phone-probe.js',
     'ort/ort-wasm-simd-threaded.jsep.wasm',
     ...modelManifest.files.filter((m) => m.packaged).map((m) => `models/${m.file}`),
     ...manifest.content_scripts.flatMap((c) => c.js),
