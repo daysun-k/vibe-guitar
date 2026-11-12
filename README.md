@@ -179,7 +179,9 @@ song plays on the Mac. Nothing else is written on it: no capo, bar number, title
 line appears only when something needs attention (an ad, no position arriving, a failed or pending command
 such as "맥에서 한 번 재생을 눌러 주세요", "곡이 바뀌었어요 · 다시 눌러 주세요" or "마지막 마디예요") and goes
 away after a few seconds or when that ends; while the link to the Mac is down, the whole page says so instead.
-Portrait and landscape both work.
+Portrait and landscape both work. In portrait the bar card sits between the two chords and the buttons along
+the bottom; in landscape the current chord's column ends with the bar card and the next chord's column with the
+buttons, so the current chord's diagram gets the height a full-width button row would take.
 
 **Run it**
 
@@ -285,9 +287,10 @@ closed), and checks phone control: a command is refused while control is off and
 reaches the fake panel once approved, and is refused again after the switch goes off; 이전 마디 and 다음 마디
 are refused without approval and forwarded once each, with the grant, once approved.
 `npm run phone-layout` opens the real phone page in headless Chromium at phone sizes (390×664 and 320×548
-portrait, 844×340 and 568×280 landscape) with long chord names (up to "C#m7b5(add11)/G#") and a long title,
-and measures that nothing is wider than the screen and that the diagrams and the four buttons stay on screen
-(it needs Chromium: `$CHROME`, Playwright's cache or Google Chrome; without one it exits 2 —
+portrait, 844×340, 874×338 and 568×280 landscape) with long chord names (up to "C#m7b5(add11)/G#") and a long
+title, and measures that nothing is wider than the screen and that the diagrams and the four buttons stay on
+screen; in landscape also that the buttons fill the next chord's column under it and the bar card the current
+chord's column, on one bottom line, each button at least 44 px wide (it needs Chromium: `$CHROME`, Playwright's cache or Google Chrome; without one it exits 2 —
 `npm run phone-layout -- --serve` then keeps a fake panel running for any browser, and the page reports its
 own measurement in its title). The phone page fits a long chord name to the space beside its diagram.
 Real-phone steps:

@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { renderShapeDiagram } from '../src/extension/sidepanel/diagram';
 import { FIT_MIN_PX, fitFontPx } from '../src/phone/fit';
-import { AD_TEXT, NO_POSITION_TEXT, beatSegments, statusLine, toggleLook } from '../src/phone/stand';
+import { AD_TEXT, COUNTIN_TEXT, FAILURE_TEXT, NO_POSITION_TEXT, beatSegments, outcomeText, statusLine, toggleLook } from '../src/phone/stand';
 
 const html = readFileSync(new URL('../src/phone/viewer.html', import.meta.url), 'utf8');
 const script = readFileSync(new URL('../src/phone/viewer.ts', import.meta.url), 'utf8');
@@ -75,8 +75,8 @@ describe('VGT-16 phone page never gets wider than the screen', () => {
     // Real-phone report: the single implicit `auto` column grew to the huge "Bm7" and pushed the
     // diagram, the 처음부터 button and the status line past the right edge.
     expect(rule(portrait, '.stand')).toContain('grid-template-columns:minmax(0,1fr)');
-    // current chord, its bar card, next chord, buttons (no header row: no capo or bar text)
-    expect(rule(portrait, '.stand')).toMatch(/grid-template-rows:minmax\(0,1fr\) auto minmax\(0,1fr\) auto/);
+    // current chord, its bar card, next chord, status/pairing, buttons (no header row: no capo or bar text)
+    expect(rule(portrait, '.stand')).toMatch(/grid-template-rows:minmax\(0,1fr\) auto minmax\(0,1fr\) auto auto/);
     expect(rule(landscape, '.stand')).toMatch(/grid-template-columns:minmax\(0,[\d.]+fr\) minmax\(0,[\d.]+fr\)/);
     expect(rule(portrait, '.stand>*')).toContain('min-width:0');
   });
@@ -95,21 +95,37 @@ describe('VGT-16 phone page never gets wider than the screen', () => {
     expect(script).toMatch(/addEventListener\('resize', \(\) => \(fitDirty = true\)\)/);
   });
 
-  it('the one status line is a single line cut with an ellipsis, and hidden while empty', () => {
+  it('the one status line wraps to at most three lines (review s9-r1 F1), and is hidden while empty', () => {
     const r = rule(portrait, '.status');
-    for (const d of ['min-width:0', 'white-space:nowrap', 'overflow:hidden', 'text-overflow:ellipsis']) expect(r, `.status ${d}`).toContain(d);
+    for (const d of ['min-width:0', 'overflow:hidden', 'overflow-wrap:anywhere', 'word-break:keep-all', '-webkit-line-clamp:3', 'max-height:3.9em']) expect(r, `.status ${d}`).toContain(d);
+    // Not a single line: no nowrap and no ellipsis, so a message is not cut after a few words.
+    expect(r).not.toContain('white-space:nowrap');
+    expect(r).not.toContain('text-overflow:ellipsis');
     expect(rule(portrait, '.status:empty')).toBe('display:none');
+    expect(css.indexOf('.status:empty{display:none}')).toBeGreaterThan(css.indexOf('.status{')); // wins over display:-webkit-box
     expect(rule(portrait, '.snd')).toContain('overflow-wrap:anywhere');
-    expect(rule(landscape, '.status')).toMatch(/flex:1 1 \d+px/);
-    // Above the buttons: a message shown or gone grows the footer upward, the buttons stay put.
+    // Above the buttons in portrait: a message shown or gone grows that row upward, the buttons stay put.
     expect(body.indexOf('id="status"')).toBeLessThan(body.indexOf('id="ctl"'));
+  });
+
+  it('every command message fits three status lines on a 320 px phone, the action first', () => {
+    // 320 px screen − 44 px padding = 276 px; 20 px Korean glyphs ≈ 20 px wide: about 13 per line.
+    const perLine = Math.floor(276 / 20);
+    const texts = [...Object.values(FAILURE_TEXT), COUNTIN_TEXT, outcomeText({ ok: false, code: 'last-bar' }, true)];
+    for (const t of texts) expect([...t].length, t).toBeLessThanOrEqual(perLine * 3);
+    // The autoplay message starts with what to do on the Mac.
+    expect(outcomeText({ ok: false, code: 'autoplay' }, false).startsWith('맥에서 한 번 재생을 눌러 주세요')).toBe(true);
+    expect(FAILURE_TEXT.timeout.startsWith('Mac 화면을 확인해 주세요')).toBe(true);
+    expect(outcomeText({ ok: true, state: 'countin' }, false)).toBe(COUNTIN_TEXT);
+    expect(outcomeText({ ok: true, state: 'playing' }, false)).toBe('');
+    expect(outcomeText({ ok: false, code: 'last-bar' }, false)).toBe(FAILURE_TEXT['last-bar']);
   });
 
   it('four icon buttons in one row of shrinkable grid columns, at least 56 px tall', () => {
     for (const id of ['ctl-prev', 'ctl-toggle', 'ctl-next', 'ctl-restart']) expect(body).toContain(`id="${id}"`);
     expect(rule(portrait, '.ctl')).toMatch(/grid-template-columns:minmax\(0,[\d.]+fr\) minmax\(0,[\d.]+fr\) minmax\(0,[\d.]+fr\) minmax\(0,[\d.]+fr\)/);
     expect(rule(portrait, '.ctl')).toContain('grid-template-areas:"restart prev toggle next"');
-    expect(rule(landscape, '.ctl')).toMatch(/min-width:0;grid-template-columns:repeat\(4,minmax\(0,auto\)\)/);
+    expect(rule(landscape, '.ctl')).toMatch(/grid-template-columns:minmax\(0,[\d.]+fr\) minmax\(0,[\d.]+fr\) minmax\(0,[\d.]+fr\) minmax\(0,[\d.]+fr\)/);
     const b = rule(portrait, '.ctl button');
     expect(b).toContain('min-width:0');
     expect(Number(/min-height:(\d+)px/.exec(b)![1])).toBeGreaterThanOrEqual(56);
@@ -128,6 +144,24 @@ function button(id: string): string {
   if (!m) throw new Error(`no button ${id}`);
   return m[0];
 }
+
+describe('landscape: buttons under the next chord, the bar card under the current one', () => {
+  const landscape = /@media \(orientation:landscape\)\{([\s\S]*)\}\s*$/.exec(css)![1]!;
+  it('the buttons are a grid item of the next chord column, the bar card of the current chord column', () => {
+    // The buttons are no longer inside the footer, so the grid can place them.
+    expect(body).toMatch(/<\/footer>\s*<div id="ctl" class="ctl" hidden>/);
+    expect(rule(landscape, '.stand')).toContain('grid-template-rows:minmax(0,1fr) auto auto');
+    expect(rule(landscape, '.now')).toContain('grid-area:1/1/2/2');
+    expect(rule(landscape, '.meter')).toMatch(/grid-area:2\/1\/3\/2;align-self:end/);
+    expect(rule(landscape, '.nx')).toContain('grid-area:1/2/2/3');
+    expect(rule(landscape, '.ctl')).toMatch(/grid-area:2\/2\/3\/3;align-self:end/);
+    // Same left divider and padding: the button row is exactly as wide as the next chord's content.
+    expect(rule(landscape, '.nx,.ctl')).toMatch(/border-left:3px solid var\(--line\);padding-left:\d+px/);
+    expect(rule(landscape, '.foot')).toContain('grid-column:1/-1;grid-row:3');
+    // The current diagram uses the height a full-width button row took before.
+    expect(css).toMatch(/#now-dia svg\{width:auto;height:min\(66vh,34vw\);height:min\(66vh,34vw,94cqh\)\}/);
+  });
+});
 
 describe('minimal phone stand (real-iPhone feedback on PR #19)', () => {
   it('shows no auto-lock notice, capo, bar number, beat countdown text, beat dots or connection text', () => {
@@ -190,7 +224,7 @@ describe('minimal phone stand (real-iPhone feedback on PR #19)', () => {
     // Successes are not said; failures and the count-in are, for a few seconds.
     expect(script).not.toContain('재생했어요');
     expect(script).not.toContain('다음 마디로 옮겼어요');
-    expect(script).toContain('카운트인 뒤에 재생해요');
+    expect(script).toContain('say(outcomeText(o, !!anchor?.loop), !o.ok)');
     expect(script).toContain("'Mac과 연결이 끊겼어요 · 다시 연결하는 중'");
     expect(script).toMatch(/if \(message\.text && t > message\.until\) message = \{ text: '', alert: false, until: 0 \};/);
   });

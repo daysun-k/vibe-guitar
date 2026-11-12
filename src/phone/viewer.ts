@@ -22,13 +22,12 @@ import {
   type AnchorMessage,
   type ClockEstimate,
   type ClockSample,
-  type CommandFailure,
   type CommandOutcome,
   type PairMessage,
   type PhoneCommand,
 } from './protocol';
 import { phoneFrame, readSongView, shapeVoicing, type PhoneSong } from './song-view';
-import { beatSegments, statusLine, toggleLook } from './stand';
+import { beatSegments, outcomeText, statusLine, toggleLook } from './stand';
 
 const $ = (id: string) => document.getElementById(id)!;
 const now = () => performance.timeOrigin + performance.now();
@@ -62,34 +61,6 @@ let pending: { id: number; at: number } | null = null;
 let countinId = 0;
 let message = { text: '', alert: false, until: 0 };
 
-const FAILURE_TEXT: Record<CommandFailure, string> = {
-  off: 'Mac 패널에서 휴대폰 조작이 꺼져 있어요',
-  'not-approved': 'Mac 패널에서 이 휴대폰을 먼저 승인해 주세요',
-  stale: '곡이 바뀌었어요 · 다시 눌러 주세요',
-  duplicate: '이미 보낸 요청이에요',
-  rate: '너무 빨리 눌렀어요 · 잠시 뒤에 다시 눌러 주세요',
-  ad: '광고 중에는 조작할 수 없어요',
-  'no-target': 'Mac에서 조작할 곡이나 플레이어를 찾지 못했어요',
-  busy: 'Mac이 앞 요청을 처리하는 중이에요',
-  autoplay: 'Mac 브라우저가 재생을 막았어요 · 맥에서 한 번 재생을 눌러 주세요',
-  timeout: 'Mac에서 바뀐 것을 확인하지 못했어요 · Mac 화면을 확인해 주세요',
-  failed: 'Mac에서 실행하지 못했어요',
-  cancelled: '조작 권한이 바뀌어서 취소했어요',
-  'last-bar': '마지막 마디예요 · 더 갈 마디가 없어요',
-  'no-panel': 'Mac 패널이 연결되어 있지 않아요',
-};
-
-/**
- * Korean message for an outcome, or '' when there is nothing to say: a success shows on the stand
- * itself (the play button's icon, the bar's progress), so only failures and the count-in are said.
- */
-function outcomeText(o: CommandOutcome): string {
-  if (!o.ok && o.code === 'last-bar' && anchor?.loop) return '구간 반복의 마지막 마디예요';
-  if (!o.ok) return FAILURE_TEXT[o.code];
-  if (o.state === 'countin') return '카운트인 뒤에 재생해요 · 한 번 더 누르면 멈춰요';
-  return '';
-}
-
 /** Shows `text` on the status line for a few seconds; '' clears an earlier message at once. */
 function say(text: string, alert: boolean) {
   message = text ? { text, alert, until: now() + MESSAGE_MS } : { text: '', alert: false, until: 0 };
@@ -107,11 +78,11 @@ function onResult(id: number, o: CommandOutcome) {
   if (pending && id === pending.id) {
     pending = null;
     if (o.ok && o.state === 'countin') countinId = id;
-    say(outcomeText(o), !o.ok);
+    say(outcomeText(o, !!anchor?.loop), !o.ok);
   } else if (countinId && id === countinId) {
     countinId = 0;
     // The count-in ended: playback started, it was cancelled (paused) or play failed.
-    say(outcomeText(o), !o.ok);
+    say(outcomeText(o, !!anchor?.loop), !o.ok);
   }
 }
 

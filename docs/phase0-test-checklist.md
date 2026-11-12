@@ -263,9 +263,14 @@ Phone control (휴대폰에서 조작 허용, VGT-16):
       loop (다음 마디 at B: "구간 반복의 마지막 마디예요"). Playing stays playing, paused stays paused.
 - [ ] Layout: in portrait and landscape, with a song whose chords have long names (e.g. Bm7, F#7sus4,
       C#m7b5/G#) and a long title, nothing runs past the right edge: the chord name gets smaller so its
-      diagram stays fully visible, the title is not shown, and all four buttons and the bar card fit.
+      diagram stays fully visible, the title is not shown, and all four buttons and the bar card fit. In
+      landscape the bar card fills the bottom of the current chord's column and the buttons the bottom of the
+      next chord's column, side by side on one bottom line; with no full-width button row under them, the
+      current chord's diagram is taller than before.
 - [ ] Autoplay: reload the YouTube tab and do not click it; tap 재생 on the phone. If Chrome blocks it, the phone
-      says "맥에서 한 번 재생을 눌러 주세요" after about 3 s; click play on the Mac once and the phone works again.
+      says "맥에서 한 번 재생을 눌러 주세요 · Mac 브라우저가 재생을 막았어요" after about 3 s, whole (on a narrow
+      phone it wraps to two or three lines instead of being cut); click play on the Mac once and the phone works
+      again.
 - [ ] Ads: during an ad every button answers "광고 중에는 조작할 수 없어요" and the ad is not affected.
 - [ ] Rapid taps: tap 재생/일시정지 five times quickly: the buttons stay disabled while a command is pending and
       excess taps are refused ("너무 빨리 눌렀어요" or ignored), never replayed later.
