@@ -76,6 +76,14 @@ function lookupKeys(source: RecordingSource, id: string): string[] {
   return keys;
 }
 
+/**
+ * One key per song as loadChart sees it: recordings with the same lookup keys (a YouTube and a YouTube
+ * Music recording with one video id) are the same song; anything else is another song.
+ */
+export function chartSongKey(source: RecordingSource, id: string): string {
+  return [...lookupKeys(source, id)].sort().join(' ');
+}
+
 /** The subset of chrome.storage.local used for charts (injectable for tests). */
 export interface StorageArea {
   get(keys: string[] | null): Promise<Record<string, unknown>>;

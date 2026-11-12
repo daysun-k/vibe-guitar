@@ -312,11 +312,13 @@ export function songIdOf(demo: { run: number; key: string } | null, recordingKey
 
 /**
  * The song a model is built for (ShownModel.builtFor): the demo run's, or, with the real player, the
- * recording of the chart the model is built from, never a label kept beside the chart (a late save
- * reply may have put another song's chart there). `chartFor` only names it when there is no chart.
+ * song of the chart the model is built from, never a label kept beside the chart (a late save reply
+ * may have put another song's chart there). `noChart` names it when there is no chart. Both are song
+ * keys as the chart loader sees them (storage.ts chartSongKey: YouTube and YouTube Music recordings
+ * of one video are one song), as is the recording key in TargetParts.songId.
  */
-export function modelSongId(demo: { run: number; key: string } | null, chartRecordingKey: string | null, chartFor: string): string {
-  return songIdOf(demo, chartRecordingKey ?? chartFor);
+export function modelSongId(demo: { run: number; key: string } | null, chartSong: string | null, noChart: string): string {
+  return songIdOf(demo, chartSong ?? noChart);
 }
 
 /** The player target: which song, model and player commands would act on right now, or null. */

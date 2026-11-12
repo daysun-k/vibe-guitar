@@ -18,7 +18,7 @@ import { PhoneLink, type SocketLike } from '../src/extension/sidepanel/phone-lin
 import { ShownModel, modelSongId, playerTargetKey, songIdOf, songViewReady, restartTargetSec, type TargetParts, runPhoneCommand, type CommandContext, type ObservedPlayer, type PanelTransport, type TransportResult } from '../src/extension/sidepanel/phone-control';
 import { playToggle, type PlayToggleEnv } from '../src/extension/sidepanel/play-toggle';
 import type { PlayerControlMessage, PlayerControlResult } from '../src/extension/messages';
-import { DEFAULT_SETTINGS, normalizeSettings } from '../src/extension/storage';
+import { DEFAULT_SETTINGS, chartSongKey, normalizeSettings } from '../src/extension/storage';
 
 const ID_A = 'aaaaaaaaaaaa';
 const ID_B = 'bbbbbbbbbbbb';
@@ -1650,7 +1650,7 @@ describe('S6-R7-01: a chart or model replaced for the same song stops commands f
     const src = readFileSync(new URL('../src/extension/sidepanel/sidepanel.ts', import.meta.url), 'utf8');
     // `const model = …` in renderModelState is a local, not the shown model.
     const assigns = [...src.matchAll(/(?<![\w.]|const )model = (.*);/g)].map((x) => x[1]);
-    expect(assigns).toEqual(['shownModel.replace(next, modelSongId(demo, c ? recordingKey(c.recording) : null, chartFor))']);
+    expect(assigns).toEqual(['shownModel.replace(next, modelSongId(demo, c ? songKey(c.recording) : null, songKey(player?.recording ?? null)))']);
     expect(src).toMatch(/modelVersion: model \? shownModel\.version : null/);
     expect(src).toMatch(/new ShownModel<PlayModel>\(\(\) => phoneSongChanging\(\)\)/);
   });
@@ -1753,7 +1753,7 @@ describe('S6-R8-01: while the demo is being left, the demo model is never publis
     const src = readFileSync(new URL('../src/extension/sidepanel/sidepanel.ts', import.meta.url), 'utf8');
     const sync = src.slice(src.indexOf('function syncPhoneSong'), src.indexOf('function phoneSongChanging'));
     expect(sync).toMatch(/if \(!songViewReady\(phoneTargetParts\(\)\)\) return;/);
-    expect(src).toMatch(/modelFor: shownModel\.builtFor,\s+songId: songIdOf\(demo, chartKey\)/);
+    expect(src).toMatch(/modelFor: shownModel\.builtFor,\s+songId: songIdOf\(demo, songKey\(player\?\.recording \?\? null\)\)/);
     const exit = src.slice(src.indexOf('async function exitDemo'));
     expect(exit.indexOf('phoneSongChanging();')).toBeGreaterThan(-1);
     expect(exit.indexOf('phoneSongChanging();')).toBeLessThan(exit.indexOf('demo = null'));
@@ -1831,5 +1831,98 @@ describe('S6-R9-01: the shown model is labelled with the recording of the chart 
       expect(after.indexOf('=== chartKey'), fn).toBeGreaterThan(-1);
       expect(after.indexOf('=== chartKey'), `${fn}: checked before the chart is shown`).toBeLessThan(after.indexOf('chart = '));
     }
+  });
+});
+
+// ---------- S6-R10-01: a chart the loader falls back to (YouTube <-> YouTube Music) is the current song's ----------
+describe('S6-R10-01: the shown model belongs to the current song as the chart loader sees it', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  type Rec = { source: 'youtube' | 'ytmusic' | 'applemusic'; id: string };
+  const key = (r: Rec) => chartSongKey(r.source, r.id);
+
+  /** The player plays `player`; the chart shown (bar start 8) was stored for `chartRecording`. Labelled as sidepanel.ts does. */
+  function run(player: Rec, chartRecording: Rec) {
+    const p = gatePanel({ countIn: false });
+    const s = { link: null as PhoneLink | null, model: null as Bars | null };
+    const shown = new ShownModel<Bars>(() => s.link?.songChanging());
+    const playerKey = `${player.source}:${player.id}`;
+    const parts = (): TargetParts => ({
+      modelVersion: s.model ? shown.version : null,
+      modelFor: shown.builtFor,
+      songId: songIdOf(null, key(player)),
+      demo: null,
+      chartLoaded: true,
+      tab: 101,
+      recordingKey: playerKey,
+      chartKey: playerKey,
+    });
+    s.model = shown.replace(MODEL_8, modelSongId(null, key(chartRecording), key(player)));
+    p.player.target = () => playerTargetKey(parts());
+    p.transport.restartTarget = () => (s.model ? restartTargetSec(null, s.model.bars, p.st.position) : null);
+    return { p, s, parts };
+  }
+
+  for (const [player, chartRec] of [
+    [{ source: 'ytmusic', id: 'A' }, { source: 'youtube', id: 'A' }],
+    [{ source: 'youtube', id: 'A' }, { source: 'ytmusic', id: 'A' }],
+  ] as [Rec, Rec][]) {
+    it(`${player.source}:A playing with the stored ${chartRec.source}:A chart: published, and restart acts`, async () => {
+      const d = run(player, chartRec);
+      expect(songViewReady(d.parts())).toBe(true);
+      expect(d.p.player.target()).not.toBeNull();
+      const h = wiredHarness(d.p);
+      d.s.link = h.link;
+      publish(h, SONG_A, d.p.player.target());
+      h.ws.rx({ t: 'cmd', id: 1, epoch: h.epoch, rev: h.rev, cmd: 'restart', from: ID_A, grant: h.grant() });
+      await finish(d.p);
+      expect(d.p.sent).toEqual(['seek 8']);
+      expect(h.results().at(-1)).toMatchObject({ id: 1, ok: true });
+    });
+  }
+
+  for (const [name, player, chartRec] of [
+    ['a different video id (S6-R9-01: A\'s chart while B plays)', { source: 'youtube', id: 'B' }, { source: 'youtube', id: 'A' }],
+    ['a different id across YouTube Music', { source: 'ytmusic', id: 'B' }, { source: 'youtube', id: 'A' }],
+    ['Apple Music with a YouTube chart of the same id', { source: 'applemusic', id: 'A' }, { source: 'youtube', id: 'A' }],
+  ] as [string, Rec, Rec][]) {
+    it(`${name}: not ready, no target, nothing sent`, async () => {
+      const d = run(player, chartRec);
+      expect(songViewReady(d.parts())).toBe(false);
+      expect(d.p.player.target()).toBeNull();
+      const h = wiredHarness(d.p);
+      d.s.link = h.link;
+      publish(h, SONG_A, d.p.player.target());
+      h.ws.rx({ t: 'cmd', id: 1, epoch: h.epoch, rev: h.rev, cmd: 'restart', from: ID_A, grant: h.grant() });
+      await finish(d.p);
+      expect(d.p.sent).toEqual([]);
+      expect(h.results().at(-1)).toMatchObject({ id: 1, ok: false });
+    });
+  }
+
+  it('chartSongKey follows the loader: YouTube and YouTube Music of one id are one song, nothing else is', () => {
+    expect(chartSongKey('youtube', 'A')).toBe(chartSongKey('ytmusic', 'A'));
+    expect(chartSongKey('youtube', 'A')).not.toBe(chartSongKey('youtube', 'B'));
+    expect(chartSongKey('applemusic', 'A')).not.toBe(chartSongKey('youtube', 'A'));
+    expect(chartSongKey('applemusic', 'A')).not.toBe(chartSongKey('applemusic', 'B'));
+    // A demo is never a real song, whatever its chart.
+    expect(songIdOf({ run: 1, key: 'K' }, chartSongKey('youtube', 'A'))).not.toBe(songIdOf(null, chartSongKey('youtube', 'A')));
+  });
+
+  it('sidepanel.ts: doSave and attachExample build the saved chart for the current recording, so a fallback chart shown does not hide it', () => {
+    const src = readFileSync(new URL('../src/extension/sidepanel/sidepanel.ts', import.meta.url), 'utf8');
+    const save = src.slice(src.indexOf('async function doSave'), src.indexOf('\n}\n', src.indexOf('async function doSave')));
+    expect(save).toMatch(/checkSaveTarget\(currentDraft\(\), currentRecording\(\)/);
+    expect(save).toMatch(/buildChartDetailed\(\{ recording: r,/);
+    expect(save).toMatch(/recordingKey\(built\.recording\) === chartKey/);
+    const attach = src.slice(src.indexOf('async function attachExample'), src.indexOf('\n}\n', src.indexOf('async function attachExample')));
+    expect(attach).toMatch(/chartWriteTarget\(currentRecording\(\)/);
+    expect(attach).toMatch(/attachChartToRecording\(ex, r\)/);
+    expect(attach).toMatch(/recordingKey\(c\.recording\) === chartKey/);
   });
 });

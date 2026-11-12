@@ -56,7 +56,7 @@ import type {
   PlayerStateMessage,
 } from '../messages';
 import { estimatePosition, type PlayerSnapshot } from '../playview';
-import { adoptAutoChart, correctChartEvent, listCharts, loadAccuracyPairs, loadAutoChart, loadChart, loadSettings, normalizeSettings, saveChart, saveSettings, undoChartCorrection, type Settings } from '../storage';
+import { adoptAutoChart, chartSongKey, correctChartEvent, listCharts, loadAccuracyPairs, loadAutoChart, loadChart, loadSettings, normalizeSettings, saveChart, saveSettings, undoChartCorrection, type Settings } from '../storage';
 import { escapeHtml, renderShapeDiagram } from './diagram';
 import { LyricsAsker, lyricsOutcome, lyricsLookupReady } from './lyrics-asker';
 import { controlTabId, keepPlayerAfterDemo } from './player-target';
@@ -159,6 +159,11 @@ function positionNow(withOffset = true): number {
 
 function recordingKey(r: Recording | null): string {
   return r ? `${r.source}:${r.id}` : '';
+}
+
+/** The song a recording is as loadChart sees it (a YouTube Music recording may show its YouTube chart). */
+function songKey(r: Recording | null): string {
+  return r ? chartSongKey(r.source, r.id) : '';
 }
 
 async function onPlayerState(msg: PlayerStateMessage, sender: chrome.runtime.MessageSender): Promise<void> {
@@ -378,7 +383,7 @@ function recompute(): void {
     }
   }
   // The only place the model is replaced: phone commands for the previous model stop first (VGT-16).
-  model = shownModel.replace(next, modelSongId(demo, c ? recordingKey(c.recording) : null, chartFor));
+  model = shownModel.replace(next, modelSongId(demo, c ? songKey(c.recording) : null, songKey(player?.recording ?? null)));
   screen.setModel(model);
   screen.setLook(settings.lookAheadBars);
   if (shownKey() !== fixModelKey) {
@@ -1383,7 +1388,7 @@ function phoneTargetParts(): TargetParts {
   return {
     modelVersion: model ? shownModel.version : null,
     modelFor: shownModel.builtFor,
-    songId: songIdOf(demo, chartKey),
+    songId: songIdOf(demo, songKey(player?.recording ?? null)),
     demo,
     chartLoaded: chartFor === chartKey,
     tab: player && hasChrome ? controlTabId(playerTabId, activeTabId) : null,
