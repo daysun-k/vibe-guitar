@@ -53,8 +53,9 @@ For each song:
       countdown; grid: "soon" border on its bar)? Try 미리 알림 ½, 1 and 2 bars in the settings sheet.
 - [ ] Capo: does 자동 pick a capo you agree with? With "실제 음 이름 보기" on, do the strip and the grid show the
       sounding names (shape G, sounding A♭)?
-- [ ] Levels 입문 / 초급 / 중급 / 상급: are the shapes playable for you? 입문 shows reduced 7ths with a tiny
-      superscript 7; 중급/상급 show "…도 돼요" only on low-confidence 7th chords.
+- [ ] Levels 입문 / 초급 / 중급 / 상급: are the shapes playable for you? 입문 shows reduced 7ths with the change
+      mark (●) and its tooltip only, with no superscript 7 next to the name; 중급/상급 show "…도 돼요" only on
+      low-confidence 7th chords.
 - [ ] Slash bass and sus: in a song with a walking bass (C – C/B – Am – Am/G) or a sus resolution
       (Dsus4 → D), are they kept at 입문?
 - [ ] Mark a few shapes as "잡을 수 있음" in 설정 tab → "이 곡에 나오는 코드": does the arrangement prefer them?
@@ -90,6 +91,34 @@ Use songs with no chart first. Note Chrome version and the 캡처 tab "실행 �
       tab audio ever stutters.
 - [ ] Sync check: do auto-chart chord changes land on the audible change? Note the offset (ms) if any.
 
+### D2. Fixing one wrong chord (코드 고치기) — run in real Chrome
+
+Use an auto chart with at least one chord you know is wrong, ideally one only partly heard (a "—" gap).
+
+- [ ] Play tab → "코드 고치기" (transport row): a panel opens at the chord under the playhead; that bar gets
+      a dashed outline and the header shows its time, name and "자동으로 들은 코드" (or "· 확실하지 않음").
+      ‹ › step to the previous/next chord and the player jumps there. Clicking a bar still only seeks.
+- [ ] With 카포 0, pick a root and a kind, check the preview "G → Am", press "이 코드로 고치기". The status line
+      says "고쳤어요: G → Am" with "되돌리기"; the grid and strip show the new chord at once.
+- [ ] Only that chord changed: the other chords, their bars and the "—" gaps look exactly as before.
+- [ ] The badge now reads "자동 코드표 · 1곳 고침 · 나머지는 미확인" (narrow panel: "자동 · 일부 고침"); its
+      explanation says how many chords you fixed and that the rest are unchecked.
+- [ ] Capo: set 카포 1 on a song in A♭ (shapes G, Em, C, D). The picker shows shape names only. Fix a G into
+      Em: the grid shows Em; Edit tab → JSON 내보내기 stores the sounding chord "Fm" (not "E#m"/"Em").
+      Turn on "실제 음 이름 보기": the picker header and preview add a small "실제 …" name.
+- [ ] "되돌리기" restores the previous chord and the badge "자동 코드표 · 사람이 확인하지 않음".
+- [ ] Survives new analysis: fix a chord, then press "들은 구간으로 자동 코드표 만들기" (or let the song finish).
+      Your fixed chart stays in use; the play tab notice says a new auto chart is ready. Reload the panel and
+      the YouTube tab: the fix is still there.
+- [ ] No false notice: right after a fix (before any new analysis) the "자동 코드표가 준비됐어요" notice does
+      not appear.
+- [ ] Edit tab on the same song: "저장된 코드표를 편집기로 불러오기" → 이 곡에 저장 without changes. Status:
+      "바뀐 코드가 없어 자동 코드와 들은 구간을 그대로 두었습니다."; the "—" gaps and the badge stay. Change one
+      chord in the text, 코드 읽기, save: "바꾼 코드 1개만 …". Re-stamp from the start and save: the status says
+      every chord became manual and the heard range became one range.
+- [ ] Demo (데모 재생): 코드 고치기 works on the demo chart and says "(데모라서 저장하지는 않아요)"; after 끝내기 the
+      real song's chart is unchanged.
+
 ## E. Play view B, lyrics and music fixes
 
 Screenshots of the synthetic demo: [docs/screens/](screens/) (`node scripts/screens.mjs`).
@@ -118,6 +147,8 @@ Screenshots of the synthetic demo: [docs/screens/](screens/) (`node scripts/scre
       is no request to lrclib.net. Turn it on: exactly one request (or get + search) for that recording;
       reopening the song makes no new request (cached).
 - [ ] Click a bar: the player jumps there. Scroll the grid by hand: "현재 위치로" appears and brings it back.
+- [ ] "코드 고치기" panel (see D2): at 400 px the picker, the grid rows around the marked bar and the transport
+      all fit; light and dark both readable.
 
 ## F. Known limits to keep in mind while testing
 

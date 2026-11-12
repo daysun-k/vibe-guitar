@@ -12,7 +12,7 @@ import { compareCharts } from '../../eval/metrics';
 import {
   addTap,
   attachChartToRecording,
-  buildChart,
+  buildChartDetailed,
   chartToSequenceText,
   fitTapTempo,
   nextToStamp,
@@ -22,6 +22,7 @@ import {
   undoStamp,
   type StampState,
 } from '../../editor/core';
+import { correctChordEvent, type EventRef } from '../../editor/correct';
 import { DraftBook, chartWriteTarget, checkSaveTarget, isDraftEmpty, reattachDraft, recordingKeyOf, type EditorDraft } from '../../editor/drafts';
 import type { Lyrics } from '../../lyrics/types';
 import { keyLabel, prettyChord, respellChartForKey, shapeName } from '../../music/key';
@@ -41,11 +42,12 @@ import type {
   PlayerStateMessage,
 } from '../messages';
 import { estimatePosition, type PlayerSnapshot } from '../playview';
-import { adoptAutoChart, listCharts, loadAutoChart, loadChart, loadSettings, normalizeSettings, saveChart, saveSettings, type Settings } from '../storage';
+import { adoptAutoChart, correctChartEvent, listCharts, loadAutoChart, loadChart, loadSettings, normalizeSettings, saveChart, saveSettings, undoChartCorrection, type Settings } from '../storage';
 import { escapeHtml, renderShapeDiagram } from './diagram';
 import { LyricsAsker, lyricsOutcome, lyricsLookupReady } from './lyrics-asker';
 import { controlTabId, keepPlayerAfterDemo } from './player-target';
 import { prepareCountIn } from './countin-prep';
+import { ChordFixer } from './fix';
 import { capoReason, unplayableLine, PlayScreen, formatTime } from './play';
 
 // ---------- DOM helpers ----------
@@ -102,6 +104,11 @@ let demo: { clock: DemoClock; chart: Chart; lyrics: Lyrics | null; key: string }
 /** Count-in in progress (cancelled by pressing play again or seeking). */
 let countInRun = 0;
 let countingIn = false;
+/** Play view chord fixing: the panel, the last fix (undoable) and its status line. */
+let fixer: ChordFixer;
+let lastFix: { key: string; recording: Pick<Recording, 'source' | 'id'> | null; before: Chart; after: Chart } | null = null;
+let fixNote: { key: string; text: string; undo: boolean; error: boolean } | null = null;
+let fixModelKey = '';
 
 // ---------- player sync ----------
 function snapshot(): PlayerSnapshot | null {
@@ -185,7 +192,9 @@ async function refreshPendingAuto(): Promise<void> {
   pendingAuto = null;
   if (r && chart && chart.provenance.createdBy !== 'recognizer' && hasChrome) {
     const auto = await loadAutoChart(r.source, r.id);
-    if (auto) pendingAuto = auto;
+    // An edited auto chart keeps the auto chart's createdAt: that auto chart is its base, not news.
+    const base = auto && chart.provenance.createdBy === 'edited' && auto.provenance.createdAt === chart.provenance.createdAt;
+    if (auto && !base) pendingAuto = auto;
   }
   renderPending();
 }
@@ -280,6 +289,12 @@ function recompute(): void {
   }
   screen.setModel(model);
   screen.setLook(settings.lookAheadBars);
+  if (shownKey() !== fixModelKey) {
+    fixModelKey = shownKey();
+    fixer.close();
+  }
+  fixer.onModel();
+  renderFixNote();
   // Any song or settings change drops pending replies. The current level's line comes from the
   // model; the worker adds only its "with root changes" count (it also computes the other levels).
   levelFit.update(c && model ? { chart: c, capo: opts.capo, profile: { ...settings.profile }, allowRootChange: settings.allowRootChange } : null, [...LEVELS]);
@@ -374,7 +389,8 @@ function renderBadge(): void {
   const c = demo ? demo.chart : chart;
   const badge = $('badge');
   const pop = $('badge-pop');
-  if (!c || (c.provenance.createdBy !== 'recognizer' && !c.provenance.example)) {
+  const fixedAuto = !!c && c.provenance.createdBy === 'edited' && c.events.some((e) => e.source === 'auto');
+  if (!c || (c.provenance.createdBy !== 'recognizer' && !c.provenance.example && !fixedAuto)) {
     badge.hidden = true;
     pop.classList.remove('open');
     return;
@@ -387,13 +403,15 @@ function renderBadge(): void {
     pop.innerHTML = '<p>코드 진행만 보여 주는 <b>예시 코드표</b>예요. 박자와 타이밍은 실제 곡과 맞지 않아요.</p>';
     return;
   }
-  setText('badge-long', '자동 코드표 · 사람이 확인하지 않음');
-  setText('badge-short', '자동 코드표 · 미확인');
-  badge.setAttribute('aria-label', '자동 코드표, 사람이 확인하지 않음. 설명 보기');
+  const fixed = fixedAuto ? c.events.filter((e) => e.source === 'manual').length : 0;
+  setText('badge-long', fixedAuto ? `자동 코드표 · ${fixed}곳 고침 · 나머지는 미확인` : '자동 코드표 · 사람이 확인하지 않음');
+  setText('badge-short', fixedAuto ? '자동 · 일부 고침' : '자동 코드표 · 미확인');
+  badge.setAttribute('aria-label', fixedAuto ? `자동 코드표, ${fixed}곳은 직접 고쳤고 나머지는 사람이 확인하지 않음. 설명 보기` : '자동 코드표, 사람이 확인하지 않음. 설명 보기');
   const heard = c.coverage.reduce((s, r) => s + r.toSec - r.fromSec, 0);
   const dur = demo ? demo.clock.durationSec : player?.duration || 0;
   pop.innerHTML =
     `<p>재생하면서 들은 소리로 자동으로 만든 코드표예요. ${dur ? `곡 ${formatTime(dur)} 중 ${formatTime(heard)}를 들었지만` : '사람이 확인하지는 않았어요.'}${dur ? ', 사람이 확인하지는 않았어요.' : ''}</p>` +
+    (fixedAuto ? `<p>코드 ${c.events.length}개 중 <b>${fixed}개는 직접 고쳤어요</b>. 나머지는 아직 자동으로 들은 그대로예요.</p>` : '') +
     '<p>화면에는 <b>가능성 높은 코드</b>를 보여 드려요. 중급 이상에서는 더 쉬운 코드로 쳐도 되는 곳을 함께 알려 드려요.' +
     (model?.lyrics ? ' 구간 이름은 가사로 짐작한 것이에요.' : '') +
     '</p>';
@@ -749,13 +767,23 @@ async function doSave(): Promise<void> {
   if (!editor.stamps.length) return setStatus('save-status', '찍은 코드가 없습니다.', true);
   try {
     const timing = readEditorTiming();
-    const stamps = $<HTMLInputElement>('quantize').checked ? quantizeStamps(editor.stamps, timing, 2) : editor.stamps;
     const existing = chartKey === recordingKeyOf(r) ? chart : null;
-    const built = buildChart({ recording: r, timing, chords: editor.chords, stamps, durationSec: player?.duration || undefined, existing });
+    // Event times of a loaded auto/edited chart stay as they are, so its information can be kept.
+    const keep = new Set(existing && existing.provenance.createdBy !== 'manual' ? existing.events.map((e) => e.startSec) : []);
+    const stamps = $<HTMLInputElement>('quantize').checked ? quantizeStamps(editor.stamps, timing, 2, keep) : editor.stamps;
+    const { chart: built, preservation, changed } = buildChartDetailed({ recording: r, timing, chords: editor.chords, stamps, durationSec: player?.duration || undefined, existing });
     await saveChart(built);
     chart = built;
     recompute();
-    setStatus('save-status', `저장했습니다: 코드 ${built.events.length}개`, false);
+    const kept =
+      preservation === 'kept'
+        ? changed
+          ? ` 바꾼 코드 ${changed}개만 직접 고른 코드로 저장했고, 나머지 자동 코드와 들은 구간은 그대로 두었습니다.`
+          : ' 바뀐 코드가 없어 자동 코드와 들은 구간을 그대로 두었습니다.'
+        : preservation === 'lost'
+          ? ' 코드 시간이 바뀌어 모든 코드를 직접 고른 코드로 저장했고, 들은 구간은 곡 전체 하나로 바뀌었습니다.'
+          : '';
+    setStatus('save-status', `저장했습니다: 코드 ${built.events.length}개.${kept}`, false);
   } catch (e) {
     setStatus('save-status', (e as Error).message, true);
   }
@@ -820,6 +848,73 @@ async function attachExample(): Promise<void> {
   chart = c;
   recompute();
   setStatus('io-status', '예시 코드표를 현재 곡에 연결했습니다(타이밍은 가짜입니다).', false);
+}
+
+// ---------- fixing one chord (play view) ----------
+function shownKey(): string {
+  return demo ? demo.key : chartKey;
+}
+
+function renderFixNote(): void {
+  const box = $('fix-done');
+  const show = !!fixNote && fixNote.key === shownKey() && !!model;
+  box.hidden = !show;
+  if (!show) return;
+  setText('fix-done-text', fixNote!.text);
+  $('fix-done-text').className = fixNote!.error ? 'err' : '';
+  $('fix-undo').hidden = !fixNote!.undo || !lastFix || lastFix.key !== shownKey();
+}
+
+/** Stores one fixed chord: through the service worker's serialized writes, or in memory during demo. */
+async function saveFix(event: EventRef, concert: string, names: { from: string; to: string }): Promise<void> {
+  const key = shownKey();
+  try {
+    let before: Chart;
+    let after: Chart;
+    let recording: Pick<Recording, 'source' | 'id'> | null = null;
+    if (demo) {
+      before = demo.chart;
+      after = correctChordEvent(before, event, concert);
+      demo.chart = after;
+    } else {
+      const target = chartWriteTarget(currentRecording(), false);
+      if (!target.ok) throw new Error('재생 중인 곡이 없어요.');
+      recording = { source: target.recording.source, id: target.recording.id };
+      ({ before, after } = await correctChartEvent(recording.source, recording.id, event, concert));
+      if (key !== shownKey()) return; // the song changed while saving
+      chart = after;
+    }
+    lastFix = { key, recording, before, after };
+    fixNote = { key, text: `고쳤어요: ${names.from} → ${names.to}${demo ? ' (데모라서 저장하지는 않아요)' : ''}`, undo: true, error: false };
+    recompute();
+    if (!demo) await refreshPendingAuto();
+  } catch (e) {
+    fixNote = { key, text: `고치지 못했어요. ${e instanceof Error ? e.message : String(e)}`, undo: false, error: true };
+    renderFixNote();
+    throw e;
+  }
+}
+
+async function undoFix(): Promise<void> {
+  const fix = lastFix;
+  if (!fix || fix.key !== shownKey()) return;
+  try {
+    if (demo) demo.chart = fix.before;
+    else {
+      if (!fix.recording) throw new Error('재생 중인 곡이 없어요.');
+      const restored = await undoChartCorrection(fix.recording.source, fix.recording.id, fix.before, fix.after);
+      if (fix.key !== shownKey()) return;
+      chart = restored;
+    }
+    lastFix = null;
+    fixNote = { key: fix.key, text: '되돌렸어요', undo: false, error: false };
+    recompute();
+    if (!demo) await refreshPendingAuto();
+  } catch (e) {
+    fixNote = { key: fix.key, text: `되돌리지 못했어요. ${e instanceof Error ? e.message : String(e)}`, undo: false, error: true };
+    lastFix = null;
+    renderFixNote();
+  }
 }
 
 // ---------- transport, count-in ----------
@@ -1304,6 +1399,15 @@ async function main(): Promise<void> {
       if (demo) demo.clock.rate = r;
     },
   });
+  fixer = new ChordFixer({
+    model: () => model,
+    now: () => positionNow(),
+    seek: (sec) => void seekTo(sec),
+    showSounding: () => settings.showSounding,
+    mark: (sec) => screen.markFix(sec),
+    save: saveFix,
+  });
+  $('fix-undo').onclick = () => void undoFix();
   if (hasChrome) {
     try {
       myWindowId = (await chrome.windows.getCurrent()).id ?? null;
@@ -1335,6 +1439,7 @@ async function main(): Promise<void> {
   recompute();
   renderHeader();
   if (params.get('demo') === '1') await startDemo(params.get('rec') ?? undefined);
+  if (params.has('fix')) fixer.open(); // screenshots: open the chord fixing panel
   if (params.get('sheet') === '1') openSheet();
   requestAnimationFrame(loop);
 }

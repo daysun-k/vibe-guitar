@@ -58,6 +58,14 @@
       <div class="lane" id="lane" tabindex="0" aria-label="마디 진행표. 마디를 누르면 그 위치로 이동"></div>
       <button class="follow" id="follow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M6 13l6 6 6-6"/></svg>현재 위치로</button>
     </div>
+    <section class="fix" id="fix" hidden aria-label="코드 고치기: 틀린 코드를 하나 골라 바꿔요">
+      <div class="fix-which"><button class="ibtn" id="fix-prev" aria-label="앞 코드 고르기">‹</button><p id="fix-which" aria-live="polite"></p><button class="ibtn" id="fix-next" aria-label="다음 코드 고르기">›</button>
+        <button class="ibtn" id="fix-close" aria-label="코드 고치기 닫기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+      <div class="fix-grid" id="fix-roots" role="group" aria-label="바꿀 코드의 근음"></div>
+      <div class="fix-grid kinds" id="fix-kinds" role="group" aria-label="바꿀 코드의 종류"></div>
+      <div class="fix-foot"><p id="fix-preview" aria-live="polite"></p><button class="fix-save" id="fix-save">이 코드로 고치기</button></div>
+    </section>
+    <div class="fix-done" id="fix-done" role="status" hidden><span id="fix-done-text"></span><button class="link" id="fix-undo">되돌리기</button></div>
     <footer class="transport" id="transport">
       <div class="seek"><div class="seek-track"><div class="seek-fill" id="seek-fill"></div></div><div class="seek-ticks" id="seek-ticks"></div>
         <input type="range" id="seek" min="0" max="1" step="0.1" value="0" aria-label="재생 위치" /></div>
@@ -66,6 +74,7 @@
         <div class="time"><b id="t-now">0:00</b> / <span id="t-dur">0:00</span></div>
         <div class="sec-now" id="sec-now"></div>
         <div class="seg" id="rate-seg" role="group" aria-label="재생 속도" hidden><button data-rate="0.5" aria-pressed="false">0.5×</button><button data-rate="1" aria-pressed="true">1×</button></div>
+        <button class="fix-open" id="fix-open" aria-controls="fix" aria-expanded="false" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/></svg>코드 고치기</button>
       </div>
       <div id="countin-status" class="small err"></div>
     </footer>

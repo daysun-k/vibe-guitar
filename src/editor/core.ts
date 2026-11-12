@@ -1,6 +1,7 @@
 /** Pure logic for the side-panel chart editor (sequence paste, stamping, tap tempo). */
 import { respellChartForKey, prettyChord } from '../music/key';
 import { isNoChord, parseChord } from '../arrange/chord';
+import { sameChordSymbol } from './correct';
 import { quantizeTime } from '../chart/timing';
 import type { Chart, ChordEvent, Recording, Timing } from '../chart/types';
 import { validateChart } from '../chart/validate';
@@ -100,11 +101,14 @@ export function nextToStamp(state: StampState): string | null {
   return state.chords[state.stamps.length] ?? null;
 }
 
-/** Snap stamps to the beat grid (subdivision steps per beat), keeping them strictly increasing. */
-export function quantizeStamps(stamps: number[], timing: Timing, subdivision = 1): number[] {
+/**
+ * Snap stamps to the beat grid (subdivision steps per beat), keeping them strictly increasing.
+ * Times in `keep` (event starts of the loaded chart) are left where they are.
+ */
+export function quantizeStamps(stamps: number[], timing: Timing, subdivision = 1, keep: ReadonlySet<number> = new Set()): number[] {
   const out: number[] = [];
   for (const s of stamps) {
-    let q = Math.max(0, Math.round(quantizeTime(timing, s, subdivision) * 1000) / 1000);
+    let q = keep.has(s) ? s : Math.max(0, Math.round(quantizeTime(timing, s, subdivision) * 1000) / 1000);
     const prev = out[out.length - 1];
     if (prev !== undefined && q <= prev) q = s > prev ? s : prev + 0.001;
     out.push(q);
@@ -123,11 +127,37 @@ export interface BuildChartInput {
   now?: Date;
 }
 
-export function buildChart(input: BuildChartInput): Chart {
+/**
+ * What happened to an automatic (or edited) chart's information on save:
+ * - 'kept': event times unchanged, so unchanged events keep their source/confidence and
+ *   the heard coverage (gaps included) stays; only changed chords became manual.
+ * - 'lost': times changed, so every event became manual and coverage one continuous range.
+ * - 'none': nothing to keep (new chart or a hand-made chart).
+ */
+export type Preservation = 'kept' | 'lost' | 'none';
+
+export interface BuiltChart {
+  chart: Chart;
+  preservation: Preservation;
+  /** Events saved as manual because they are new or their chord changed ('kept' only). */
+  changed: number;
+}
+
+export function buildChartDetailed(input: BuildChartInput): BuiltChart {
   const n = Math.min(input.chords.length, input.stamps.length);
+  const existing = input.existing ?? null;
+  const prev = existing && existing.provenance.createdBy !== 'manual' ? existing.events : null;
+  const sameTimes = !!prev && prev.length === n && prev.every((e, i) => e.startSec === input.stamps[i]);
+  const preservation: Preservation = !prev ? 'none' : sameTimes ? 'kept' : 'lost';
   const events: ChordEvent[] = [];
+  let changed = 0;
   for (let i = 0; i < n; i++) {
-    events.push({ startSec: input.stamps[i], chord: input.chords[i], confidence: 1, source: 'manual' });
+    const old = sameTimes ? prev![i] : null;
+    if (old && sameChordSymbol(old.chord, input.chords[i])) events.push({ ...old });
+    else {
+      if (sameTimes) changed++;
+      events.push({ startSec: input.stamps[i], chord: input.chords[i], confidence: 1, source: 'manual' });
+    }
   }
   const barSec = (60 / input.timing.bpm) * input.timing.beatsPerBar;
   const lastStart = events.length ? events[events.length - 1].startSec : 0;
@@ -138,15 +168,22 @@ export function buildChart(input: BuildChartInput): Chart {
     recording: input.recording,
     timing: input.timing,
     events,
-    coverage: events.length ? [{ fromSec: Math.min(events[0].startSec, input.timing.firstDownbeatSec), toSec: end }] : [],
-    provenance: input.existing
-      ? { ...input.existing.provenance, createdBy: 'edited', updatedAt: nowIso, example: undefined }
+    coverage:
+      preservation === 'kept'
+        ? existing!.coverage.map((r) => ({ ...r }))
+        : events.length ? [{ fromSec: Math.min(events[0].startSec, input.timing.firstDownbeatSec), toSec: end }] : [],
+    provenance: existing
+      ? { ...existing.provenance, createdBy: 'edited', updatedAt: nowIso, example: undefined }
       : { createdBy: 'manual', createdAt: nowIso, tool: 'vibe-guitar side panel editor' },
   };
   if (chart.provenance.example === undefined) delete chart.provenance.example;
   const v = validateChart(chart);
   if (!v.ok) throw new Error(`built chart is invalid: ${v.errors.join('; ')}`);
-  return chart;
+  return { chart, preservation, changed };
+}
+
+export function buildChart(input: BuildChartInput): Chart {
+  return buildChartDetailed(input).chart;
 }
 
 /** Re-key a chart (e.g. an example) to another recording, keeping events and timing. */
