@@ -246,16 +246,25 @@ Phone control (휴대폰에서 조작 허용, VGT-16):
       code and no buttons. With 휴대폰 악보대 off the switch is hidden.
 - [ ] Pairing: switch it on. The phone shows a 4-digit code; the sheet lists the same code with 승인 / 거절.
       Open the page on a second phone (or a second browser tab): it gets a different code. Press 승인 for your
-      phone's code only: your phone shows 재생 and 처음부터; the other one keeps showing its code and no buttons.
+      phone's code only: your phone shows ◀ 이전 마디, 재생, 다음 마디 ▶ and 처음부터; the other one keeps
+      showing its code and no buttons.
 - [ ] Play/pause: with a song playing in the active tab, tap 일시정지, then 재생. The Mac's player follows each
       tap within about a second, and the phone shows "일시정지했어요" / "재생했어요" after the Mac changed.
       With 카운트인 1마디: 재생 starts the panel's count-in ("카운트인 뒤에 재생해요"); tapping again during
       the count-in cancels it and nothing plays.
 - [ ] 처음부터: with an A/B loop set, it goes back to the loop's first bar; without a loop, to the start of the
-      current bar. Playing stays playing, paused stays paused.
+      song (0 s), not the current bar. Playing stays playing, paused stays paused.
+- [ ] 이전 마디 / 다음 마디: in the middle of the song, 이전 마디 goes to the start of the previous bar (tapped
+      right after a bar starts, still the previous bar, not the current one) and 다음 마디 to the start of the
+      next bar; the bar number at the top of the phone follows. In bar 1, 이전 마디 stays at bar 1's start; in
+      the last bar, 다음 마디 does nothing and says "마지막 마디예요". With an A/B loop set, both stay inside the
+      loop (다음 마디 at B: "구간 반복의 마지막 마디예요"). Playing stays playing, paused stays paused.
+- [ ] Layout: in portrait and landscape, with a song whose chords have long names (e.g. Bm7, F#7sus4,
+      C#m7b5/G#) and a long title, nothing runs past the right edge: the chord name gets smaller so its
+      diagram stays fully visible, the title in the status line ends with "…", and all four buttons fit.
 - [ ] Autoplay: reload the YouTube tab and do not click it; tap 재생 on the phone. If Chrome blocks it, the phone
       says "맥에서 한 번 재생을 눌러 주세요" after about 3 s; click play on the Mac once and the phone works again.
-- [ ] Ads: during an ad both buttons answer "광고 중에는 조작할 수 없어요" and the ad is not affected.
+- [ ] Ads: during an ad every button answers "광고 중에는 조작할 수 없어요" and the ad is not affected.
 - [ ] Rapid taps: tap 재생/일시정지 five times quickly: the buttons stay disabled while a command is pending and
       excess taps are refused ("너무 빨리 눌렀어요" or ignored), never replayed later.
 - [ ] Revoke: press 승인 해제 in the sheet: the phone shows "조작 승인이 해제됐어요" and its code again. Approve

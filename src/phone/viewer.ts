@@ -1,10 +1,13 @@
 /**
  * VGT-13 phone music stand page (design B "악보대형"). Served by the relay on the home LAN over plain
  * http, so there is no Screen Wake Lock: the page asks once to turn off auto-lock instead.
- * It sends clock pings and, VGT-16, only while the panel approved this connection, the two commands
- * (재생/일시정지, 처음부터) for the song it shows. A pending command is never re-sent after a reconnect.
+ * It sends clock pings and, VGT-16, only while the panel approved this connection, the commands
+ * (재생/일시정지, 처음부터, 이전 마디, 다음 마디) for the song it shows. A pending command is never re-sent
+ * after a reconnect. Chord names are fitted to the space beside their diagrams (fit.ts) so the page
+ * never gets wider than the screen.
  */
 import { renderShapeDiagram } from '../extension/sidepanel/diagram';
+import { NEXT_SCALE, fitText } from './fit';
 import {
   ANCHOR_TTL_MS,
   SongAssembler,
@@ -69,14 +72,18 @@ const FAILURE_TEXT: Record<CommandFailure, string> = {
   timeout: 'Mac에서 바뀐 것을 확인하지 못했어요 · Mac 화면을 확인해 주세요',
   failed: 'Mac에서 실행하지 못했어요',
   cancelled: '조작 권한이 바뀌어서 취소했어요',
+  'last-bar': '마지막 마디예요 · 더 갈 마디가 없어요',
   'no-panel': 'Mac 패널이 연결되어 있지 않아요',
 };
 
 /** Korean message for an outcome. */
 function outcomeText(cmd: PhoneCommand | null, o: CommandOutcome): string {
+  if (!o.ok && o.code === 'last-bar' && anchor?.loop) return '구간 반복의 마지막 마디예요';
   if (!o.ok) return FAILURE_TEXT[o.code];
   if (o.state === 'countin') return '카운트인 뒤에 재생해요 · 한 번 더 누르면 멈춰요';
   if (cmd === 'restart') return o.state === 'playing' ? '처음부터 다시 재생해요' : '처음 위치로 옮겼어요';
+  if (cmd === 'prev-bar') return '이전 마디로 옮겼어요';
+  if (cmd === 'next-bar') return '다음 마디로 옮겼어요';
   return o.state === 'playing' ? '재생했어요' : '일시정지했어요';
 }
 
@@ -201,6 +208,8 @@ function watchdog() {
 // ---------- drawing ----------
 
 const shown = { nowShape: -3, nextShape: -3 };
+/** The chord names must be fitted again (new name, new screen size, or not measurable yet). */
+let fitDirty = true;
 
 function setText(id: string, text: string) {
   const el = $(id);
@@ -242,7 +251,9 @@ function where(s: PhoneSong, section: number, bar: number): string {
 
 const REJECTED_TEXT = 'Mac 패널에서 이 휴대폰의 조작을 거절했어요 · 다시 요청하려면 페이지를 새로 고쳐 주세요';
 
-/** Pairing code, the two buttons and the last outcome. */
+const CONTROL_BUTTONS = ['ctl-prev', 'ctl-toggle', 'ctl-next', 'ctl-restart'];
+
+/** Pairing code, the control buttons and the last outcome. */
 function drawControl(t: number, ready: boolean) {
   if (pending && t - pending.at > COMMAND_WAIT_MS) {
     pending = null;
@@ -259,10 +270,10 @@ function drawControl(t: number, ready: boolean) {
   $('ctl').hidden = !controls;
   if (controls) {
     const busy = !!pending;
-    const toggle = $('ctl-toggle') as HTMLButtonElement;
-    const restart = $('ctl-restart') as HTMLButtonElement;
-    if (toggle.disabled !== busy) toggle.disabled = busy;
-    if (restart.disabled !== busy) restart.disabled = busy;
+    for (const id of CONTROL_BUTTONS) {
+      const b = $(id) as HTMLButtonElement;
+      if (b.disabled !== busy) b.disabled = busy;
+    }
     const playing = !!anchor && !anchor.paused && !anchor.ad;
     setText('ctl-toggle', busy ? '보내는 중…' : countinId ? '멈추기' : playing ? '일시정지' : '재생');
   }
@@ -321,6 +332,7 @@ function frame() {
     setText('now-snd', n.snd);
     $('now-dia').innerHTML = diagramHtml(s, nowShape, 170);
     shown.nowShape = nowShape;
+    fitDirty = true;
   }
   if (nextShape !== shown.nextShape) {
     const n = nameOf(s, nextShape);
@@ -328,8 +340,14 @@ function frame() {
     setText('next-snd', n.snd);
     $('next-dia').innerHTML = diagramHtml(s, nextShape, 130);
     shown.nextShape = nextShape;
+    fitDirty = true;
   }
   setText('where', where(s, f.section, f.bar));
+  if (fitDirty) {
+    // The next chord never looks bigger than the current one, also when a long current name shrank.
+    const nowPx = fitText($('now-name'));
+    fitDirty = nowPx === null || fitText($('next-name'), Math.round(nowPx * NEXT_SCALE)) === null;
+  }
   if (anchor?.ad) {
     setDots(0, 0);
     setText('count', '광고 중');
@@ -367,6 +385,23 @@ setInterval(() => {
 }, 2000);
 $('ctl-toggle').addEventListener('click', () => sendCommand('toggle'));
 $('ctl-restart').addEventListener('click', () => sendCommand('restart'));
+$('ctl-prev').addEventListener('click', () => sendCommand('prev-bar'));
+$('ctl-next').addEventListener('click', () => sendCommand('next-bar'));
+// Rotation or a resized window changes the space beside the diagrams, and so does a row whose height
+// changed (a message or notice shown or gone resizes the diagrams, which are sized by their row).
+addEventListener('resize', () => (fitDirty = true));
+if (typeof ResizeObserver === 'function') {
+  const widths = new Map<Element, number>();
+  const ro = new ResizeObserver((entries) => {
+    for (const e of entries) {
+      const w = e.contentRect.width;
+      if (widths.get(e.target) !== w) fitDirty = true;
+      widths.set(e.target, w);
+    }
+  });
+  ro.observe($('now-name'));
+  ro.observe($('next-name'));
+}
 lockNotice();
 connect();
 requestAnimationFrame(frame);

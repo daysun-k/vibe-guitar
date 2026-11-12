@@ -1,9 +1,10 @@
 /**
  * VGT-16: carrying out a command from the approved phone in the side panel.
  *
- * The phone's two commands go through the same handlers as the panel's own controls: play/pause is
- * the play button's togglePlay (count-in, loop start and pause-cancels-count-in included) and
- * "처음부터" is the same seek a bar click uses. The panel then waits until the player's reported
+ * The phone's commands go through the same handlers as the panel's own controls: play/pause is the
+ * play button's togglePlay (count-in, loop start and pause-cancels-count-in included); "처음부터"
+ * (loop A, else the song's start) and "이전 마디" / "다음 마디" are the same seek a bar click uses.
+ * The panel then waits until the player's reported
  * state shows the change (bounded by CONTROL_OBSERVE_MS) before it tells the phone, because the
  * content script answers before play/seek has actually happened, and a phone tap does not count as a
  * user gesture on the Mac's page: the browser's autoplay rule may keep the video paused.
@@ -57,6 +58,11 @@ export interface PanelTransport {
   seek(sec: number): Promise<PlayerControlResult>;
   /** Where 처음부터 goes, or null when there is nowhere to go. */
   restartTarget(): number | null;
+  /**
+   * Where 이전 마디 (-1) / 다음 마디 (+1) goes from the position now (see barStepTargetSec): a time,
+   * `last` when 다음 마디 is already in the last bar (of the loop, when one is set), or null without bars.
+   */
+  barTarget(step: -1 | 1): number | 'last' | null;
   /** Cancels the count-in this command started (never one started from the panel), so it never plays. */
   cancelCountIn(): void;
 }
@@ -97,7 +103,7 @@ export const SONG_CHANGED: CommandFailure = 'stale';
 export const SEEK_EARLY_SEC = 0.35;
 /** ... and at most this far after it (observed, never extrapolated from the rate). */
 export const SEEK_LATE_SEC = 0.6;
-/** Consecutive observations inside that window needed before 처음부터 counts as done. */
+/** Consecutive observations inside that window needed before a seek command counts as done. */
 const LANDED_SAMPLES = 2;
 
 /** Pauses the player if it plays (e.g. started on the Mac during a count-in) and reports what it shows. */
@@ -163,15 +169,42 @@ export async function waitUntil(pred: () => boolean, ms: number, pollMs: number,
 }
 
 /**
- * Where 처음부터 goes: the loop's A (`loopStartSec`, already the bar-click target) when a loop
- * exists, otherwise the start of the bar under `position` (0 before the first bar). Null without bars.
+ * Where 처음부터 goes: the loop's A (`loopStartSec`, already the bar-click target) when a loop exists,
+ * otherwise the start of the song (0). Never the current bar. Null without bars (no chart to play).
  */
-export function restartTargetSec(loopStartSec: number | null, bars: readonly { startSec: number }[], position: number): number | null {
+export function restartTargetSec(loopStartSec: number | null, bars: readonly { startSec: number }[]): number | null {
   if (loopStartSec !== null) return Math.max(0, loopStartSec);
+  return bars.length ? 0 : null;
+}
+
+/** A bar step seeks just inside the bar, like a bar click (so the bar under the playhead is that bar). */
+const BAR_SEEK_INSIDE_SEC = 0.01;
+/**
+ * A position this little before a bar's start counts as that bar: a step that landed a frame early (players
+ * round to frames) must not make the next 이전 마디 skip a bar.
+ */
+export const BAR_EARLY_SEC = 0.1;
+
+/**
+ * Where 이전 마디 (`step` -1) / 다음 마디 (+1) goes from `position`: the start of the bar before / after
+ * the bar under `position` (before the first bar: bar 1 counts as the current bar's successor; up to
+ * BAR_EARLY_SEC before a bar's start counts as that bar).
+ * 이전 마디 always goes to the previous bar, never back to the start of the current one, and stays at
+ * the first bar's start there. 다음 마디 in the last bar is `last` (nothing to do). With a loop
+ * (`loopBars`: indexes of its A and B bars), the steps stay inside its bars: 이전 마디 at A stays at A,
+ * 다음 마디 at B is `last`, and from outside the loop a step lands on the nearest loop bar.
+ * Null without bars.
+ */
+export function barStepTargetSec(step: -1 | 1, bars: readonly { startSec: number }[], position: number, loopBars: readonly [number, number] | null = null): number | 'last' | null {
   if (!bars.length) return null;
+  const lo = loopBars ? Math.max(0, Math.min(loopBars[0], bars.length - 1)) : 0;
+  const hi = loopBars ? Math.max(lo, Math.min(loopBars[1], bars.length - 1)) : bars.length - 1;
   let at = -1;
-  for (let i = 0; i < bars.length; i++) if (bars[i]!.startSec <= position + 1e-6) at = i;
-  return at >= 0 ? Math.max(0, bars[at]!.startSec) : 0;
+  for (let i = 0; i < bars.length; i++) if (bars[i]!.startSec <= position + BAR_EARLY_SEC) at = i;
+  // In the last bar (of the loop): 다음 마디 has nothing to do.
+  if (step > 0 && at === hi) return 'last';
+  const to = Math.max(lo, Math.min(hi, at + step));
+  return Math.max(0, bars[to]!.startSec) + BAR_SEEK_INSIDE_SEC;
 }
 
 export async function runPhoneCommand(cmd: PhoneCommand, player: ObservedPlayer, transport: PanelTransport, o: RunOptions = {}): Promise<CommandOutcome> {
@@ -214,8 +247,10 @@ export async function runPhoneCommand(cmd: PhoneCommand, player: ObservedPlayer,
     return fail(want ? 'autoplay' : 'timeout');
   }
 
-  const target = transport.restartTarget();
+  const target = cmd === 'restart' ? transport.restartTarget() : transport.barTarget(cmd === 'prev-bar' ? -1 : 1);
   if (target === null) return fail('no-target');
+  // 다음 마디 in the last bar: nothing is sent to the player.
+  if (target === 'last') return fail('last-bar');
   // seek() sends synchronously, so this is the check immediately before the seek goes out.
   if (!allowed()) return g.refused();
   const r = await transport.seek(target);
@@ -226,7 +261,7 @@ export async function runPhoneCommand(cmd: PhoneCommand, player: ObservedPlayer,
 }
 
 /**
- * 처음부터 counts as done only once the observed position is inside [target - SEEK_EARLY_SEC,
+ * A seek command (처음부터, 이전 마디, 다음 마디) counts as done only once the observed position is inside [target - SEEK_EARLY_SEC,
  * target + SEEK_LATE_SEC] in LANDED_SAMPLES consecutive observations. Nothing is extrapolated from
  * the rate or the elapsed time, so a seek that was accepted but never applied (the old position keeps
  * moving away from the target) never counts. A rate change between observations starts the count

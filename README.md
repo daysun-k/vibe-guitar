@@ -31,7 +31,7 @@ on, the loopback connection to the [phone music stand](#phone-music-stand-휴대
 | `src/lyrics/` | LRCLIB client and parsers (`lrclib.ts`), lyric↔chart offset, chord-over-word placement, pinned line (`align.ts`) |
 | `src/play/` | Play-view model (`model.ts`), lane/sections/strip (`lane.ts`), demo clock and synthetic demo song (`demo.ts`) |
 | `src/phone/` | Phone music stand: song view (`song-view.ts`), wire protocol and timing (`protocol.ts`), relay (`relay.ts`), WebSocket frames, QR encoder, phone page (`viewer.ts/html`) |
-| `scripts/phone.mjs`, `scripts/phone-check.mjs` | `npm run phone` (relay + QR) and `npm run phone-check` (scripted relay checks) |
+| `scripts/phone.mjs`, `scripts/phone-check.mjs`, `scripts/phone-layout.mjs` | `npm run phone` (relay + QR), `npm run phone-check` (scripted relay checks) and `npm run phone-layout` (phone page measured in headless Chromium) |
 | `Vibe Guitar Phone.command` | double-click launcher for `npm run phone` (macOS Finder) |
 | `src/eval/metrics.ts` | WCSR (majmin/root/sevenths), beat F-measure, chart-vs-chart comparison |
 | `src/bench/` | Synthetic labeled set and benchmark core (Node script and in-extension bench page) |
@@ -227,7 +227,7 @@ WebSocket, plus an exact `Host` (DNS rebinding) and `Origin` match. The token is
 encryption**: traffic is plain http, so use it only on a trusted home Wi-Fi, not on public Wi-Fi. Frames over
 8 KiB, malformed or unknown messages, more than 40 messages a second, more than 4 phones and 20 s of silence
 close the connection; a song view larger than one frame is sent in up to 16 parts and checked as a whole
-before any phone sees it. The phone page sends only clock pings and, with phone control (below), the two
+before any phone sees it. The phone page sends only clock pings and, with phone control (below), its four
 commands; it is served with
 `Cache-Control: no-store` and a CSP that allows only its own script and WebSocket. No manifest change: the
 extension pages' CSP has no `connect-src` limit, so `ws://127.0.0.1` needs no permission.
@@ -235,9 +235,13 @@ extension pages' CSP has no `connect-src` limit, so `ws://127.0.0.1` needs no pe
 **Phone control (휴대폰에서 조작 허용, off by default).** With 휴대폰 악보대 on, a second switch appears:
 휴대폰에서 조작 허용. While it is on, a phone that opens the stand page shows a 4-digit code, and the settings
 sheet lists every connected phone's code with **승인** / **거절**. Approve only the code your own phone shows.
-The approved phone gets two large buttons, **재생/일시정지** and **처음부터** (back to loop A when a loop is
-set, otherwise to the start of the current bar; it keeps playing or paused). Nothing else can be controlled
-from the phone: no seeking to a chosen time, no speed, no other tab or page. Anyone with the QR URL can still
+The approved phone gets large buttons: **◀ 이전 마디 | 재생/일시정지 | 다음 마디 ▶** and, below them,
+**처음부터**. 처음부터 goes to loop A when a loop is set, otherwise to the start of the song (0 s), never just
+the current bar. 이전 마디 goes to the start of the bar before the one under the playhead (also when the
+playhead is right at a bar start), and stays at the first bar there; 다음 마디 goes to the start of the next
+bar, and in the last bar does nothing and says "마지막 마디예요". With a loop set, both stay inside the loop's
+bars (이전 마디 at A stays at A, 다음 마디 at B says "구간 반복의 마지막 마디예요"). All of them keep playing or
+paused. Nothing else can be controlled from the phone: no seeking to a chosen time, no speed, no other tab or page. Anyone with the QR URL can still
 *watch*, but only the one approved phone can *control*. The approval belongs to that one connection and this
 panel session; it ends with **승인 해제**, when the switch goes off, when the phone disconnects or reloads,
 when the panel closes or another window's panel takes over, and when the relay restarts. Nothing about it is
@@ -246,7 +250,7 @@ song the panel currently shows, with an increasing request id and at most about 
 rejected, never queued); the panel checks all of that again and refuses during ads or without a controllable
 player. A command runs through the panel's own play button and bar-click seek (count-in, loop start and
 "pause cancels the count-in" included), and the phone hears the outcome only after the panel saw the player
-change (up to 3 s); 처음부터 counts only once the observed position is at the target. Only the panel
+change (up to 3 s); 처음부터, 이전 마디 and 다음 마디 count only once the observed position is at the target. Only the panel
 grants control: pressing 승인 gives that phone a new grant number, the relay stamps it on the phone's commands,
 and the panel runs a command only if it carries the panel's current number; 승인 해제, 거절, approving another
 phone or switching control off ends the grant on the panel at once, without waiting for the relay.
@@ -264,7 +268,15 @@ phone's extrapolated chord changes land from the panel's (same Mac, so Wi-Fi del
 target is ≤ 100 ms; on the development Mac the worst case was under 2 ms). It also runs a second relay with a
 1.5 s idle time to check the idle auto-stop (stays up with a panel, stops once only a phone is left, both ports
 closed), and checks phone control: a command is refused while control is off and from an unapproved phone,
-reaches the fake panel once approved, and is refused again after the switch goes off. Real-phone steps:
+reaches the fake panel once approved, and is refused again after the switch goes off; 이전 마디 and 다음 마디
+are refused without approval and forwarded once each, with the grant, once approved.
+`npm run phone-layout` opens the real phone page in headless Chromium at phone sizes (390×664 and 320×548
+portrait, 844×340 and 568×280 landscape) with long chord names (up to "C#m7b5(add11)/G#") and a long title,
+and measures that nothing is wider than the screen and that the diagrams and the four buttons stay on screen
+(it needs Chromium: `$CHROME`, Playwright's cache or Google Chrome; without one it exits 2 —
+`npm run phone-layout -- --serve` then keeps a fake panel running for any browser, and the page reports its
+own measurement in its title). The phone page fits a long chord name to the space beside its diagram.
+Real-phone steps:
 [checklist section G](docs/phase0-test-checklist.md#g-phone-music-stand-휴대폰-악보대--real-phone).
 
 ## Demo playback and screenshots

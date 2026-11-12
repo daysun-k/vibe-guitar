@@ -13,7 +13,8 @@
     "bench": "node scripts/bench.mjs",
     "accuracy-report": "node scripts/accuracy-report.mjs",
     "phone": "node scripts/phone.mjs",
-    "phone-check": "node scripts/phone-check.mjs"
+    "phone-check": "node scripts/phone-check.mjs",
+    "phone-layout": "node scripts/phone-layout.mjs"
   },
   "devDependencies": {
     "@types/chrome": "^0.3.7",

@@ -65,7 +65,7 @@ import { ChordFixer } from './fix';
 import { OVERVIEW_EMPTY, renderOverviewHtml } from './overview';
 import { capoReason, unplayableLine, PlayScreen, formatTime, type LoopMarks } from './play';
 import { PhoneLink, phoneStatusText, type PhoneStatus, type PlaybackSample } from './phone-link';
-import { ShownModel, modelSongId, playerTargetKey, songIdOf, songViewReady, type TargetParts, restartTargetSec, runPhoneCommand, type CommandContext, type ObservedPlayer, type PanelTransport } from './phone-control';
+import { ShownModel, modelSongId, playerTargetKey, songIdOf, songViewReady, type TargetParts, restartTargetSec, barStepTargetSec, runPhoneCommand, type CommandContext, type ObservedPlayer, type PanelTransport } from './phone-control';
 import type { CommandOutcome, PhoneCommand, PhoneEntry } from '../../phone/protocol';
 import { buildSongView } from '../../phone/song-view';
 
@@ -1409,7 +1409,8 @@ const phoneTransport: PanelTransport = {
     if (countingIn && countInRun === phoneCountInRun) stopCountIn();
   },
   seek: (sec) => seekTo(sec),
-  restartTarget: () => (model ? restartTargetSec(practiceLoop ? loopStartTarget(practiceLoop) : null, model.bars, positionNow(false)) : null),
+  restartTarget: () => (model ? restartTargetSec(practiceLoop ? loopStartTarget(practiceLoop) : null, model.bars) : null),
+  barTarget: (step) => (model ? barStepTargetSec(step, model.bars, positionNow(false), practiceLoop ? loopBarIndexes(practiceLoop, model.bars) : null) : null),
 };
 
 function onPhoneCommand(cmd: PhoneCommand, progress: (o: CommandOutcome) => void, signal: AbortSignal, context: CommandContext): Promise<CommandOutcome> {

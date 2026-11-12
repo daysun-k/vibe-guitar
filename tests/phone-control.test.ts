@@ -15,7 +15,7 @@ import {
 } from '../src/phone/protocol';
 import { Pairing } from '../src/phone/pairing';
 import { PhoneLink, type SocketLike } from '../src/extension/sidepanel/phone-link';
-import { ShownModel, modelSongId, playerTargetKey, songIdOf, songViewReady, restartTargetSec, type TargetParts, runPhoneCommand, type CommandContext, type ObservedPlayer, type PanelTransport, type TransportResult } from '../src/extension/sidepanel/phone-control';
+import { ShownModel, modelSongId, playerTargetKey, songIdOf, songViewReady, restartTargetSec, barStepTargetSec, type TargetParts, runPhoneCommand, type CommandContext, type ObservedPlayer, type PanelTransport, type TransportResult } from '../src/extension/sidepanel/phone-control';
 import { playToggle, type PlayToggleEnv } from '../src/extension/sidepanel/play-toggle';
 import type { PlayerControlMessage, PlayerControlResult } from '../src/extension/messages';
 import { DEFAULT_SETTINGS, chartSongKey, normalizeSettings } from '../src/extension/storage';
@@ -27,9 +27,9 @@ const EPOCH = 'epochepoch01';
 describe('protocol: control messages', () => {
   const cmd = { t: 'cmd', id: 1, epoch: EPOCH, rev: 3, cmd: 'toggle' };
 
-  it('accepts exactly the two commands from a viewer', () => {
+  it('accepts exactly the four commands from a viewer', () => {
     expect(validateViewerMessage(JSON.stringify(cmd))).toEqual(cmd);
-    expect(validateViewerMessage(JSON.stringify({ ...cmd, cmd: 'restart' }))?.t).toBe('cmd');
+    for (const c of ['restart', 'prev-bar', 'next-bar']) expect(validateViewerMessage(JSON.stringify({ ...cmd, cmd: c }))).toEqual({ ...cmd, cmd: c });
     expect(validateViewerMessage(JSON.stringify({ t: 'ping', id: 1, c: 5 }))?.t).toBe('ping');
   });
 
@@ -37,6 +37,9 @@ describe('protocol: control messages', () => {
     for (const bad of [
       { ...cmd, cmd: 'seek' },
       { ...cmd, cmd: 'play' },
+      { ...cmd, cmd: 'bar' },
+      { ...cmd, cmd: 'next-bar', bar: 3 },
+      { ...cmd, cmd: 'prev-bar', bars: -2 },
       { ...cmd, time: 12 },
       { ...cmd, rate: 2 },
       { ...cmd, tabId: 5 },
@@ -224,21 +227,62 @@ describe('Pairing', () => {
 describe('restart target', () => {
   const bars = [{ startSec: 2 }, { startSec: 4 }, { startSec: 6 }];
   it('goes to loop A when a loop exists', () => {
-    expect(restartTargetSec(4.01, bars, 5.5)).toBe(4.01);
+    expect(restartTargetSec(4.01, bars)).toBe(4.01);
   });
-  it('otherwise to the start of the current bar', () => {
-    expect(restartTargetSec(null, bars, 5.5)).toBe(4);
-    expect(restartTargetSec(null, bars, 4)).toBe(4);
-    expect(restartTargetSec(null, bars, 30)).toBe(6);
+  it('otherwise to the start of the song, never the current bar', () => {
+    expect(restartTargetSec(null, bars)).toBe(0);
   });
-  it('to 0 before the first bar, null without bars', () => {
-    expect(restartTargetSec(null, bars, 1)).toBe(0);
-    expect(restartTargetSec(null, [], 1)).toBeNull();
+  it('null without bars', () => {
+    expect(restartTargetSec(null, [])).toBeNull();
   });
 });
 
+describe('bar step target (이전 마디 / 다음 마디)', () => {
+  // Bars 1..5 start at 2, 4, 6, 8, 10 s; a step lands just inside the bar, like a bar click.
+  const bars = [{ startSec: 2 }, { startSec: 4 }, { startSec: 6 }, { startSec: 8 }, { startSec: 10 }];
+  it('이전 마디 goes to the previous bar, also from the very start of the current bar', () => {
+    expect(barStepTargetSec(-1, bars, 7.5)).toBe(4.01);
+    expect(barStepTargetSec(-1, bars, 6.01)).toBe(4.01);
+    expect(barStepTargetSec(-1, bars, 6)).toBe(4.01);
+  });
+  it('a step that landed a frame early still counts as that bar (no skipped bar on the next tap)', () => {
+    expect(barStepTargetSec(-1, bars, 5.97)).toBe(4.01); // reported 0.03 s before bar 3
+    expect(barStepTargetSec(1, bars, 5.97)).toBe(8.01);
+    expect(barStepTargetSec(-1, bars, 5.8)).toBe(2.01); // well inside bar 2
+  });
+  it('이전 마디 in (or before) the first bar stays at the first bar', () => {
+    expect(barStepTargetSec(-1, bars, 3)).toBe(2.01);
+    expect(barStepTargetSec(-1, bars, 0.5)).toBe(2.01);
+  });
+  it('다음 마디 goes to the next bar; before the first bar that is bar 1', () => {
+    expect(barStepTargetSec(1, bars, 7.5)).toBe(8.01);
+    expect(barStepTargetSec(1, bars, 0.5)).toBe(2.01);
+  });
+  it('다음 마디 in the last bar is `last` (nothing to do)', () => {
+    expect(barStepTargetSec(1, bars, 10.5)).toBe('last');
+    expect(barStepTargetSec(1, bars, 30)).toBe('last');
+  });
+  it('with a loop (bars 2..4), steps stay inside its bars', () => {
+    const loop: [number, number] = [1, 3];
+    expect(barStepTargetSec(-1, bars, 4.5, loop)).toBe(4.01); // at A: stays at A
+    expect(barStepTargetSec(-1, bars, 6.5, loop)).toBe(4.01);
+    expect(barStepTargetSec(1, bars, 6.5, loop)).toBe(8.01);
+    expect(barStepTargetSec(1, bars, 8.5, loop)).toBe('last'); // at B
+    expect(barStepTargetSec(1, bars, 3, loop)).toBe(4.01); // before A: next is A
+    expect(barStepTargetSec(-1, bars, 3, loop)).toBe(4.01);
+    expect(barStepTargetSec(-1, bars, 10.5, loop)).toBe(8.01); // after B: back to B
+    expect(barStepTargetSec(1, bars, 10.5, loop)).toBe(8.01);
+  });
+  it('null without bars', () => {
+    expect(barStepTargetSec(1, [], 3)).toBeNull();
+    expect(barStepTargetSec(-1, [], 3)).toBeNull();
+  });
+});
+
+const FAKE_BARS = Array.from({ length: 10 }, (_, i) => ({ startSec: i * 2 }));
+
 /** A fake panel: the player reacts after `lagMs` (or never, like an autoplay block). */
-function fakePanel(o: { playing?: boolean; countIn?: boolean; countingIn?: boolean; heldCountIn?: boolean; ad?: boolean; target?: boolean; lagMs?: number; blockPlay?: boolean; position?: number; rate?: number; noSeek?: boolean; target10?: boolean } = {}) {
+function fakePanel(o: { playing?: boolean; countIn?: boolean; countingIn?: boolean; heldCountIn?: boolean; ad?: boolean; target?: boolean; lagMs?: number; blockPlay?: boolean; position?: number; rate?: number; noSeek?: boolean; target10?: boolean; loopBars?: [number, number] } = {}) {
   let t = 0;
   const st = { playing: o.playing ?? false, countingIn: o.countingIn ?? false, position: o.position ?? 10, ad: o.ad ?? false };
   let countInDone: ((r: TransportResult) => void) | null = null;
@@ -295,6 +339,8 @@ function fakePanel(o: { playing?: boolean; countIn?: boolean; countingIn?: boole
       return { ok: true };
     },
     restartTarget: () => (o.target10 ? 10 : 4),
+    // Bars every 2 s from 0 to 18 s.
+    barTarget: (step) => barStepTargetSec(step, FAKE_BARS, st.position, o.loopBars ?? null),
     cancelCountIn: () => {
       calls.push('cancelCountIn');
       if (!st.countingIn) return;
@@ -448,6 +494,45 @@ describe('runPhoneCommand: the outcome follows the observed player state', () =>
   it('restart that never lands times out', async () => {
     const f = fakePanel({ position: 9, lagMs: 60_000 });
     expect(await f.run('restart')).toEqual({ ok: false, code: 'timeout' });
+  });
+
+  it('이전 마디 / 다음 마디 seek through the panel handler to the bar next to the observed position', async () => {
+    const prev = fakePanel({ position: 9 });
+    expect(await prev.run('prev-bar')).toEqual({ ok: true, state: 'paused' });
+    expect(prev.calls).toEqual(['seek 6.01']);
+    const next = fakePanel({ playing: true, position: 9 });
+    expect(await next.run('next-bar')).toEqual({ ok: true, state: 'playing' });
+    expect(next.calls).toEqual(['seek 10.01']);
+  });
+
+  it('다음 마디 in the last bar sends nothing and reports last-bar; also at the loop end', async () => {
+    const f = fakePanel({ position: 19 });
+    expect(await f.run('next-bar')).toEqual({ ok: false, code: 'last-bar' });
+    const loop = fakePanel({ position: 9, loopBars: [2, 4] });
+    expect(await loop.run('next-bar')).toEqual({ ok: false, code: 'last-bar' });
+    expect([...f.calls, ...loop.calls]).toEqual([]);
+    expect(await loop.run('prev-bar')).toEqual({ ok: true, state: 'paused' });
+    expect(loop.calls).toEqual(['seek 6.01']);
+  });
+
+  it('bar steps are refused during ads, without a target and once control is gone, touching nothing', async () => {
+    const ad = fakePanel({ ad: true });
+    const none = fakePanel({ target: false });
+    const gone = fakePanel();
+    const ctl = new AbortController();
+    ctl.abort();
+    for (const cmd of ['prev-bar', 'next-bar'] as const) {
+      expect(await ad.run(cmd)).toEqual({ ok: false, code: 'ad' });
+      expect(await none.run(cmd)).toEqual({ ok: false, code: 'no-target' });
+      expect(await gone.run(cmd, undefined, ctl.signal)).toEqual({ ok: false, code: 'cancelled' });
+    }
+    expect([...ad.calls, ...none.calls, ...gone.calls]).toEqual([]);
+  });
+
+  it('a bar step that was accepted but never applied is not success (observed position only)', async () => {
+    const f = fakePanel({ playing: true, position: 9, noSeek: true });
+    expect(await f.run('prev-bar')).toEqual({ ok: false, code: 'timeout' });
+    expect(f.calls).toEqual(['seek 6.01']);
   });
 });
 
@@ -829,6 +914,7 @@ function gatePanel(o: { countIn: boolean; loopStart?: number | null; dropSeek?: 
       return env.send({ type: 'player-control', action: 'seek', time: sec });
     },
     restartTarget: () => 4,
+    barTarget: (step) => (step < 0 ? 2 : 6),
   };
   /** Answers the oldest player command still waiting for its reply. */
   const reply = () => pending.shift()?.();
@@ -1379,15 +1465,17 @@ describe('S6-R6-01: an ad that starts while a phone command waits stops it befor
     }
   }
 
-  it('restart during an ad sends nothing (with the link context)', async () => {
-    const p = gatePanel({ countIn: false });
-    const h = wiredHarness(p);
-    p.st.ad = true;
-    h.ws.rx({ t: 'cmd', id: 1, epoch: h.epoch, rev: h.rev, cmd: 'restart', from: ID_A, grant: h.grant() });
-    await finish(p);
-    expect(p.sent).toEqual([]);
-    expect(h.results().at(-1)).toMatchObject({ id: 1, ok: false, code: 'ad' });
-  });
+  for (const cmd of ['restart', 'prev-bar', 'next-bar'] as const) {
+    it(`${cmd} during an ad sends nothing (with the link context)`, async () => {
+      const p = gatePanel({ countIn: false });
+      const h = wiredHarness(p);
+      p.st.ad = true;
+      h.ws.rx({ t: 'cmd', id: 1, epoch: h.epoch, rev: h.rev, cmd, from: ID_A, grant: h.grant() });
+      await finish(p);
+      expect(p.sent).toEqual([]);
+      expect(h.results().at(-1)).toMatchObject({ id: 1, ok: false, code: 'ad' });
+    });
+  }
 });
 
 describe('S6-R6-02: a command for the previous song never reaches a player that changed before the new song is published', () => {
@@ -1400,6 +1488,8 @@ describe('S6-R6-02: a command for the previous song never reaches a player that 
 
   const CMDS: [string, PhoneCommand, boolean][] = [
     ['restart', 'restart', false],
+    ['이전 마디', 'prev-bar', false],
+    ['다음 마디', 'next-bar', false],
     ['play (count-in on)', 'toggle', true],
     ['play (count-in off)', 'toggle', false],
   ];
@@ -1561,7 +1651,8 @@ function modelPanel(marked: boolean) {
   p.player.target = () =>
     playerTargetKey({ modelVersion: m.model ? shown.version : null, modelFor: shown.builtFor, songId: REC_A, demo: null, chartLoaded: true, tab: 101, recordingKey: 'youtube:A', chartKey: 'youtube:A' });
   p.st.target = 'unused';
-  p.transport.restartTarget = () => (m.model ? restartTargetSec(null, m.model.bars, p.st.position) : null);
+  p.transport.restartTarget = () => (m.model ? restartTargetSec(null, m.model.bars) : null);
+  p.transport.barTarget = (step) => (m.model ? barStepTargetSec(step, m.model.bars, p.st.position) : null);
   // sentTo records the panel's real target.
   const send = p.env.send;
   p.env.send = (msg) => {
@@ -1592,11 +1683,13 @@ describe('S6-R7-01: a chart or model replaced for the same song stops commands f
       expect(p.sent).toEqual([]);
       expect(h.results().at(-1)).toMatchObject({ id: 1, ok: false, code: 'stale' });
 
-      // syncPhoneSong publishes the new model's view: a command with that revision uses the new bars.
+      // syncPhoneSong publishes the new model's view: a command with that revision uses the new bars
+      // (다음 마디 from bar 1 goes to the new model's bar 2).
       publish(h, SONG_B, p.player.target());
-      h.ws.rx({ t: 'cmd', id: 2, epoch: h.epoch, rev: h.rev, cmd: 'restart', from: ID_A, grant: h.grant() });
+      p.st.position = 1;
+      h.ws.rx({ t: 'cmd', id: 2, epoch: h.epoch, rev: h.rev, cmd: 'next-bar', from: ID_A, grant: h.grant() });
       await finish(p);
-      expect(p.sent).toEqual(['seek 9']);
+      expect(p.sent).toEqual(['seek 9.01']);
       expect(h.results().at(-1)).toMatchObject({ id: 2, ok: true });
     });
   }
@@ -1678,7 +1771,8 @@ function demoExitPanel() {
   });
   s.model = shown.replace(MODEL_9, DEMO_B);
   p.player.target = () => playerTargetKey(parts());
-  p.transport.restartTarget = () => (s.model ? restartTargetSec(null, s.model.bars, p.st.position) : null);
+  p.transport.restartTarget = () => (s.model ? restartTargetSec(null, s.model.bars) : null);
+  p.transport.barTarget = (step) => (s.model ? barStepTargetSec(step, s.model.bars, p.st.position) : null);
   const send = p.env.send;
   p.env.send = (msg) => {
     p.st.target = p.player.target();
@@ -1723,9 +1817,10 @@ describe('S6-R8-01: while the demo is being left, the demo model is never publis
     d.buildReal();
     expect(songViewReady(d.parts())).toBe(true);
     publish(h, SONG_A, d.p.player.target());
-    h.ws.rx({ t: 'cmd', id: 2, epoch: h.epoch, rev: h.rev, cmd: 'restart', from: ID_A, grant: h.grant() });
+    d.p.st.position = 1;
+    h.ws.rx({ t: 'cmd', id: 2, epoch: h.epoch, rev: h.rev, cmd: 'next-bar', from: ID_A, grant: h.grant() });
     await finish(d.p);
-    expect(d.p.sent).toEqual(['seek 8']);
+    expect(d.p.sent).toEqual(['seek 8.01']);
     expect(h.results().at(-1)).toMatchObject({ id: 2, ok: true });
   });
 
@@ -1789,7 +1884,8 @@ describe('S6-R9-01: the shown model is labelled with the recording of the chart 
     /** recompute() as sidepanel.ts labels it, from the chart's own recording. */
     const recompute = (chartRecording: string, m: Bars) => (s.model = shown.replace(m, modelSongId(null, chartRecording, cur.chartFor)));
     p.player.target = () => playerTargetKey(parts());
-    p.transport.restartTarget = () => (s.model ? restartTargetSec(null, s.model.bars, p.st.position) : null);
+    p.transport.restartTarget = () => (s.model ? restartTargetSec(null, s.model.bars) : null);
+    p.transport.barTarget = (step) => (s.model ? barStepTargetSec(step, s.model.bars, p.st.position) : null);
     const MODEL_6: Bars = { bars: [{ startSec: 0 }, { startSec: 6 }] };
     recompute('youtube:B', MODEL_6);
     const h = wiredHarness(p);
@@ -1807,13 +1903,14 @@ describe('S6-R9-01: the shown model is labelled with the recording of the chart 
     expect(p.sent).toEqual([]);
     expect(h.results().at(-1)).toMatchObject({ id: 1, ok: false });
 
-    // B's chart shown again: ready, and restart goes to B's bar.
+    // B's chart shown again: ready, and 다음 마디 goes to B's bar.
     recompute('youtube:B', MODEL_6);
     expect(songViewReady(parts())).toBe(true);
     publish(h, SONG_B, p.player.target());
-    h.ws.rx({ t: 'cmd', id: 2, epoch: h.epoch, rev: h.rev, cmd: 'restart', from: ID_A, grant: h.grant() });
+    p.st.position = 1;
+    h.ws.rx({ t: 'cmd', id: 2, epoch: h.epoch, rev: h.rev, cmd: 'next-bar', from: ID_A, grant: h.grant() });
     await finish(p);
-    expect(p.sent).toEqual(['seek 6']);
+    expect(p.sent).toEqual(['seek 6.01']);
   });
 
   it('modelSongId: the chart recording decides, chartFor only without a chart, the demo run for a demo', () => {
@@ -1864,7 +1961,8 @@ describe('S6-R10-01: the shown model belongs to the current song as the chart lo
     });
     s.model = shown.replace(MODEL_8, modelSongId(null, key(chartRecording), key(player)));
     p.player.target = () => playerTargetKey(parts());
-    p.transport.restartTarget = () => (s.model ? restartTargetSec(null, s.model.bars, p.st.position) : null);
+    p.transport.restartTarget = () => (s.model ? restartTargetSec(null, s.model.bars) : null);
+    p.transport.barTarget = (step) => (s.model ? barStepTargetSec(step, s.model.bars, p.st.position) : null);
     return { p, s, parts };
   }
 
@@ -1872,7 +1970,7 @@ describe('S6-R10-01: the shown model belongs to the current song as the chart lo
     [{ source: 'ytmusic', id: 'A' }, { source: 'youtube', id: 'A' }],
     [{ source: 'youtube', id: 'A' }, { source: 'ytmusic', id: 'A' }],
   ] as [Rec, Rec][]) {
-    it(`${player.source}:A playing with the stored ${chartRec.source}:A chart: published, and restart acts`, async () => {
+    it(`${player.source}:A playing with the stored ${chartRec.source}:A chart: published, and restart and a bar step act`, async () => {
       const d = run(player, chartRec);
       expect(songViewReady(d.parts())).toBe(true);
       expect(d.p.player.target()).not.toBeNull();
@@ -1881,8 +1979,12 @@ describe('S6-R10-01: the shown model belongs to the current song as the chart lo
       publish(h, SONG_A, d.p.player.target());
       h.ws.rx({ t: 'cmd', id: 1, epoch: h.epoch, rev: h.rev, cmd: 'restart', from: ID_A, grant: h.grant() });
       await finish(d.p);
-      expect(d.p.sent).toEqual(['seek 8']);
+      expect(d.p.sent).toEqual(['seek 0']);
       expect(h.results().at(-1)).toMatchObject({ id: 1, ok: true });
+      h.ws.rx({ t: 'cmd', id: 2, epoch: h.epoch, rev: h.rev, cmd: 'next-bar', from: ID_A, grant: h.grant() });
+      await finish(d.p);
+      expect(d.p.sent).toEqual(['seek 0', 'seek 8.01']);
+      expect(h.results().at(-1)).toMatchObject({ id: 2, ok: true });
     });
   }
 

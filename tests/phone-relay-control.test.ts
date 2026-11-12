@@ -157,6 +157,27 @@ describe('relay: commands', () => {
     expect(h.forwarded()).toEqual([]);
   });
 
+  it('이전 마디 / 다음 마디: refused while off and unapproved, forwarded with the grant once approved', async () => {
+    const h = await setup();
+    const ph = await h.phone();
+    h.cmd(ph, 1, { cmd: 'prev-bar' });
+    expect(await h.resultFor(ph, 1)).toMatchObject({ ok: false, code: 'off' });
+    h.pub.send({ t: 'control', on: true });
+    const code = await h.code(ph);
+    h.cmd(ph, 2, { cmd: 'next-bar' });
+    expect(await h.resultFor(ph, 2)).toMatchObject({ ok: false, code: 'not-approved' });
+    expect(h.forwarded()).toEqual([]);
+    h.pub.send({ t: 'approve', id: await h.idOf(code), code, grant: 9 });
+    await ph.next((m) => m.t === 'pair' && m.state === 'approved');
+    h.cmd(ph, 3, { cmd: 'prev-bar' });
+    expect(await h.pub.next((m) => m.t === 'cmd' && m.id === 3)).toMatchObject({ cmd: 'prev-bar', grant: 9 });
+    await h.sleep(300); // rate limit refills
+    h.cmd(ph, 4, { cmd: 'next-bar' });
+    expect(await h.pub.next((m) => m.t === 'cmd' && m.id === 4)).toMatchObject({ cmd: 'next-bar', grant: 9 });
+    h.pub.send({ t: 'result', to: await h.idOf(code), id: 4, ok: false, code: 'last-bar' });
+    expect(await h.resultFor(ph, 4)).toEqual({ t: 'result', id: 4, ok: false, code: 'last-bar' });
+  });
+
   it('forwards the approved phone command to the panel and the result back to that phone only', async () => {
     const h = await approvedSetup();
     const other = await h.phone();

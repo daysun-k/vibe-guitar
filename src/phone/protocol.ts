@@ -69,7 +69,7 @@ export interface PingMessage {
 }
 
 /**
- * VGT-16: one control request from the approved phone. Exactly two commands exist; the phone never
+ * VGT-16: one control request from the approved phone. Exactly the PHONE_COMMANDS exist; the phone never
  * names a time, rate, tab or URL. `epoch`/`rev` are the song view the phone shows: a request made
  * against another song (or another panel) is rejected as stale. `id` increases per connection.
  */
@@ -171,7 +171,12 @@ export function validateViewerMessage(text: string): ViewerMessage | null {
 
 // ---------- phone control (VGT-16) ----------
 
-export type PhoneCommand = 'toggle' | 'restart';
+/**
+ * 재생/일시정지, 처음부터 (loop A, else the song's start), 이전 마디 and 다음 마디 (bar steps from the
+ * position the panel observes, kept inside the loop's bars when a loop is set).
+ */
+export const PHONE_COMMANDS = ['toggle', 'restart', 'prev-bar', 'next-bar'] as const;
+export type PhoneCommand = (typeof PHONE_COMMANDS)[number];
 /** Commands the approved phone may send per second, and how many may come at once. */
 export const CONTROL_RATE_PER_SEC = 4;
 export const CONTROL_BURST = 2;
@@ -206,9 +211,11 @@ export type CommandFailure =
   | 'failed'
   /** The phone lost the right to control while the command ran: nothing further was sent to the player. */
   | 'cancelled'
+  /** 다음 마디 while already in the last bar (of the loop, when one is set): nothing was sent. */
+  | 'last-bar'
   /** No side panel is connected to the relay. */
   | 'no-panel';
-const FAILURES: readonly CommandFailure[] = ['off', 'not-approved', 'stale', 'duplicate', 'rate', 'ad', 'no-target', 'busy', 'autoplay', 'timeout', 'failed', 'cancelled', 'no-panel'];
+const FAILURES: readonly CommandFailure[] = ['off', 'not-approved', 'stale', 'duplicate', 'rate', 'ad', 'no-target', 'busy', 'autoplay', 'timeout', 'failed', 'cancelled', 'last-bar', 'no-panel'];
 
 /** 'countin': the count-in started; a second result with the same id follows once playback starts (or fails). */
 export type CommandState = 'playing' | 'paused' | 'countin';
@@ -259,8 +266,8 @@ export type PanelMessage =
 function validCommand(v: Record<string, unknown>, forwarded: boolean): CommandMessage | ForwardedCommand | null {
   if (!onlyKeys(v, forwarded ? ['t', 'id', 'epoch', 'rev', 'cmd', 'from', 'grant'] : ['t', 'id', 'epoch', 'rev', 'cmd'])) return null;
   if (!int(v.id, 1, Number.MAX_SAFE_INTEGER) || !int(v.rev, 1, Number.MAX_SAFE_INTEGER)) return null;
-  if (typeof v.epoch !== 'string' || !EPOCH_RE.test(v.epoch) || (v.cmd !== 'toggle' && v.cmd !== 'restart')) return null;
-  const m: CommandMessage = { t: 'cmd', id: v.id, epoch: v.epoch, rev: v.rev, cmd: v.cmd };
+  if (typeof v.epoch !== 'string' || !EPOCH_RE.test(v.epoch) || !PHONE_COMMANDS.includes(v.cmd as PhoneCommand)) return null;
+  const m: CommandMessage = { t: 'cmd', id: v.id, epoch: v.epoch, rev: v.rev, cmd: v.cmd as PhoneCommand };
   if (!forwarded) return m;
   if (typeof v.from !== 'string' || !CONN_ID_RE.test(v.from) || !int(v.grant, 1, Number.MAX_SAFE_INTEGER)) return null;
   return { ...m, from: v.from, grant: v.grant };
