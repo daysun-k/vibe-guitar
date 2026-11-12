@@ -97,6 +97,9 @@ const SHOTS = [
   { name: 'demo-600-dark', width: 600, height: 860, theme: 'dark', q: 't=31.2' },
   { name: 'demo-400-light-intermediate-snd', width: 400, height: 860, theme: 'light', q: 't=31.2&level=intermediate&capo=1&snd=1' },
   { name: 'demo-400-light-sheet', width: 400, height: 860, theme: 'light', q: 't=31.2&sheet=1' },
+  // "코드 고치기" panel open at the chord under the playhead (capo 1: shape names in the picker).
+  { name: 'demo-400-light-fix', width: 400, height: 860, theme: 'light', q: 't=31.2&capo=1&fix=1' },
+  { name: 'demo-400-dark-fix', width: 400, height: 860, theme: 'dark', q: 't=31.2&capo=1&fix=1' },
 ];
 
 const only = arg('--only', null);

@@ -62,6 +62,11 @@ Requirements: Node 20+ and desktop Chrome 116 or newer.
      Click inside the panel first so it receives key presses; when the YouTube page has focus use the
      global shortcuts Alt+Shift+K (stamp) and Alt+Shift+T (tap tempo). Check or change them at
      `chrome://extensions/shortcuts`.
+     Saving a loaded auto (or edited) chart keeps what the recognizer knew when the chord times are
+     unchanged: untouched chords keep their source and confidence, the heard ranges keep their gaps, and
+     only changed chords become manual. If times changed (re-stamped), every chord becomes manual and the
+     heard range becomes one range; the save status says which happened. To fix a single wrong chord,
+     "코드 고치기" in the Play tab is simpler.
    - **듣기·캡처 (Listen / Capture)** tab: listening-mode progress, audio received yes/no, RMS, sample rate,
      a live 12-bin chroma, the recognition model state / backend (WASM or WebGPU) and the player readout
      (adapter, video id, state).
@@ -74,14 +79,14 @@ Requirements: Node 20+ and desktop Chrome 116 or newer.
 
 Port of the approved mockup B ("진행표형", diagrams 3x):
 
-- **Header**: title and artist, one badge ("자동 코드표 · 사람이 확인하지 않음" for auto charts, "예시 코드표"
-  for bundled examples, nothing for manual charts; click it for a short explanation) and a level/capo chip
+- **Header**: title and artist, one badge ("자동 코드표 · 사람이 확인하지 않음" for auto charts, "자동 코드표 ·
+  N곳 고침 · 나머지는 미확인" (narrow: "자동 · 일부 고침") once some chords of an auto chart were fixed, "예시
+  코드표" for bundled examples, nothing for manual charts; click it for a short explanation) and a level/capo chip
   that opens the **settings sheet** (난이도, 카포, 미리 알림, 카운트인 끔/1마디/2마디, 실제 음 이름 보기 (off),
   가사 가져오기 (on), 추천 반주, 데모 재생).
-- **Chord-shape strip**: 120 px diagrams with finger numbers in one row. When it overflows it scrolls
-  sideways (fade mask) and, just before a change, scrolls so the next shape is visible (if the current and
-  next shapes cannot both fit, the next one). Current shape: accent border; next shape: neutral border with
-  the big-beat countdown. From about 560 px all shapes of a typical song fit.
+- **Chord-shape strip**: exactly three slots with 120 px diagrams and finger numbers: the current shape,
+  the next one and the one after it (not every shape of the song). Current shape: accent border; next
+  shape: neutral border with the big-beat countdown.
 - **Pinned lyric line** (only when lyrics exist): the line sung at the playhead with chord names over the
   words where the changes happen, the current word underlined and the current chord highlighted; the next
   line small below. Between sung parts: "♪ 연주만 나와요".
@@ -89,10 +94,22 @@ Port of the approved mockup B ("진행표형", diagrams 3x):
   후렴, 간주, 아웃트로; without lyrics: groups of 8 bars), repeat bars as %, one tick per big beat, a playhead
   line, auto-follow with "현재 위치로" after manual scrolling, click a bar to seek, and a "soon" border on the
   bar of the next change.
-- **Transport**: seek bar with section ticks, play/pause (with the count-in when it is on), time and section.
-  Play/pause/seek control the YouTube player through the content script.
+- **Transport**: seek bar with section ticks, play/pause (with the count-in when it is on), time, section
+  and the **코드 고치기** button. Play/pause/seek control the YouTube player through the content script.
+- **Fixing one chord (코드 고치기)**: the button opens a small panel at the chord under the playhead (‹ ›
+  step to the previous/next chord and seek there; the bar gets a dashed outline). Pick a root and a kind (or
+  코드 없음) and press "이 코드로 고치기". Names follow the screen: with a capo the picker shows shape names
+  (the sounding name only as a small extra when 실제 음 이름 보기 is on); the chart stores the sounding chord,
+  moved up by the capo and spelled for the key (shape G with capo 1 in A♭ major → A♭). Only that event's
+  chord changes: its time, every other chord with its confidence and the heard ranges stay. The event
+  becomes a manual event and the chart `edited`, so a later auto analysis waits as pending instead of
+  replacing it. The write goes through the service worker's serialized chart writes (`ChartStore.correctEvent`),
+  so it applies to the stored chart even if an auto chart arrived meanwhile. "되돌리기" in the status line
+  undoes the last fix while the stored chart is still the fixed one. Clicking a bar still only seeks. In demo
+  playback the fix changes only the in-memory demo chart.
 - **Uncertainty** is shown only by the badge, plus at 중급/상급 an actionable hint such as "Em도 돼요" on
-  low-confidence 7th chords. 입문 reduces 7/maj7 to triads and marks them with a tiny superscript 7.
+  low-confidence 7th chords. 입문 reduces 7/maj7 to triads; the change mark (●) and its tooltip say so (no
+  superscript 7 next to the name).
 
 Music fixes applied before drawing (pure functions in `src/music/`, tests in `tests/music.test.ts`):
 
