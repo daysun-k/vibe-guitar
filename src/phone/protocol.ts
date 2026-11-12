@@ -201,9 +201,11 @@ export type CommandFailure =
   | 'autoplay'
   | 'timeout'
   | 'failed'
+  /** The phone lost the right to control while the command ran: nothing further was sent to the player. */
+  | 'cancelled'
   /** No side panel is connected to the relay. */
   | 'no-panel';
-const FAILURES: readonly CommandFailure[] = ['off', 'not-approved', 'stale', 'duplicate', 'rate', 'ad', 'no-target', 'busy', 'autoplay', 'timeout', 'failed', 'no-panel'];
+const FAILURES: readonly CommandFailure[] = ['off', 'not-approved', 'stale', 'duplicate', 'rate', 'ad', 'no-target', 'busy', 'autoplay', 'timeout', 'failed', 'cancelled', 'no-panel'];
 
 /** 'countin': the count-in started; a second result with the same id follows once playback starts (or fails). */
 export type CommandState = 'playing' | 'paused' | 'countin';

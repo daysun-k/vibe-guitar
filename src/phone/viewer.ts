@@ -68,6 +68,7 @@ const FAILURE_TEXT: Record<CommandFailure, string> = {
   autoplay: 'Mac 브라우저가 재생을 막았어요 · 맥에서 한 번 재생을 눌러 주세요',
   timeout: 'Mac에서 바뀐 것을 확인하지 못했어요 · Mac 화면을 확인해 주세요',
   failed: 'Mac에서 실행하지 못했어요',
+  cancelled: '조작 권한이 바뀌어서 취소했어요',
   'no-panel': 'Mac 패널이 연결되어 있지 않아요',
 };
 

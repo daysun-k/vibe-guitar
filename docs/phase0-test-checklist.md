@@ -261,6 +261,8 @@ Phone control (휴대폰에서 조작 허용, VGT-16):
 - [ ] Revoke: press 승인 해제 in the sheet: the phone shows "조작 승인이 해제됐어요" and its code again. Approve
       again, then reload the phone page: it gets a new code and must be approved again. Switch 휴대폰에서 조작
       허용 off, close the panel, or restart the relay: each time the phone loses its buttons.
+- [ ] Revoke mid-command: with a loop set and the playhead outside it (count-in on, then off), tap 재생 on the
+      phone and press 승인 해제 at once: the video does not start (it may stay paused at the loop start).
 - [ ] Watching still works without approval: a phone that was refused (거절) keeps showing chords.
 
 Please note: phone model / browser, Mac on Wi-Fi or wired, how far apart the changes looked (or the slow-motion

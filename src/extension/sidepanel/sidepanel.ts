@@ -60,12 +60,12 @@ import { adoptAutoChart, correctChartEvent, listCharts, loadAccuracyPairs, loadA
 import { escapeHtml, renderShapeDiagram } from './diagram';
 import { LyricsAsker, lyricsOutcome, lyricsLookupReady } from './lyrics-asker';
 import { controlTabId, keepPlayerAfterDemo } from './player-target';
-import { prepareCountIn, runCountIn } from './countin-prep';
+import { playToggle, RATE_CANCELS_COUNTIN, type PlayToggleEnv, type TransportResult } from './play-toggle';
 import { ChordFixer } from './fix';
 import { OVERVIEW_EMPTY, renderOverviewHtml } from './overview';
 import { capoReason, unplayableLine, PlayScreen, formatTime, type LoopMarks } from './play';
 import { PhoneLink, phoneStatusText, type PhoneStatus, type PlaybackSample } from './phone-link';
-import { restartTargetSec, runPhoneCommand, type ObservedPlayer, type PanelTransport, type TransportResult } from './phone-control';
+import { restartTargetSec, runPhoneCommand, type ObservedPlayer, type PanelTransport } from './phone-control';
 import type { CommandOutcome, PhoneCommand, PhoneEntry } from '../../phone/protocol';
 import { buildSongView } from '../../phone/song-view';
 
@@ -1058,87 +1058,56 @@ async function seekTo(sec: number): Promise<PlayerControlResult> {
   return r;
 }
 
+/** What the play button's steps (play-toggle.ts) use of the panel. */
+const playToggleEnv: PlayToggleEnv = {
+  send: sendControl,
+  isPlaying,
+  countingIn: () => countingIn,
+  stopCountIn,
+  newRun: () => ++countInRun,
+  isRun: (run) => run === countInRun,
+  beginCountIn: () => {
+    countingIn = true;
+    $('countin').classList.add('on');
+  },
+  endCountIn: () => {
+    countingIn = false;
+    $('countin').classList.remove('on');
+  },
+  countInPlan: () => {
+    if (!settings.countInBars || !model) return null;
+    const m = model;
+    const pos = positionNow(false);
+    const f = frameAt(m, pos);
+    const bar = f.bar >= 0 ? m.bars[f.bar] : null;
+    return {
+      target: explicitStartSec(practiceLoop, pos, bar ? bar.startSec : null),
+      beats: settings.countInBars * m.big.bigPerBar,
+      bigPerBar: m.big.bigPerBar,
+      beatSec: screen.bigBeatSec(),
+    };
+  },
+  loopStartOutside: () => (practiceLoop && !insideLoop(practiceLoop, positionNow(false)) ? loopStartTarget(practiceLoop) : null),
+  rate: currentRate,
+  seeked: (sec) => jumper.seeked(sec, Date.now()),
+  status: (text) => setText('countin-status', text),
+  beat: (left, accent) => {
+    $('countin').querySelector('b')!.textContent = String(left);
+    click(accent);
+  },
+};
+
 /**
  * Play / pause from the panel. Starting plays a count-in of big beats from the bar start; with a
  * loop on and the playhead outside it, playback starts from the loop's first bar. Automatic loop
- * repeats never come through here, so they never count in.
+ * repeats never come through here, so they never count in. `allowed` is a phone command's
+ * authorization gate, checked before every player command; the panel's own button passes none.
  */
-async function togglePlay(onCountIn?: () => void): Promise<TransportResult> {
-  setText('countin-status', '');
-  if (countingIn) {
-    stopCountIn();
-    return { ok: true };
-  }
-  if (isPlaying()) {
-    const r = await sendControl({ type: 'player-control', action: 'pause' });
-    if (!r.ok) setText('countin-status', `이 플레이어는 패널에서 멈출 수 없어요 (${r.reason ?? '알 수 없음'}).`);
-    return r;
-  }
-  if (!settings.countInBars || !model) {
-    const loopStart = practiceLoop && !insideLoop(practiceLoop, positionNow(false)) ? loopStartTarget(practiceLoop) : null;
-    if (loopStart !== null) {
-      jumper.seeked(loopStart, Date.now());
-      const s = await sendControl({ type: 'player-control', action: 'seek', time: loopStart });
-      if (!s.ok) {
-        setText('countin-status', `반복 구간 처음으로 이동하지 못했어요 (${s.reason ?? '알 수 없음'}).`);
-        return s;
-      }
-    }
-    const r = await sendControl({ type: 'player-control', action: 'play' });
-    if (!r.ok) setText('countin-status', `이 플레이어는 패널에서 재생할 수 없어요 (${r.reason ?? '알 수 없음'}).`);
-    return r;
-  }
-  const run = ++countInRun;
-  const m = model;
-  const pos = positionNow(false);
-  const f = frameAt(m, pos);
-  const bar = f.bar >= 0 ? m.bars[f.bar] : null;
-  const target = explicitStartSec(practiceLoop, pos, bar ? bar.startSec : null);
-  jumper.seeked(target, Date.now());
-  const prep = await prepareCountIn(sendControl, () => run === countInRun, target);
-  if (prep.kind === 'cancelled') return { ok: false, cancelled: true };
-  if (prep.kind === 'failed') {
-    setText('countin-status', prep.step === 'pause'
-      ? `이 플레이어에서는 카운트인 재생을 지원하지 않아요 (${prep.reason ?? '알 수 없음'}).`
-      : `마디 처음으로 이동하지 못해 카운트인을 취소했어요 (${prep.reason ?? '알 수 없음'}).`);
-    return { ok: false, reason: prep.reason };
-  }
-  const rate = currentRate();
-  const n = settings.countInBars * m.big.bigPerBar;
-  const stepMs = (screen.bigBeatSec() * 1000) / rate;
-  const box = $('countin');
-  const num = box.querySelector('b')!;
-  countingIn = true;
-  box.classList.add('on');
-  onCountIn?.();
-  const done = await runCountIn({
-    beats: n,
-    stepMs,
-    startRate: rate,
-    rate: currentRate,
-    isCurrent: () => run === countInRun,
-    onBeat: (left, k) => {
-      num.textContent = String(left);
-      click(k % m.big.bigPerBar === 0);
-    },
-    play: () => {
-      countingIn = false;
-      box.classList.remove('on');
-      return sendControl({ type: 'player-control', action: 'play' });
-    },
-  });
-  if (done.kind === 'cancelled') return { ok: false, cancelled: true };
-  if (done.kind === 'rate-changed') {
-    stopCountIn();
-    setText('countin-status', RATE_CANCELS_COUNTIN);
-    return { ok: false, cancelled: true };
-  }
-  if (!done.result.ok) setText('countin-status', `재생을 다시 시작하지 못했어요 (${done.result.reason ?? '알 수 없음'}).`);
-  return done.result;
+async function togglePlay(onCountIn?: () => void, allowed?: () => boolean): Promise<TransportResult> {
+  return playToggle(playToggleEnv, { onCountIn, allowed });
 }
 
 // ---------- practice: speed, A/B loop ----------
-const RATE_CANCELS_COUNTIN = '속도가 바뀌어서 카운트인을 멈췄어요. 다시 눌러 주세요.';
 
 function currentRate(): number {
   return (demo ? demo.clock.rate : player?.playbackRate) || 1;
@@ -1377,11 +1346,11 @@ const phonePlayer: ObservedPlayer = {
 /** countInRun of the count-in the phone started (cancelCountIn stops only that one). */
 let phoneCountInRun = -1;
 const phoneTransport: PanelTransport = {
-  toggle: (onCountIn) =>
+  toggle: (onCountIn, allowed) =>
     togglePlay(() => {
       phoneCountInRun = countInRun;
       onCountIn();
-    }),
+    }, allowed),
   cancelCountIn: () => {
     if (countingIn && countInRun === phoneCountInRun) stopCountIn();
   },
