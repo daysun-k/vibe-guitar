@@ -149,7 +149,21 @@ check('publisher upgrade with target // rejected (400)', statusOf(await raw('127
   const p = await raw('127.0.0.1', pubPort, Buffer.concat([Buffer.from(upgradeReq('/publish', `127.0.0.1:${pubPort}`, EXT_ORIGIN)), badFrame]));
   check('publisher handshake + invalid frame in one write: closed 1008', statusOf(p) === 101 && closeCodeOf(p) === 1008, `status ${statusOf(p)}, close ${closeCodeOf(p)}`);
 }
-check('relay still serving after malformed input', (await get(lanIp, lanPort, `/${tokenQ}`)).status === 200);
+// A client that sends a rejected upgrade and then resets the connection (RST) must not stop the relay.
+const resetAfter = (host, port, req, ms) =>
+  new Promise((resolve) => {
+    const s = net.connect({ host, port }, () => {
+      s.write(req);
+      setTimeout(() => (s.resetAndDestroy(), resolve()), ms);
+    });
+    s.on('error', resolve);
+  });
+for (const ms of [0, 5, 30]) {
+  await resetAfter(lanIp, lanPort, upgradeReq(`/viewer?t=${'z'.repeat(22)}`, relay.lanHost, `http://${relay.lanHost}`), ms);
+  await resetAfter('127.0.0.1', pubPort, upgradeReq('/publish', `127.0.0.1:${pubPort}`, 'http://evil.example'), ms);
+}
+await sleep(300);
+check('relay still serving after malformed input and RST after rejected upgrades', (await get(lanIp, lanPort, `/${tokenQ}`)).status === 200);
 
 // ---------- song view: the real demo song through the relay ----------
 const model = S.buildPlayModel(S.demoChart(), { level: 'beginner', capo: 'auto' }, null);

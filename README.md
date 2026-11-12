@@ -181,7 +181,8 @@ is used, while the song plays on the Mac. Portrait and landscape both work.
    연결 안 됨 / 연결됨 · 휴대폰 n대.
 2. In a terminal in this repository: `npm run phone`. It prints a QR code and `http://192.168.x.x:47822/?t=…`.
    The first time, macOS may ask whether node may accept incoming connections: allow it (or later in System
-   Settings › Network › Firewall › Options). Wrong Wi-Fi address picked: `npm run phone -- --host 192.168.x.x`.
+   Settings › Network › Firewall › Options). Wrong Wi-Fi address picked: `npm run phone -- --host 192.168.x.x`
+   (one private IPv4 of this Mac; `0`, `0.0.0.0`, `::`, hostnames and loopback are refused).
 3. Put the phone on **the same home Wi-Fi** and scan the QR code (or type the address).
 4. Turn off the phone's auto-lock while playing (the page says so once): plain http on the home network cannot
    use the browser's keep-screen-on feature. iPhone: 설정 › 디스플레이 및 밝기 › 자동 잠금 › 안 함; Android:

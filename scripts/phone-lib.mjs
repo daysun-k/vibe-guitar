@@ -70,7 +70,11 @@ export function parseArgs(argv) {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const v = argv[i + 1];
-    if (a === '--host') (opts.host = v), i++;
+    if (a === '--host') {
+      if (v === undefined || v.startsWith('--')) throw new Error('--host needs this Mac\'s home-network IPv4 address, e.g. 192.168.0.23');
+      opts.host = v;
+      i++;
+    }
     else if (a === '--port') (opts.port = num(v, a)), i++;
     else if (a === '--pub-port') (opts.pubPort = num(v, a)), i++;
     else if (a === '--extension-id') {

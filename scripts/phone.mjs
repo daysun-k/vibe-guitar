@@ -17,6 +17,12 @@ if (opts.help) {
 }
 
 const R = await loadRelay();
+// One concrete private IPv4 only: "0", "0.0.0.0", "::", hostnames or loopback would expose or hide the phone page.
+const hostProblem = opts.host === undefined ? null : R.viewerHostProblem(opts.host);
+if (hostProblem) {
+  console.error(hostProblem);
+  process.exit(2);
+}
 const viewer = await buildViewer();
 const dist = await distPath();
 const extensionId = opts.anyExtension ? undefined : (opts.extensionId ?? R.unpackedExtensionId(dist));

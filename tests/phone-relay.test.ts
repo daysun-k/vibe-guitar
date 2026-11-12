@@ -5,7 +5,8 @@
 import net from 'node:net';
 import { randomBytes } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { parseRequestUrl, startRelay, type Relay } from '../src/phone/relay';
+import { execFile } from 'node:child_process';
+import { parseRequestUrl, startRelay, viewerHostProblem, type Relay } from '../src/phone/relay';
 import { OP_TEXT, encodeFrame } from '../src/phone/ws-frame';
 import { songParts } from '../src/phone/protocol';
 import { EMPTY_SONG } from '../src/extension/sidepanel/phone-link';
@@ -16,7 +17,7 @@ let pubPort: number;
 const EXT_ORIGIN = `chrome-extension://${'a'.repeat(32)}`;
 
 beforeAll(async () => {
-  relay = await startRelay({ host: '127.0.0.1', port: 0, pubPort: 0, extensionId: 'a'.repeat(32), viewerHtml: '<p>ok</p>', viewerJs: '', log: () => {} });
+  relay = await startRelay({ host: '127.0.0.1', allowLoopback: true, port: 0, pubPort: 0, extensionId: 'a'.repeat(32), viewerHtml: '<p>ok</p>', viewerJs: '', log: () => {} });
   viewerPort = Number(relay.lanHost.split(':')[1]);
   pubPort = Number(new URL(relay.publisherUrl).port);
 });
@@ -142,5 +143,59 @@ describe('relay: what a phone receives', () => {
   it('another extension cannot publish', async () => {
     const res = await raw(pubPort, upgradeRequest('/publish', `127.0.0.1:${pubPort}`, `chrome-extension://${'b'.repeat(32)}`));
     expect(statusOf(res)).toBe(403);
+  });
+});
+
+describe('relay: a client that resets after a rejected upgrade (review s4-r1, S4-R1-01)', () => {
+  /** Sends `req`, waits `ms`, then aborts the TCP connection with RST instead of a normal close. */
+  function sendThenReset(port: number, req: string, ms: number): Promise<void> {
+    return new Promise((resolve) => {
+      const s = net.connect({ host: '127.0.0.1', port }, () => {
+        s.write(req);
+        setTimeout(() => {
+          s.resetAndDestroy();
+          resolve();
+        }, ms);
+      });
+      s.on('error', () => resolve());
+    });
+  }
+
+  it('viewer (wrong token) and publisher (wrong Origin): RST does not stop the relay', async () => {
+    const viewerReq = upgradeRequest(`/viewer?t=${'z'.repeat(22)}`, relay.lanHost, `http://${relay.lanHost}`);
+    const pubReq = upgradeRequest('/publish', `127.0.0.1:${pubPort}`, 'http://evil.example');
+    const badHostReq = upgradeRequest('/viewer', 'evil.example:1', 'http://evil.example');
+    for (const ms of [0, 1, 5, 20, 60]) {
+      await Promise.all([sendThenReset(viewerPort, viewerReq, ms), sendThenReset(pubPort, pubReq, ms), sendThenReset(viewerPort, badHostReq, ms)]);
+    }
+    await new Promise((r) => setTimeout(r, 300)); // let the server see the resets and its delayed destroys run
+    await relayStillServes();
+    expect(statusOf(await raw(pubPort, upgradeRequest('/publish', `127.0.0.1:${pubPort}`, 'http://evil.example')))).toBe(403);
+  });
+});
+
+describe('relay: viewer address must be one private IPv4 (review s4-r1, S4-R1-02)', () => {
+  it('accepts plain private IPv4 addresses only', () => {
+    for (const ok of ['192.168.0.23', '10.0.0.5', '172.16.3.4', '172.31.255.254']) expect(viewerHostProblem(ok)).toBeNull();
+    const bad = ['0', '0.0.0.0', '::', '::1', '', ' ', 'localhost', 'mac.local', 'example.com', '127.0.0.1', '8.8.8.8', '100.64.0.1', '169.254.1.2',
+      '172.32.0.1', '192.168.0.256', '192.168.001.1', '192.168.0', '192.168.0.23 ', '192.168.0.23,10.0.0.1', '0x7f.0.0.1', '255.255.255.255'];
+    for (const b of bad) expect(viewerHostProblem(b), b).not.toBeNull();
+    expect(viewerHostProblem(undefined)).not.toBeNull();
+    expect(viewerHostProblem('127.0.0.1', true)).toBeNull(); // unit tests only
+  });
+
+  it('startRelay refuses wildcard and non-LAN hosts before opening any port', async () => {
+    for (const host of ['0', '0.0.0.0', '::', '', 'localhost', '127.0.0.1']) {
+      await expect(startRelay({ host, port: 0, pubPort: 0, viewerHtml: '', viewerJs: '' }), host).rejects.toThrow(/--host|refusing/);
+    }
+  });
+
+  it('npm run phone -- --host 0 exits with an error and binds nothing', async () => {
+    const r = await new Promise<{ code: number | null; err: string }>((resolve) => {
+      execFile(process.execPath, ['scripts/phone.mjs', '--host', '0', '--port', '0', '--pub-port', '0'], { timeout: 30000 }, (e, _out, err) =>
+        resolve({ code: e ? ((e as { code?: number }).code ?? 1) : 0, err }));
+    });
+    expect(r.code).toBe(2);
+    expect(r.err).toMatch(/--host must be one IPv4 address/);
   });
 });

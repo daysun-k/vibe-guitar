@@ -33,8 +33,10 @@ const MAX_MSGS_PER_SEC = 40;
 const IDLE_MS = 20_000;
 
 export interface RelayOptions {
-  /** LAN IPv4 to bind the viewer endpoint to; detected when omitted. Never 0.0.0.0. */
+  /** LAN IPv4 to bind the viewer endpoint to; detected when omitted. One private IPv4 only (see viewerHostProblem). */
   host?: string;
+  /** Unit tests only: allow 127.0.0.1 as the viewer address. Not reachable from npm run phone. */
+  allowLoopback?: boolean;
   port?: number;
   pubPort?: number;
   /** When set, only this extension id may publish (otherwise any Chrome extension on this Mac). */
@@ -69,6 +71,21 @@ export function unpackedExtensionId(absPath: string): string {
 function isPrivateIpv4(ip: string): boolean {
   const [a, b] = ip.split('.').map(Number) as [number, number];
   return a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
+}
+
+/** One dotted-quad IPv4 written plainly: four decimal octets 0-255, no leading zeros (Node reads "0" as 0.0.0.0). */
+const IPV4_RE = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
+
+/**
+ * Checks an address for the viewer endpoint: exactly one concrete private (home network) IPv4, never a
+ * wildcard, hostname, IPv6 or loopback. `allowLoopback` exists for the unit tests only.
+ * Returns an error message, or null when the address is fine.
+ */
+export function viewerHostProblem(host: unknown, allowLoopback = false): string | null {
+  if (typeof host !== 'string' || !IPV4_RE.test(host)) return `--host must be one IPv4 address such as 192.168.0.23 (got ${JSON.stringify(host)})`;
+  if (allowLoopback && host === '127.0.0.1') return null;
+  if (!isPrivateIpv4(host)) return `--host must be this Mac's private home-network address (10.x, 172.16-31.x or 192.168.x), not ${host}`;
+  return null;
 }
 
 /** Picks the Wi-Fi/Ethernet private IPv4 (en0 first). */
@@ -161,6 +178,11 @@ class Conn {
   }
 }
 
+/** A peer may reset at any moment; without a listener the 'error' would be thrown and stop the relay. */
+function ignoreSocketErrors(socket: Duplex) {
+  if (!socket.listenerCount('error')) socket.on('error', () => socket.destroy());
+}
+
 function reject(socket: Duplex, status: number, text: string) {
   socket.end(`HTTP/1.1 ${status} ${text}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
   setTimeout(() => socket.destroy(), 200).unref();
@@ -204,9 +226,13 @@ function listen(server: http.Server, port: number, host: string): Promise<void> 
 
 export async function startRelay(opts: RelayOptions): Promise<Relay> {
   const log = opts.log ?? (() => {});
+  if (opts.host !== undefined) {
+    const problem = viewerHostProblem(opts.host, opts.allowLoopback === true);
+    if (problem) throw new Error(problem);
+  }
   const host = opts.host ?? pickLanAddress();
   if (!host) throw new Error('no private LAN IPv4 address found (is Wi-Fi on?); pass --host <ip>');
-  if (host === '0.0.0.0' || host === '::') throw new Error('refusing to bind the viewer endpoint to all interfaces');
+  if (viewerHostProblem(host, opts.allowLoopback === true)) throw new Error(`refusing to bind the viewer endpoint to ${host}`);
   const maxViewers = opts.maxViewers ?? 4;
   // Final values are read back after listen() so port 0 (any free port, used by tests) works.
   let pubPort = opts.pubPort ?? DEFAULT_PUBLISHER_PORT;
@@ -255,6 +281,8 @@ export async function startRelay(opts: RelayOptions): Promise<Relay> {
   // A bug in a handler must reject that one request, never stop the relay process.
   type UpgradeHandler = (req: http.IncomingMessage, socket: Duplex, head: Buffer) => void;
   const guarded = (fn: UpgradeHandler): UpgradeHandler => (req, socket, head) => {
+    // Before any check: a client may reset right after a rejected (or accepted) upgrade.
+    ignoreSocketErrors(socket);
     try {
       fn(req, socket, head);
     } catch (e) {
