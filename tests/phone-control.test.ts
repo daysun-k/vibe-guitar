@@ -14,7 +14,7 @@ import {
 } from '../src/phone/protocol';
 import { Pairing } from '../src/phone/pairing';
 import { PhoneLink, type SocketLike } from '../src/extension/sidepanel/phone-link';
-import { restartTargetSec, runPhoneCommand, type ObservedPlayer, type PanelTransport, type TransportResult } from '../src/extension/sidepanel/phone-control';
+import { restartTargetSec, runPhoneCommand, type CommandContext, type ObservedPlayer, type PanelTransport, type TransportResult } from '../src/extension/sidepanel/phone-control';
 import { playToggle, type PlayToggleEnv } from '../src/extension/sidepanel/play-toggle';
 import type { PlayerControlMessage, PlayerControlResult } from '../src/extension/messages';
 import { DEFAULT_SETTINGS, normalizeSettings } from '../src/extension/storage';
@@ -484,14 +484,14 @@ function linkHarness() {
   const sockets: FakeSocket[] = [];
   const commands: PhoneCommand[] = [];
   const phones: PhoneEntry[][] = [];
-  let answer: (cmd: PhoneCommand, progress: (o: CommandOutcome) => void, signal: AbortSignal) => Promise<CommandOutcome> = async () => ({ ok: true, state: 'playing' });
+  let answer: (cmd: PhoneCommand, progress: (o: CommandOutcome) => void, signal: AbortSignal, context: CommandContext) => Promise<CommandOutcome> = async () => ({ ok: true, state: 'playing' });
   const link = new PhoneLink({
     onStatus: () => {},
     sample: () => ({ position: 1, rate: 1, paused: true, ad: false, loop: null }),
     onPhones: (l) => phones.push(l),
-    onCommand: (cmd, progress, signal) => {
+    onCommand: (cmd, progress, signal, context) => {
       commands.push(cmd);
-      return answer(cmd, progress, signal);
+      return answer(cmd, progress, signal, context);
     },
     makeSocket: () => {
       const s = new FakeSocket();
@@ -767,7 +767,7 @@ describe('PhoneLink: the panel checks every forwarded command again', () => {
  */
 function gatePanel(o: { countIn: boolean; loopStart?: number | null; dropSeek?: boolean }) {
   /** `target`: the song and tab sendControl would reach right now (as the panel's target()). */
-  const st = { playing: false, position: 20, countingIn: false, run: 0, phoneRun: -1, target: TARGET_A as string | null };
+  const st = { playing: false, position: 20, countingIn: false, run: 0, phoneRun: -1, target: TARGET_A as string | null, ad: false };
   const sent: string[] = [];
   /** Which target each player command reached. */
   const sentTo: (string | null)[] = [];
@@ -807,7 +807,7 @@ function gatePanel(o: { countIn: boolean; loopStart?: number | null; dropSeek?: 
     countingIn: () => st.countingIn,
     position: () => st.position,
     rate: () => 1,
-    isAd: () => false,
+    isAd: () => st.ad,
     target: () => st.target,
   };
   // As sidepanel.ts wires it.
@@ -968,6 +968,8 @@ const SONG_TRIGGERS: [string, (h: ReturnType<typeof linkHarness>, p: ReturnType<
     p.st.target = 'tab 202 / song B';
     h.link.setSong(OTHER_SONG);
   }],
+  // S6-R6-02: what sidepanel.ts does first when its player, recording, chart or demo changes.
+  ['panel song changing', (h) => h.link.songChanging()],
 ];
 
 describe('S6-R5B-01: a song or tab change stops a phone command', () => {
@@ -1307,5 +1309,193 @@ describe('S6-R4-01: only the panel grants control; late lists and late commands 
     h.cmd(2);
     await settle();
     expect(h.commands).toEqual(['toggle']);
+  });
+});
+
+// ---------- S6-R6: one context predicate (grant, published revision and its target, no ad) ----------
+const SONG_A = { title: 'song A' } as never;
+const SONG_B = { title: 'song B' } as never;
+const TARGET_B = 'tab 101 / song B';
+
+/** The harness with song A published for TARGET_A, and commands carried out as sidepanel.ts wires them. */
+function wiredHarness(p: ReturnType<typeof gatePanel>) {
+  const h = linkHarness();
+  h.link.setControl(true);
+  h.approve();
+  h.answer = (c, progress, signal, context) => runPhoneCommand(c, p.player, p.transport, { progress, signal, context });
+  publish(h, SONG_A, TARGET_A);
+  return h;
+}
+
+/** The panel sets a song for a target and it is published; later commands carry its revision. */
+function publish(h: ReturnType<typeof linkHarness>, view: never, target: string | null) {
+  h.link.setSong(view, target);
+  h.advance(1000);
+  h.rev = h.ws.json().filter((m) => m.t === 'song').at(-1)!.rev as number;
+}
+
+async function finish(p: ReturnType<typeof gatePanel>) {
+  for (let i = 0; i < 20; i++) {
+    while (p.pending.length) p.reply();
+    await vi.advanceTimersByTimeAsync(500);
+  }
+}
+
+describe('S6-R6-01: an ad that starts while a phone command waits stops it before the next player command', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  for (const point of POINTS) {
+    for (const wired of [false, true]) {
+      it(`${point.name}${wired ? ' (with the link context)' : ''}: nothing is sent during the ad, the phone hears ad`, async () => {
+        const p = gatePanel({ countIn: point.countIn, loopStart: point.countIn ? null : 5 });
+        let h: ReturnType<typeof linkHarness>;
+        if (wired) h = wiredHarness(p);
+        else {
+          h = linkHarness();
+          h.link.setControl(true);
+          h.approve();
+          h.answer = (c, progress, signal) => runPhoneCommand(c, p.player, p.transport, { progress, signal });
+        }
+        h.cmd(1);
+        await settle();
+        await point.reach(p);
+        expect(p.sent).toEqual(point.sentBefore);
+        // Same tab, same song: only the ad starts.
+        p.st.ad = true;
+        await finish(p);
+        expect(p.sent, 'no player command once the ad started').toEqual(point.sentBefore);
+        expect(p.st.countingIn).toBe(false);
+        if (!point.sentBefore.includes('play')) {
+          expect(p.st.playing, 'never plays').toBe(false);
+          const results = h.results().filter((r) => r.id === 1 && r.state !== 'countin');
+          expect(results).toEqual([expect.objectContaining({ ok: false, code: 'ad' })]);
+        }
+      });
+    }
+  }
+
+  it('restart during an ad sends nothing (with the link context)', async () => {
+    const p = gatePanel({ countIn: false });
+    const h = wiredHarness(p);
+    p.st.ad = true;
+    h.ws.rx({ t: 'cmd', id: 1, epoch: h.epoch, rev: h.rev, cmd: 'restart', from: ID_A, grant: h.grant() });
+    await finish(p);
+    expect(p.sent).toEqual([]);
+    expect(h.results().at(-1)).toMatchObject({ id: 1, ok: false, code: 'ad' });
+  });
+});
+
+describe('S6-R6-02: a command for the previous song never reaches a player that changed before the new song is published', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const CMDS: [string, PhoneCommand, boolean][] = [
+    ['restart', 'restart', false],
+    ['play (count-in on)', 'toggle', true],
+    ['play (count-in off)', 'toggle', false],
+  ];
+
+  for (const [name, cmd, countIn] of CMDS) {
+    for (const marked of [true, false]) {
+      it(`${name}: player changed to song B, ${marked ? 'panel marked not ready' : 'not marked (target binding alone)'}: stale, nothing sent`, async () => {
+        const p = gatePanel({ countIn, loopStart: countIn ? null : 5 });
+        const h = wiredHarness(p);
+        // sidepanel.ts onPlayerState: player and chartKey are song B's, the chart is still loading, and
+        // syncPhoneSong has not published song B yet. The phone still shows song A.
+        if (marked) h.link.songChanging();
+        p.st.target = TARGET_B;
+        h.ws.rx({ t: 'cmd', id: 1, epoch: h.epoch, rev: h.rev, cmd, from: ID_A, grant: h.grant() });
+        await finish(p);
+        expect(p.sent).toEqual([]);
+        expect(h.results().at(-1)).toMatchObject({ id: 1, ok: false, code: 'stale' });
+
+        // Once song B is published for its target, a command with that revision acts on song B.
+        publish(h, SONG_B, TARGET_B);
+        h.ws.rx({ t: 'cmd', id: 2, epoch: h.epoch, rev: h.rev, cmd, from: ID_A, grant: h.grant() });
+        await finish(p);
+        expect(p.sent.length).toBeGreaterThan(0);
+        expect(new Set(p.sentTo)).toEqual(new Set([TARGET_B]));
+        expect(h.results().at(-1)).toMatchObject({ id: 2, ok: true });
+      });
+    }
+  }
+
+  it('after songChanging, setting the same song and target again publishes a new revision', async () => {
+    const p = gatePanel({ countIn: false });
+    const h = wiredHarness(p);
+    const before = h.rev;
+    h.link.songChanging();
+    h.ws.rx({ t: 'cmd', id: 1, epoch: h.epoch, rev: before, cmd: 'restart', from: ID_A, grant: h.grant() });
+    await finish(p);
+    expect(h.results().at(-1)).toMatchObject({ id: 1, ok: false, code: 'stale' });
+    publish(h, SONG_A, TARGET_A);
+    expect(h.rev).toBeGreaterThan(before);
+    h.ws.rx({ t: 'cmd', id: 2, epoch: h.epoch, rev: h.rev, cmd: 'restart', from: ID_A, grant: h.grant() });
+    await finish(p);
+    expect(p.sent).toEqual(['seek 4']);
+    expect(h.results().at(-1)).toMatchObject({ id: 2, ok: true });
+  });
+
+  it('the same view set for another target is a new revision (the old one is stale)', async () => {
+    const p = gatePanel({ countIn: false });
+    const h = wiredHarness(p);
+    const before = h.rev;
+    publish(h, SONG_A, 'tab 202 / song A');
+    expect(h.rev).toBeGreaterThan(before);
+    h.ws.rx({ t: 'cmd', id: 1, epoch: h.epoch, rev: before, cmd: 'restart', from: ID_A, grant: h.grant() });
+    await finish(p);
+    expect(p.sent).toEqual([]);
+    expect(h.results().at(-1)).toMatchObject({ id: 1, ok: false, code: 'stale' });
+  });
+});
+
+describe('S6-R6: the link context also carries the grant (every revoke trigger, count-in on and off)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  for (const point of POINTS) {
+    it(`${point.name}: cancelled, nothing further sent`, async () => {
+      for (const [name, trigger] of REVOKE_TRIGGERS) {
+        const p = gatePanel({ countIn: point.countIn, loopStart: point.countIn ? null : 5 });
+        const h = wiredHarness(p);
+        h.cmd(1);
+        await settle();
+        await point.reach(p);
+        const label = `${point.name} / ${name}`;
+        expect(p.sent, label).toEqual(point.sentBefore);
+        trigger(h);
+        await finish(p);
+        expect(p.sent, label).toEqual(point.sentBefore);
+        expect(p.st.countingIn, label).toBe(false);
+        if (!point.sentBefore.includes('play')) {
+          const results = h.results().filter((r) => r.id === 1 && r.state !== 'countin');
+          for (const r of results) expect(r, label).toMatchObject({ ok: false, code: 'cancelled' });
+        }
+      }
+    });
+  }
+
+  it('without a trigger the same steps run to the end', async () => {
+    for (const countIn of [true, false]) {
+      const p = gatePanel({ countIn, loopStart: countIn ? null : 5 });
+      const h = wiredHarness(p);
+      h.cmd(1);
+      await finish(p);
+      expect(p.sent).toEqual(countIn ? ['pause', 'seek 4', 'play'] : ['seek 5', 'play']);
+      expect(h.results().at(-1)).toMatchObject({ id: 1, ok: true, state: 'playing' });
+    }
   });
 });

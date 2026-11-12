@@ -10,6 +10,12 @@
  * to `onCommand`. The outcome goes back only over the same socket. A song change while a command runs
  * aborts it with SONG_CHANGED, so it sends nothing further to the player (the phone hears `stale`).
  *
+ * Each published song revision is bound to the player target the panel gave with it (setSong). The
+ * command's CommandContext tells runPhoneCommand that target and whether the grant and the revision
+ * still hold. songChanging() (the panel's player, recording, chart or demo changed) clears the
+ * published revision at once: until the panel sets the new song and it is published, every command is
+ * `stale`.
+ *
  * The panel alone decides who may control: it holds one grant {connection, number}, set only by its
  * own 승인 (with a new number) and cleared at once by every way control ends. The relay stamps each
  * forwarded command with the number it was given at approval; a command runs only when its sender and
@@ -36,7 +42,7 @@ import {
   type SongPartMessage,
 } from '../../phone/protocol';
 import type { SongView } from '../../phone/song-view';
-import { SONG_CHANGED } from './phone-control';
+import { SONG_CHANGED, type CommandContext } from './phone-control';
 
 export type PhoneStatus =
   | { kind: 'off' }
@@ -72,9 +78,10 @@ export interface PhoneLinkOptions {
   onPhones?: (list: PhoneEntry[]) => void;
   /**
    * Carries out a command from the approved phone (already checked here). `progress` sends an
-   * intermediate outcome (the count-in started); the resolved outcome is the final one.
+   * intermediate outcome (the count-in started); the resolved outcome is the final one. `context`
+   * goes to runPhoneCommand.
    */
-  onCommand?: (cmd: PhoneCommand, progress: (o: CommandOutcome) => void, signal: AbortSignal) => Promise<CommandOutcome>;
+  onCommand?: (cmd: PhoneCommand, progress: (o: CommandOutcome) => void, signal: AbortSignal, context: CommandContext) => Promise<CommandOutcome>;
   port?: number;
   makeSocket?: (url: string) => SocketLike;
   now?: () => number;
@@ -86,6 +93,8 @@ const OPEN = 1;
 const FIRST_RETRY_MS = 1000;
 const MAX_RETRY_MS = 15000;
 const SONG_DEBOUNCE_MS = 250;
+/** songTarget after songChanging(): the next setSong always counts as a change. */
+const NOT_READY: unique symbol = Symbol('not ready');
 /** A position this far from the last anchor's extrapolation is a seek or a loop jump. */
 const JUMP_SEC = 0.15;
 /** Close code the relay uses when a newer publisher connects. */
@@ -122,6 +131,10 @@ export class PhoneLink {
   private rev = 0;
   private seq = 0;
   private songJson = '';
+  /** The player target the song in songJson was set for; NOT_READY after songChanging(). */
+  private songTarget: string | null | typeof NOT_READY = null;
+  /** The revision phones have and the player target it was published for; null while none may be acted on. */
+  private published: { rev: number; target: string | null } | null = null;
   private parts: SongPartMessage[] = [];
   private lastAnchor: AnchorMessage | null = null;
   private control = false;
@@ -236,21 +249,42 @@ export class PhoneLink {
     this.connect();
   }
 
-  /** The song the panel shows (null: none). Sent once its JSON changes, debounced. */
-  setSong(view: SongView | null): void {
+  /**
+   * The song the panel shows (null: none) and the player target commands for it would act on (null:
+   * none). Sent once either changes, debounced; commands are `stale` until it is published.
+   */
+  setSong(view: SongView | null, target: string | null = null): void {
     const json = JSON.stringify(view ?? EMPTY_SONG);
-    if (json === this.songJson) return;
+    if (json === this.songJson && target === this.songTarget) return;
     this.songJson = json;
-    // A command started for the previous song must not act on this one.
+    this.songTarget = target;
+    this.unpublish();
+    this.songTimer = this.o.setTimer(() => {
+      this.songTimer = null;
+      this.publishSong(view ?? EMPTY_SONG, target);
+    }, SONG_DEBOUNCE_MS);
+  }
+
+  /**
+   * The panel's player, recording, chart or demo is changing: from now on no command acts until the
+   * panel sets the song again (setSong) and it is published. Called synchronously before anything else
+   * runs, so no command can reach the new player with the previous song's revision.
+   */
+  songChanging(): void {
+    this.songTarget = NOT_READY;
+    this.unpublish();
+  }
+
+  /** No revision may be acted on; commands for the previous one are stopped. */
+  private unpublish(): void {
+    this.published = null;
+    this.o.clearTimer(this.songTimer);
+    this.songTimer = null;
+    // A command started for the previous song must not act on the next one.
     for (const r of [...this.running]) {
       this.running.delete(r);
       r.ctl.abort(SONG_CHANGED);
     }
-    this.o.clearTimer(this.songTimer);
-    this.songTimer = this.o.setTimer(() => {
-      this.songTimer = null;
-      this.publishSong(view ?? EMPTY_SONG);
-    }, SONG_DEBOUNCE_MS);
   }
 
   /** Called every frame: sends an anchor at once on play/pause, rate, ad, loop changes and jumps. */
@@ -293,8 +327,9 @@ export class PhoneLink {
     this.send(m);
   }
 
-  private publishSong(view: SongView): void {
+  private publishSong(view: SongView, target: string | null | typeof NOT_READY): void {
     this.rev++;
+    this.published = target === NOT_READY ? null : { rev: this.rev, target };
     this.parts = songParts(view, this.epoch, this.rev) ?? songParts(EMPTY_SONG, this.epoch, this.rev)!;
     if (this.isOpen()) for (const p of this.parts) this.send(p);
   }
@@ -325,7 +360,7 @@ export class PhoneLink {
       this.seen.clear();
       this.setGrant(null);
       if (this.control) this.send({ t: 'control', on: true });
-      if (!this.parts.length) this.publishSong(this.songJson ? (JSON.parse(this.songJson) as SongView) : EMPTY_SONG);
+      if (!this.parts.length) this.publishSong(this.songJson ? (JSON.parse(this.songJson) as SongView) : EMPTY_SONG, this.songTarget);
       else for (const p of this.parts) this.send(p);
       this.lastAnchor = null;
       this.tick();
@@ -422,8 +457,9 @@ export class PhoneLink {
     if (m.id <= (this.seen.get(m.from) ?? 0)) return fail('duplicate');
     this.seen.set(m.from, m.id);
     if (!this.bucket.take()) return fail('rate');
-    // A song change waiting for its debounce is already what the panel shows.
-    if (m.epoch !== this.epoch || m.rev !== this.rev || this.songTimer) return fail('stale');
+    // A song change waiting for its debounce (or for the panel to set it) is already what the panel shows.
+    const pub = this.published;
+    if (!pub || m.epoch !== this.epoch || m.rev !== pub.rev) return fail('stale');
     if (this.busy) return fail('busy');
     this.busy = true;
     let released = false;
@@ -433,6 +469,15 @@ export class PhoneLink {
     };
     const run = { grant: g.seq, ctl: new AbortController() };
     this.running.add(run);
+    const context: CommandContext = {
+      // The same checks as above, for every later player command: a new revision (or none) is `stale`.
+      check: () => {
+        if (this.published !== pub) return 'stale';
+        const now = this.grant;
+        return this.control && now && now.id === m.from && now.seq === m.grant ? null : 'cancelled';
+      },
+      target: pub.target,
+    };
     this.o
       .onCommand(
         m.cmd,
@@ -442,6 +487,7 @@ export class PhoneLink {
           reply(o);
         },
         run.ctl.signal,
+        context,
       )
       .catch((): CommandOutcome => ({ ok: false, code: 'failed' }))
       .then((o) => {

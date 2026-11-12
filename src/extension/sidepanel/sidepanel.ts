@@ -65,7 +65,7 @@ import { ChordFixer } from './fix';
 import { OVERVIEW_EMPTY, renderOverviewHtml } from './overview';
 import { capoReason, unplayableLine, PlayScreen, formatTime, type LoopMarks } from './play';
 import { PhoneLink, phoneStatusText, type PhoneStatus, type PlaybackSample } from './phone-link';
-import { restartTargetSec, runPhoneCommand, type ObservedPlayer, type PanelTransport } from './phone-control';
+import { restartTargetSec, runPhoneCommand, type CommandContext, type ObservedPlayer, type PanelTransport } from './phone-control';
 import type { CommandOutcome, PhoneCommand, PhoneEntry } from '../../phone/protocol';
 import { buildSongView } from '../../phone/song-view';
 
@@ -99,6 +99,8 @@ let activeTabId: number | null = null;
 let myWindowId: number | null = null;
 let chart: Chart | null = null;
 let chartKey = '';
+/** The recording key `chart` was loaded for: while it differs from chartKey, the chart shown is the previous song's. */
+let chartFor = '';
 let model: PlayModel | null = null;
 let screen: PlayScreen;
 let editor: StampState = { chords: [], stamps: [] };
@@ -139,7 +141,7 @@ const jumper = new LoopJumper();
 let practiceRate: { key: string; tabId: number | null; rate: number } | null = null;
 /** 휴대폰 악보대 (VGT-13): publisher to the local relay, and what its song view was built from. */
 let phone: PhoneLink;
-let phoneSongFrom: { model: PlayModel | null; snd: boolean; title: string; artist: string } | null = null;
+let phoneSongFrom: { model: PlayModel | null; snd: boolean; title: string; artist: string; target: string | null } | null = null;
 let phoneSongPos = 0;
 
 // ---------- player sync ----------
@@ -164,11 +166,13 @@ async function onPlayerState(msg: PlayerStateMessage, sender: chrome.runtime.Mes
   if (!tab.active) return;
   activeTabId = tab.id;
   if (demo) return;
+  const key = recordingKey(msg.recording);
+  // Before anything else: no phone command may reach this player with the previous song's revision.
+  if (key !== chartKey || tab.id !== playerTabId) phoneSongChanging();
   const durationBefore = player?.duration ?? 0;
   player = msg;
   playerTabId = tab.id;
   if (msg.adapter === 'applemusic') renderAppleMusicStatus(msg);
-  const key = recordingKey(msg.recording);
   resetRateForNewRecording(msg, key, tab.id);
   if (key !== chartKey) {
     stopCountIn();
@@ -193,10 +197,12 @@ function forgetPlayer(): void {
   stopCountIn(); // the count-in loop must not outlive the model it counts against
   clearLoop();
   if (player === null && playerTabId === null) return;
+  phoneSongChanging();
   switchDraft(null);
   player = null;
   playerTabId = null;
   chartKey = '';
+  chartFor = '';
   chart = null;
   lyrics = null;
   lyricsNote = '';
@@ -218,7 +224,9 @@ async function refreshActiveTab(): Promise<void> {
 async function reloadChart(): Promise<void> {
   if (demo) return;
   const r = player?.recording;
+  const key = recordingKey(r ?? null);
   chart = r && hasChrome ? await loadChart(r.source, r.id) : null;
+  chartFor = key;
   recompute();
   await refreshPendingAuto();
 }
@@ -1286,6 +1294,7 @@ async function startDemo(preferKey?: string): Promise<void> {
   const rate = Number(params.get('rate'));
   if (isPracticeRate(rate)) clock.rate = rate;
   clearLoop(); // a loop belongs to one playback: the real player's or one demo's
+  phoneSongChanging();
   demo = { clock, chart: pick.chart, lyrics: await demoLyricsFor(pick.chart), key: pick.key, run: ++demoRuns };
   $('demo-bar').hidden = false;
   showTab('play');
@@ -1298,6 +1307,7 @@ async function startDemo(preferKey?: string): Promise<void> {
 async function exitDemo(): Promise<void> {
   stopCountIn();
   clearLoop();
+  phoneSongChanging();
   demo = null;
   $('demo-bar').hidden = true;
   // Tab switches were not followed during the demo: drop a player that is no longer in the
@@ -1327,12 +1337,23 @@ function phoneSample(): PlaybackSample | null {
 /** Rebuilds the song view when the model, 실제 음 이름 보기 or the title changes (not every frame). */
 function syncPhoneSong(): void {
   if (!phone.isEnabled) return;
+  // The new song's chart is still loading: phones keep the previous view, and commands stay stale.
+  if (!demo && chartFor !== chartKey) return;
   const r = shownRecording();
-  const from = { model, snd: settings.showSounding, title: r?.title ?? '', artist: r?.artist ?? '' };
+  const from = { model, snd: settings.showSounding, title: r?.title ?? '', artist: r?.artist ?? '', target: phonePlayer.target() };
   const p = phoneSongFrom;
-  if (p && p.model === from.model && p.snd === from.snd && p.title === from.title && p.artist === from.artist) return;
+  if (p && p.model === from.model && p.snd === from.snd && p.title === from.title && p.artist === from.artist && p.target === from.target) return;
   phoneSongFrom = from;
-  phone.setSong(model ? buildSongView(model, { title: from.title, artist: from.artist, showSounding: from.snd }) : null);
+  phone.setSong(model ? buildSongView(model, { title: from.title, artist: from.artist, showSounding: from.snd }) : null, from.target);
+}
+
+/**
+ * The player, recording, chart or demo is about to change (VGT-16): phone commands are refused as
+ * stale from now until syncPhoneSong publishes the new song for the new target.
+ */
+function phoneSongChanging(): void {
+  phoneSongFrom = null;
+  phone?.songChanging();
 }
 
 // ---------- 휴대폰에서 조작 (VGT-16) ----------
@@ -1346,6 +1367,7 @@ const phonePlayer: ObservedPlayer = {
   target: () => {
     if (!model) return null;
     if (demo) return JSON.stringify(['demo', demo.run, demo.key]);
+    if (chartFor !== chartKey) return null; // the model shown is still the previous song's
     const tab = player && hasChrome ? controlTabId(playerTabId, activeTabId) : null;
     return tab === null ? null : JSON.stringify(['tab', tab, recordingKey(player!.recording), chartKey]);
   },
@@ -1366,8 +1388,8 @@ const phoneTransport: PanelTransport = {
   restartTarget: () => (model ? restartTargetSec(practiceLoop ? loopStartTarget(practiceLoop) : null, model.bars, positionNow(false)) : null),
 };
 
-function onPhoneCommand(cmd: PhoneCommand, progress: (o: CommandOutcome) => void, signal: AbortSignal): Promise<CommandOutcome> {
-  return runPhoneCommand(cmd, phonePlayer, phoneTransport, { progress, signal });
+function onPhoneCommand(cmd: PhoneCommand, progress: (o: CommandOutcome) => void, signal: AbortSignal, context: CommandContext): Promise<CommandOutcome> {
+  return runPhoneCommand(cmd, phonePlayer, phoneTransport, { progress, signal, context });
 }
 
 function renderPhones(list: readonly PhoneEntry[]): void {

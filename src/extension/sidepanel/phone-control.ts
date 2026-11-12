@@ -8,11 +8,15 @@
  * content script answers before play/seek has actually happened, and a phone tap does not count as a
  * user gesture on the Mac's page: the browser's autoplay rule may keep the video paused.
  *
- * Authorization gate: checked immediately before every player command and count-in start the command
- * causes. It fails once the command's AbortSignal is aborted (the phone lost the right to control, or
- * the song the phone saw changed) or once the panel's player target (song, tab, recording) is no
- * longer the one captured when the command started. Then nothing further is sent, and the phone (if
- * still connected) gets `cancelled` (control lost) or `stale` (song or tab changed).
+ * Context gate: one predicate, checked when the command starts and again immediately before every
+ * player command and count-in start the command causes. It holds only while
+ *   - the phone still holds the grant the command came with (else `cancelled`),
+ *   - the command's song revision is still the one published to phones (else `stale`),
+ *   - the panel's player target (song, tab, recording) is still the one that revision was published
+ *     for, so a player that changed before the panel published the new song is never reached (else
+ *     `stale`; at the start, no target at all is `no-target`),
+ *   - no ad is playing (else `ad`).
+ * Once it fails nothing further is sent, and the phone (if still connected) gets that code.
  */
 import { CONTROL_OBSERVE_MS, type CommandFailure, type CommandOutcome, type PhoneCommand } from '../../phone/protocol';
 import type { PlayerControlResult } from '../messages';
@@ -51,7 +55,20 @@ export interface PanelTransport {
   cancelCountIn(): void;
 }
 
+/** What PhoneLink knows about a command it hands over: its grant and the song revision it was sent for. */
+export interface CommandContext {
+  /** `cancelled` once the grant the command came with ended, `stale` once its revision is no longer the one published; else null. */
+  check(): CommandFailure | null;
+  /** The player target the command's revision was published for (null: published with no song). */
+  readonly target: string | null;
+}
+
 export interface RunOptions {
+  /**
+   * The command's grant and published revision. Without it (tests of the steps alone), the target seen
+   * when the command starts is the one it is bound to.
+   */
+  context?: CommandContext;
   /** Progress before the final outcome (the count-in started). */
   progress?: (o: CommandOutcome) => void;
   /**
@@ -88,21 +105,35 @@ async function settlePaused(player: ObservedPlayer, transport: PanelTransport, g
 }
 
 interface Gate {
-  /** The authorization gate (see the file comment). */
+  /** Why the context gate (see the file comment) fails right now, or null while it holds. */
+  why: () => CommandFailure | null;
+  /** The gate holds. */
   allowed: () => boolean;
   /** The song or player target changed since the command started (what is observed is another song's). */
   moved: () => boolean;
   /** The failure to report once the gate failed. */
   refused: () => CommandOutcome;
+  /** The target the command is bound to. */
+  target: string | null;
 }
 
-function gate(player: ObservedPlayer, signal: AbortSignal | undefined): Gate {
-  const start = player.target();
-  const moved = () => player.target() !== start || (!!signal?.aborted && signal.reason === SONG_CHANGED);
+function gate(player: ObservedPlayer, signal: AbortSignal | undefined, context: CommandContext | undefined): Gate {
+  const target = context ? context.target : player.target();
+  // A song or target change wins over a lost grant: what is observed now is another song's.
+  const why = (): CommandFailure | null => {
+    const c = context?.check() ?? null;
+    if (c === 'stale' || (signal?.aborted && signal.reason === SONG_CHANGED) || player.target() !== target) return 'stale';
+    if (c) return c;
+    if (signal?.aborted) return 'cancelled';
+    if (player.isAd()) return 'ad';
+    return null;
+  };
   return {
-    allowed: () => !signal?.aborted && !moved(),
-    moved,
-    refused: () => fail(moved() ? 'stale' : 'cancelled'),
+    why,
+    allowed: () => why() === null,
+    moved: () => why() === 'stale',
+    refused: () => fail(why() ?? 'cancelled'),
+    target,
   };
 }
 
@@ -133,11 +164,10 @@ export async function runPhoneCommand(cmd: PhoneCommand, player: ObservedPlayer,
   const sleep = o.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const observeMs = o.observeMs ?? CONTROL_OBSERVE_MS;
   const pollMs = o.pollMs ?? 50;
-  const g = gate(player, o.signal);
+  const g = gate(player, o.signal, o.context);
   const { allowed } = g;
   if (!allowed()) return g.refused();
-  if (player.isAd()) return fail('ad');
-  if (player.target() === null) return fail('no-target');
+  if (g.target === null) return fail('no-target');
 
   if (cmd === 'toggle') {
     // Pause during a count-in cancels it. The player itself may still play (started on the Mac
