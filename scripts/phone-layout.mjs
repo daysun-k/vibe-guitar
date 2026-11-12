@@ -1,9 +1,9 @@
 // VGT-16: measured layout check of the phone music stand page (`npm run phone-layout`).
 // Starts the relay, a fake side panel that publishes a song whose chord names are long ("C#m7b5/G#",
-// the 16-character maximum) with a long title, approves the phone, and opens the real phone page in
+// the 16-character maximum) with a long title (not shown on the phone), approves the phone, and opens the real phone page in
 // headless Chromium at phone sizes (portrait and landscape). For every size and name it measures, in
 // the page, that nothing is wider than the screen: the page itself, both diagrams, the four control
-// buttons, the status line and the position. Diagrams and buttons must also be fully on screen
+// icon buttons, the bar card and the status line. Diagrams and buttons must also be fully on screen
 // vertically, and the chord name must not overlap its diagram. Then it stops the relay and Chromium.
 //
 // Chromium: $CHROME, else Playwright's headless shell / Chromium cache, else Google Chrome (as
@@ -128,7 +128,7 @@ const viewer = await buildViewer();
 if (serve)
   viewer.viewerJs += `;(() => { const seen = new Set(), bad = new Map(); const m = ${MEASURE_SOURCE};
     setInterval(() => { const r = m(innerWidth, innerHeight, true); if (!r.controls || !r.name || r.name === '–') return;
-      const k = innerWidth + 'x' + innerHeight + (document.getElementById('lock').hidden ? '' : ' notice') + '@' + r.name; seen.add(k);
+      const k = innerWidth + 'x' + innerHeight + '@' + r.name; seen.add(k);
       if (r.out.length || (r.clipped && parseFloat(r.font) > 16)) bad.set(k, r.out.join('; ') || 'clipped at ' + r.font);
       document.title = 'VGLAYOUT seen ' + seen.size + ' bad ' + JSON.stringify([...bad]) + ' last ' + k + ' ' + r.font; }, 300); })();`;
 const NAMES = ['Bm7', 'Bbmaj7', 'F#7sus4', 'C#m7b5/G#', 'C#m7b5(add11)/G#'];
@@ -266,7 +266,7 @@ try {
   await setSize(320, 548);
   await send('Page.navigate', { url: `http://${relay.lanHost}/?t=${relay.token}` });
 
-  // Before approval: the auto-lock notice and the pairing code are shown (width only).
+  // Before approval: the pairing code is shown (width only).
   const pending = await (async () => {
     for (let i = 0; i < 50; i++) {
       const p = pub.messages.findLast((m) => m.t === 'phones' && m.list.some((e) => e.state === 'pending'));
@@ -282,9 +282,8 @@ try {
     await sleep(300);
     const m = await evaluate(measure(s.w, s.h, false));
     await shot(`${s.name}-pairing`);
-    check(`${s.name} before approval (auto-lock notice, pairing code): nothing wider than the screen`, m.out.length === 0, m.out.join('; '));
+    check(`${s.name} before approval (pairing code): nothing wider than the screen`, m.out.length === 0, m.out.join('; '));
   }
-  await evaluate("document.getElementById('lock-ok')?.click()");
   pub.send(JSON.stringify({ t: 'approve', id: pending.id, code: pending.code, grant: 1 }));
   await sleep(500);
 

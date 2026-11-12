@@ -9,7 +9,7 @@
 import type { Finger, Fret, Voicing } from '../arrange/guitar';
 import type { Timing } from '../chart/types';
 import { findEventIndex } from '../extension/playview';
-import { bigBeatInfo, bigBeatsUntil, type BigBeat } from '../music/meter';
+import { bigBeatIndexAt, bigBeatInfo, bigBeatsUntil, type BigBeat } from '../music/meter';
 import type { PlayModel } from '../play/model';
 
 export const SONG_VIEW_LIMITS = {
@@ -237,6 +237,10 @@ export interface PhoneFrame {
   beatsLeft: number;
   /** Lane bar under the playhead, -1 outside every bar. */
   bar: number;
+  /** Whole big beats elapsed in `bar` before the one under the playhead (0 outside every bar). */
+  bigInBar: number;
+  /** How far the playhead is through `bar`, 0..1 (0 outside every bar). */
+  barFraction: number;
   section: number;
 }
 
@@ -283,11 +287,19 @@ export function phoneFrame(s: PhoneSong, t: number): PhoneFrame {
       break;
     }
   }
+  // The play view's frameAt: the lane cell's playhead and filled ticks.
+  let bigInBar = 0;
+  let barFraction = 0;
+  if (bar >= 0) {
+    const b = s.bars[bar]!;
+    barFraction = Math.min(1, Math.max(0, (t - b.startSec) / (b.endSec - b.startSec)));
+    bigInBar = Math.floor(bigBeatIndexAt(s.timing, s.big, t) - bigBeatIndexAt(s.timing, s.big, b.startSec) + 1e-6);
+  }
   let section = 0;
   s.view.sections.forEach(([, firstBar, startSec], k) => {
     if (bar >= firstBar || (bar < 0 && t >= startSec)) section = k;
   });
-  return { nowEvent, nextEvent, beatsLeft, bar, section };
+  return { nowEvent, nextEvent, beatsLeft, bar, bigInBar, barFraction, section };
 }
 
 /** Voicing for the diagram renderer (renderShapeDiagram reads chord, frets and fingers). */

@@ -172,9 +172,14 @@ median (chance level) by 25 % and 4+ changes; otherwise it stays 0.
 
 ## Phone music stand (휴대폰 악보대)
 
-Stand a phone next to the guitar like a music stand: it shows the current chord and the next one side by
-side with their diagrams, the big beats left until the change, the bar/section and "카포 N 모양" when a capo
-is used, while the song plays on the Mac. Portrait and landscape both work.
+Stand a phone next to the guitar like a music stand: it shows the current chord and the next one with their
+diagrams, and under the current chord a card for the current bar drawn like the panel's lane cell (a playhead
+moving across the bar and one segment per big beat along its bottom, filled as the beats pass), while the
+song plays on the Mac. Nothing else is written on it: no capo, bar number, title or "Mac과 연결됨". One status
+line appears only when something needs attention (an ad, no position arriving, a failed or pending command
+such as "맥에서 한 번 재생을 눌러 주세요", "곡이 바뀌었어요 · 다시 눌러 주세요" or "마지막 마디예요") and goes
+away after a few seconds or when that ends; while the link to the Mac is down, the whole page says so instead.
+Portrait and landscape both work.
 
 **Run it**
 
@@ -188,7 +193,7 @@ is used, while the song plays on the Mac. Portrait and landscape both work.
    in System Settings › Network › Firewall › Options). Wrong Wi-Fi address picked: `npm run phone -- --host
    192.168.x.x` (one private IPv4 of this Mac; `0`, `0.0.0.0`, `::`, hostnames and loopback are refused).
 3. Put the phone on **the same home Wi-Fi** and scan the QR code (or type the address).
-4. Turn off the phone's auto-lock while playing (the page says so once): plain http on the home network cannot
+4. Turn off the phone's auto-lock while playing (the page does not remind you): plain http on the home network cannot
    use the browser's keep-screen-on feature. iPhone: 설정 › 디스플레이 및 밝기 › 자동 잠금 › 안 함; Android:
    설정 › 디스플레이 › 화면 자동 꺼짐. Turn it back afterwards.
 5. Stop by closing that Terminal window or pressing **Ctrl+C** in it. If you forget, it stops by itself: when no
@@ -235,8 +240,10 @@ extension pages' CSP has no `connect-src` limit, so `ws://127.0.0.1` needs no pe
 **Phone control (휴대폰에서 조작 허용, off by default).** With 휴대폰 악보대 on, a second switch appears:
 휴대폰에서 조작 허용. While it is on, a phone that opens the stand page shows a 4-digit code, and the settings
 sheet lists every connected phone's code with **승인** / **거절**. Approve only the code your own phone shows.
-The approved phone gets large buttons: **◀ 이전 마디 | 재생/일시정지 | 다음 마디 ▶** and, below them,
-**처음부터**. 처음부터 goes to loop A when a loop is set, otherwise to the start of the song (0 s), never just
+The approved phone gets one row of large icon buttons (at least 56 px tall, named for screen readers):
+**↻ 처음부터 | ‹ 이전 마디 | ▶ 재생 / ❚❚ 일시정지 | › 다음 마디**. The play button shows the pause icon while the
+song plays or a count-in runs. A command that worked shows on the stand itself (the icon, the bar card); only a
+failure or the count-in is written on the status line. 처음부터 goes to loop A when a loop is set, otherwise to the start of the song (0 s), never just
 the current bar. 이전 마디 goes to the start of the bar before the one under the playhead (also when the
 playhead is right at a bar start), and stays at the first bar there; 다음 마디 goes to the start of the next
 bar, and in the last bar does nothing and says "마지막 마디예요". With a loop set, both stay inside the loop's

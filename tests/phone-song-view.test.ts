@@ -94,6 +94,9 @@ describe('song view builder', () => {
         expect(p.nextEvent).toBe((now >= 0 ? up[1] : up[0]) ?? -1);
         expect(p.bar).toBe(f.bar);
         expect(p.section).toBe(f.section);
+        // The phone's bar card draws the lane cell's playhead and filled ticks from these.
+        expect(p.bigInBar).toBe(f.bigInBar);
+        expect(p.barFraction).toBeCloseTo(f.barFraction, 3);
         expect(p.beatsLeft).toBe(p.nextEvent >= 0 ? bigBeatsUntil(m.timing, m.big, t, m.arrangement.events[p.nextEvent]!.startSec) : 0);
       }
     }
@@ -106,6 +109,14 @@ describe('song view builder', () => {
     const f = phoneFrame(s, bar.startSec + 0.01);
     expect(s.big.bigPerBar).toBe(2);
     expect(f.beatsLeft).toBe(2);
+    // Bar card: the first big beat of the bar, the playhead at its very start.
+    expect(f.bar).toBe(5);
+    expect(f.bigInBar).toBe(0);
+    expect(f.barFraction).toBeLessThan(0.05);
+    // Past the middle of the bar: the second big beat, the playhead past halfway.
+    const later = phoneFrame(s, bar.startSec + (bar.endSec - bar.startSec) * 0.6);
+    expect(later.bigInBar).toBe(1);
+    expect(later.barFraction).toBeCloseTo(0.6, 2);
   });
 });
 

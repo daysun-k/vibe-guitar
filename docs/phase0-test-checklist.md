@@ -211,17 +211,19 @@ home Wi-Fi only (the token is access control, not encryption).
       `--extension-id <id>` it suggests (the extension was loaded from another folder).
 - [ ] The first time, macOS asks whether node may accept incoming connections: allow. Phone on the same Wi-Fi,
       scan the QR code: the page loads and the sheet shows 휴대폰 1대. A wrong or missing token shows a 403 page.
-- [ ] First visit: the auto-lock notice appears; 확인 hides it and it stays hidden on the next visit. Turn
-      auto-lock off (iPhone: 설정 › 디스플레이 및 밝기 › 자동 잠금 › 안 함; Android: 설정 › 디스플레이 › 화면 자동 꺼짐)
-      and back on after testing.
+- [ ] No auto-lock notice on the page. Turn auto-lock off by hand (iPhone: 설정 › 디스플레이 및 밝기 › 자동 잠금 ›
+      안 함; Android: 설정 › 디스플레이 › 화면 자동 꺼짐) and back on after testing.
 - [ ] Play a song with a chart: the phone shows the same current and next shape names and diagrams as the
-      panel's strip, "N박 뒤에 바뀜" with filled dots counting big beats (2 per bar in 6/8), and the section ·
-      bar line. Readable at arm's length, portrait and landscape (rotate the phone).
-- [ ] Capo: set 카포 2 in the panel: the phone shows "카포 2 모양" and the same shape names. 실제 음 이름 보기 on:
+      panel's strip, and under the current chord a bar card like the panel's lane cell: the playhead moves
+      across it in step with the panel's playhead, and its bottom has one segment per big beat (4 in 4/4, 2 in
+      6/8), filling as the beats pass and starting over at each bar. No "N박 뒤에 바뀜", dots, bar number, section,
+      title or "Mac과 연결됨" text, and no status line while all is well. Readable at arm's length, portrait and
+      landscape (rotate the phone).
+- [ ] Capo: set 카포 2 in the panel: the phone shows the same shape names (no "카포 2 모양" text). 실제 음 이름 보기 on:
       "실제 …" appears under both names, as in the panel; off: it disappears within a second.
 - [ ] Change 난이도, 카포 and fix one chord (코드 고치기): the phone follows within about a second.
       데모 재생 also drives the phone; leaving the demo returns to the live song.
-- [ ] Pause: the phone freezes ("일시정지" in the status line). Seek by clicking a bar, change speed to 0.5×
+- [ ] Pause: the phone freezes (no status text; with control approved the play button shows ▶). Seek by clicking a bar, change speed to 0.5×
       and 0.75×, set a 구간 반복 loop: the phone follows the jumps, the slower countdown and the loop wrap.
 - [ ] An ad on YouTube: the phone shows "광고 중" and resumes after the ad.
 - [ ] Timing by eye with the phone next to the panel: chord changes look simultaneous. Optional, most exact:
@@ -246,22 +248,22 @@ Phone control (휴대폰에서 조작 허용, VGT-16):
       code and no buttons. With 휴대폰 악보대 off the switch is hidden.
 - [ ] Pairing: switch it on. The phone shows a 4-digit code; the sheet lists the same code with 승인 / 거절.
       Open the page on a second phone (or a second browser tab): it gets a different code. Press 승인 for your
-      phone's code only: your phone shows ◀ 이전 마디, 재생, 다음 마디 ▶ and 처음부터; the other one keeps
-      showing its code and no buttons.
+      phone's code only: your phone shows one row of icon buttons ↻ ‹ ▶ › (VoiceOver reads 처음부터, 이전 마디,
+      재생, 다음 마디); the other one keeps showing its code and no buttons.
 - [ ] Play/pause: with a song playing in the active tab, tap 일시정지, then 재생. The Mac's player follows each
-      tap within about a second, and the phone shows "일시정지했어요" / "재생했어요" after the Mac changed.
+      tap within about a second, and the phone's button turns to ▶ / ❚❚ once the Mac changed (no text).
       With 카운트인 1마디: 재생 starts the panel's count-in ("카운트인 뒤에 재생해요"); tapping again during
       the count-in cancels it and nothing plays.
 - [ ] 처음부터: with an A/B loop set, it goes back to the loop's first bar; without a loop, to the start of the
       song (0 s), not the current bar. Playing stays playing, paused stays paused.
 - [ ] 이전 마디 / 다음 마디: in the middle of the song, 이전 마디 goes to the start of the previous bar (tapped
       right after a bar starts, still the previous bar, not the current one) and 다음 마디 to the start of the
-      next bar; the bar number at the top of the phone follows. In bar 1, 이전 마디 stays at bar 1's start; in
+      next bar; the phone's bar card restarts at the new bar. In bar 1, 이전 마디 stays at bar 1's start; in
       the last bar, 다음 마디 does nothing and says "마지막 마디예요". With an A/B loop set, both stay inside the
       loop (다음 마디 at B: "구간 반복의 마지막 마디예요"). Playing stays playing, paused stays paused.
 - [ ] Layout: in portrait and landscape, with a song whose chords have long names (e.g. Bm7, F#7sus4,
       C#m7b5/G#) and a long title, nothing runs past the right edge: the chord name gets smaller so its
-      diagram stays fully visible, the title in the status line ends with "…", and all four buttons fit.
+      diagram stays fully visible, the title is not shown, and all four buttons and the bar card fit.
 - [ ] Autoplay: reload the YouTube tab and do not click it; tap 재생 on the phone. If Chrome blocks it, the phone
       says "맥에서 한 번 재생을 눌러 주세요" after about 3 s; click play on the Mac once and the phone works again.
 - [ ] Ads: during an ad every button answers "광고 중에는 조작할 수 없어요" and the ad is not affected.

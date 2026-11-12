@@ -1,7 +1,8 @@
 /**
  * VGT-13 phone music stand page (design B "악보대형"). Served by the relay on the home LAN over plain
- * http, so there is no Screen Wake Lock: the page asks once to turn off auto-lock instead.
- * It sends clock pings and, VGT-16, only while the panel approved this connection, the commands
+ * http, so there is no Screen Wake Lock (the README says to turn off auto-lock; the page does not).
+ * It shows only the chords, their diagrams, the current bar's progress and icon buttons; the status
+ * line appears only when something needs attention (stand.ts). It sends clock pings and, VGT-16, only while the panel approved this connection, the commands
  * (재생/일시정지, 처음부터, 이전 마디, 다음 마디) for the song it shows. A pending command is never re-sent
  * after a reconnect. Chord names are fitted to the space beside their diagrams (fit.ts) so the page
  * never gets wider than the screen.
@@ -27,16 +28,18 @@ import {
   type PhoneCommand,
 } from './protocol';
 import { phoneFrame, readSongView, shapeVoicing, type PhoneSong } from './song-view';
+import { beatSegments, statusLine, toggleLook } from './stand';
 
 const $ = (id: string) => document.getElementById(id)!;
 const now = () => performance.timeOrigin + performance.now();
 const token = new URLSearchParams(location.search).get('t') ?? '';
 /** The relay pongs every 2 s and the panel sends an anchor every 1 s; silence this long means a dead link. */
 const SILENCE_MS = 6000;
-const LOCK_KEY = 'vg-phone-lock-ok';
 
 let ws: WebSocket | null = null;
 let open = false;
+/** The socket was open at least once: a later close is a lost link, not the first connect. */
+let everOpen = false;
 let publisherConnected = false;
 const assembler = new SongAssembler();
 let song: PhoneSong | null = null;
@@ -54,7 +57,7 @@ const COMMAND_WAIT_MS = 8000;
 const MESSAGE_MS = 4000;
 let pair: PairMessage = { t: 'pair', state: 'off' };
 let cmdId = 0;
-let pending: { id: number; cmd: PhoneCommand; at: number } | null = null;
+let pending: { id: number; at: number } | null = null;
 /** Request whose count-in runs: its final result (playing or a failure) still comes. */
 let countinId = 0;
 let message = { text: '', alert: false, until: 0 };
@@ -76,39 +79,39 @@ const FAILURE_TEXT: Record<CommandFailure, string> = {
   'no-panel': 'Mac 패널이 연결되어 있지 않아요',
 };
 
-/** Korean message for an outcome. */
-function outcomeText(cmd: PhoneCommand | null, o: CommandOutcome): string {
+/**
+ * Korean message for an outcome, or '' when there is nothing to say: a success shows on the stand
+ * itself (the play button's icon, the bar's progress), so only failures and the count-in are said.
+ */
+function outcomeText(o: CommandOutcome): string {
   if (!o.ok && o.code === 'last-bar' && anchor?.loop) return '구간 반복의 마지막 마디예요';
   if (!o.ok) return FAILURE_TEXT[o.code];
   if (o.state === 'countin') return '카운트인 뒤에 재생해요 · 한 번 더 누르면 멈춰요';
-  if (cmd === 'restart') return o.state === 'playing' ? '처음부터 다시 재생해요' : '처음 위치로 옮겼어요';
-  if (cmd === 'prev-bar') return '이전 마디로 옮겼어요';
-  if (cmd === 'next-bar') return '다음 마디로 옮겼어요';
-  return o.state === 'playing' ? '재생했어요' : '일시정지했어요';
+  return '';
 }
 
+/** Shows `text` on the status line for a few seconds; '' clears an earlier message at once. */
 function say(text: string, alert: boolean) {
-  message = { text, alert, until: now() + MESSAGE_MS };
+  message = text ? { text, alert, until: now() + MESSAGE_MS } : { text: '', alert: false, until: 0 };
 }
 
 function sendCommand(cmd: PhoneCommand) {
   const cur = assembler.current;
   if (!open || pair.state !== 'approved' || pending || !cur) return;
   const id = ++cmdId;
-  pending = { id, cmd, at: now() };
+  pending = { id, at: now() };
   ws!.send(JSON.stringify({ t: 'cmd', id, epoch: cur.epoch, rev: cur.rev, cmd }));
 }
 
 function onResult(id: number, o: CommandOutcome) {
   if (pending && id === pending.id) {
-    const cmd = pending.cmd;
     pending = null;
     if (o.ok && o.state === 'countin') countinId = id;
-    say(outcomeText(cmd, o), !o.ok);
+    say(outcomeText(o), !o.ok);
   } else if (countinId && id === countinId) {
     countinId = 0;
     // The count-in ended: playback started, it was cancelled (paused) or play failed.
-    say(outcomeText('toggle', o), !o.ok);
+    say(outcomeText(o), !o.ok);
   }
 }
 
@@ -147,8 +150,8 @@ function onMessage(text: string) {
         pending = null;
         countinId = 0;
       }
+      // Approval shows as the buttons appearing; losing it is said, since the buttons just vanish.
       if (was === 'approved' && v.state !== 'approved') say('조작 승인이 해제됐어요', true);
-      else if (was !== 'approved' && v.state === 'approved') say('Mac 패널에서 승인했어요 · 이제 조작할 수 있어요', false);
     } else onResult(v.id, v);
   } else if (m.t === 'pong') {
     if (!finite(m.c, 0, 1e15) || !finite(m.s, 0, 1e15)) return;
@@ -184,6 +187,7 @@ function connect() {
   ws = new WebSocket(`ws://${location.host}/viewer?t=${encodeURIComponent(token)}`);
   ws.onopen = () => {
     open = true;
+    everOpen = true;
     lastAnyRx = now();
     backoff = 500;
     samples = [];
@@ -233,27 +237,25 @@ function nameOf(s: PhoneSong, shape: number): { name: string; snd: string } {
   return { name: sh.name, snd };
 }
 
-let dotsKey = '';
-function setDots(total: number, on: number) {
-  const key = `${total}/${on}`;
-  if (key === dotsKey) return;
-  dotsKey = key;
-  $('dots').innerHTML = total > 0 && total <= 6 ? Array.from({ length: total }, (_, i) => `<i${i < on ? ' class="on"' : ''}></i>`).join('') : '';
-}
-
-function where(s: PhoneSong, section: number, bar: number): string {
-  const name = s.view.sections[section]?.[0] ?? '';
-  const barText = bar >= 0 ? `${bar + 1}마디` : '';
-  // Sections without lyrics are already named by bars ("1–8마디"): show only the bar then.
-  if (!name || /마디$/.test(name)) return barText;
-  return barText ? `${name} · ${barText}` : name;
+let meterKey = '';
+/** The current bar's card: the playhead at `fraction` of the bar and one segment per big beat. */
+function drawMeter(total: number, filled: number, bar: number, fraction: number) {
+  const key = `${total}`;
+  if (key !== meterKey) {
+    meterKey = key;
+    $('ticks').innerHTML = '<i></i>'.repeat(total);
+  }
+  $('ticks').querySelectorAll('i').forEach((x, i) => x.classList.toggle('on', i < filled));
+  const ph = $('ph');
+  if (ph.hidden !== bar < 0) ph.hidden = bar < 0;
+  if (bar >= 0) ph.style.left = `${(fraction * 100).toFixed(2)}%`;
 }
 
 const REJECTED_TEXT = 'Mac 패널에서 이 휴대폰의 조작을 거절했어요 · 다시 요청하려면 페이지를 새로 고쳐 주세요';
 
 const CONTROL_BUTTONS = ['ctl-prev', 'ctl-toggle', 'ctl-next', 'ctl-restart'];
 
-/** Pairing code, the control buttons and the last outcome. */
+/** Pairing code and the control buttons (their outcome goes to the status line). */
 function drawControl(t: number, ready: boolean) {
   if (pending && t - pending.at > COMMAND_WAIT_MS) {
     pending = null;
@@ -274,12 +276,15 @@ function drawControl(t: number, ready: boolean) {
       const b = $(id) as HTMLButtonElement;
       if (b.disabled !== busy) b.disabled = busy;
     }
-    const playing = !!anchor && !anchor.paused && !anchor.ad;
-    setText('ctl-toggle', busy ? '보내는 중…' : countinId ? '멈추기' : playing ? '일시정지' : '재생');
+    const look = toggleLook(!!anchor && !anchor.paused && !anchor.ad, !!countinId);
+    const toggle = $('ctl-toggle');
+    setClass(toggle, 'pause', look.pause);
+    if (toggle.getAttribute('aria-label') !== look.label) {
+      toggle.setAttribute('aria-label', look.label);
+      toggle.title = look.label;
+    }
   }
   if (message.text && t > message.until) message = { text: '', alert: false, until: 0 };
-  setText('ctl-msg', message.text);
-  setClass($('ctl-msg'), 'alert', message.alert);
 }
 
 function frame() {
@@ -289,21 +294,15 @@ function frame() {
   const ready = open && publisherConnected && !!song && song.events.length > 0;
   setClass(app, 'waiting', !ready);
   drawControl(t, ready);
-  let status: string;
-  let alert = false;
-  if (!open) status = 'Mac과 연결이 끊겼어요 · 다시 연결하는 중';
-  else if (!publisherConnected) status = 'Mac과 연결됨 · 패널의 휴대폰 악보대가 꺼져 있어요';
-  else if (!song || !song.events.length) status = 'Mac과 연결됨';
-  else if (!fresh || !clock) status = '재생 위치를 받는 중';
-  else if (anchor!.ad) {
-    status = '광고 중 · 광고가 끝나면 이어서 보여 줘요';
-    alert = true;
-  } else status = `Mac과 연결됨${anchor!.paused ? ' · 일시정지' : ''}${song.view.title ? ` · ${song.view.title}` : ''}`;
-  setText('status', status);
-  setClass($('status'), 'alert', alert);
+  const live = fresh && !!clock;
+  const status = statusLine({ ready, live, ad: !!anchor?.ad, message });
+  setText('status', status?.text ?? '');
+  setClass($('status'), 'alert', !!status?.alert);
   if (!ready) {
     const [head, sub] = !open
-      ? ['Mac에 연결하는 중', 'Mac 터미널에서 npm run phone이 켜져 있는지 확인해 주세요']
+      ? everOpen
+        ? ['Mac과 연결이 끊겼어요 · 다시 연결하는 중', 'Mac 터미널에서 npm run phone이 켜져 있는지 확인해 주세요']
+        : ['Mac에 연결하는 중', 'Mac 터미널에서 npm run phone이 켜져 있는지 확인해 주세요']
       : !publisherConnected
         ? ['패널의 휴대폰 악보대가 꺼져 있어요', 'Mac의 Vibe Guitar 패널 › 연주 설정에서 켜 주세요']
         : ['곡을 기다리는 중', 'Mac에서 코드표가 있는 곡을 재생해 주세요'];
@@ -313,15 +312,11 @@ function frame() {
       small.textContent = sub;
       w.replaceChildren(head, small);
     }
-    setText('capo', '');
-    setText('where', '');
     requestAnimationFrame(frame);
     return;
   }
   const s = song!;
-  setText('capo', s.view.capo > 0 ? `카포 ${s.view.capo} 모양` : '');
-  const live = fresh && !!clock;
-  setClass(app, 'stale', !live || anchor!.ad);
+  setClass(app, 'stale', !live || !!anchor?.ad);
   const pos = anchor && clock ? positionAt(anchor, s.view.durationSec, t + clock.offset) : 0;
   const f = phoneFrame(s, pos);
   const nowShape = f.nowEvent >= 0 ? s.events[f.nowEvent]!.shape : -1;
@@ -342,41 +337,14 @@ function frame() {
     shown.nextShape = nextShape;
     fitDirty = true;
   }
-  setText('where', where(s, f.section, f.bar));
+  const seg = beatSegments(s.big.bigPerBar, f.bar, f.bigInBar);
+  drawMeter(seg.total, seg.filled, f.bar, f.barFraction);
   if (fitDirty) {
     // The next chord never looks bigger than the current one, also when a long current name shrank.
     const nowPx = fitText($('now-name'));
     fitDirty = nowPx === null || fitText($('next-name'), Math.round(nowPx * NEXT_SCALE)) === null;
   }
-  if (anchor?.ad) {
-    setDots(0, 0);
-    setText('count', '광고 중');
-  } else if (nextShape < 0) {
-    setDots(0, 0);
-    setText('count', '마지막 코드예요');
-  } else {
-    setDots(s.big.bigPerBar, Math.min(f.beatsLeft, s.big.bigPerBar));
-    setText('count', `${f.beatsLeft}박 뒤에 바뀜`);
-  }
   requestAnimationFrame(frame);
-}
-
-function lockNotice() {
-  let seen = false;
-  try {
-    seen = localStorage.getItem(LOCK_KEY) === '1';
-  } catch {
-    /* storage blocked: show the notice every time */
-  }
-  $('lock').hidden = seen;
-  $('lock-ok').addEventListener('click', () => {
-    $('lock').hidden = true;
-    try {
-      localStorage.setItem(LOCK_KEY, '1');
-    } catch {
-      /* ignore */
-    }
-  });
 }
 
 setInterval(() => {
@@ -388,7 +356,7 @@ $('ctl-restart').addEventListener('click', () => sendCommand('restart'));
 $('ctl-prev').addEventListener('click', () => sendCommand('prev-bar'));
 $('ctl-next').addEventListener('click', () => sendCommand('next-bar'));
 // Rotation or a resized window changes the space beside the diagrams, and so does a row whose height
-// changed (a message or notice shown or gone resizes the diagrams, which are sized by their row).
+// changed (a status line or pairing code shown or gone resizes the diagrams, which are sized by their row).
 addEventListener('resize', () => (fitDirty = true));
 if (typeof ResizeObserver === 'function') {
   const widths = new Map<Element, number>();
@@ -402,6 +370,5 @@ if (typeof ResizeObserver === 'function') {
   ro.observe($('now-name'));
   ro.observe($('next-name'));
 }
-lockNotice();
 connect();
 requestAnimationFrame(frame);

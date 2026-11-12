@@ -7,6 +7,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { renderShapeDiagram } from '../src/extension/sidepanel/diagram';
 import { FIT_MIN_PX, fitFontPx } from '../src/phone/fit';
+import { AD_TEXT, NO_POSITION_TEXT, beatSegments, statusLine, toggleLook } from '../src/phone/stand';
 
 const html = readFileSync(new URL('../src/phone/viewer.html', import.meta.url), 'utf8');
 const script = readFileSync(new URL('../src/phone/viewer.ts', import.meta.url), 'utf8');
@@ -74,7 +75,8 @@ describe('VGT-16 phone page never gets wider than the screen', () => {
     // Real-phone report: the single implicit `auto` column grew to the huge "Bm7" and pushed the
     // diagram, the 처음부터 button and the status line past the right edge.
     expect(rule(portrait, '.stand')).toContain('grid-template-columns:minmax(0,1fr)');
-    expect(rule(portrait, '.stand')).toMatch(/grid-template-rows:auto minmax\(0,1fr\) auto minmax\(0,1fr\) auto/);
+    // current chord, its bar card, next chord, buttons (no header row: no capo or bar text)
+    expect(rule(portrait, '.stand')).toMatch(/grid-template-rows:minmax\(0,1fr\) auto minmax\(0,1fr\) auto/);
     expect(rule(landscape, '.stand')).toMatch(/grid-template-columns:minmax\(0,[\d.]+fr\) minmax\(0,[\d.]+fr\)/);
     expect(rule(portrait, '.stand>*')).toContain('min-width:0');
   });
@@ -93,28 +95,104 @@ describe('VGT-16 phone page never gets wider than the screen', () => {
     expect(script).toMatch(/addEventListener\('resize', \(\) => \(fitDirty = true\)\)/);
   });
 
-  it('long status, position and messages are cut with an ellipsis or wrap', () => {
-    for (const sel of ['.status', '.where']) {
-      const r = rule(portrait, sel);
-      for (const d of ['min-width:0', 'white-space:nowrap', 'overflow:hidden', 'text-overflow:ellipsis']) expect(r, `${sel} ${d}`).toContain(d);
-    }
-    expect(rule(portrait, '.ctl-msg')).toContain('overflow-wrap:anywhere');
+  it('the one status line is a single line cut with an ellipsis, and hidden while empty', () => {
+    const r = rule(portrait, '.status');
+    for (const d of ['min-width:0', 'white-space:nowrap', 'overflow:hidden', 'text-overflow:ellipsis']) expect(r, `.status ${d}`).toContain(d);
+    expect(rule(portrait, '.status:empty')).toBe('display:none');
     expect(rule(portrait, '.snd')).toContain('overflow-wrap:anywhere');
     expect(rule(landscape, '.status')).toMatch(/flex:1 1 \d+px/);
+    // Above the buttons: a message shown or gone grows the footer upward, the buttons stay put.
+    expect(body.indexOf('id="status"')).toBeLessThan(body.indexOf('id="ctl"'));
   });
 
-  it('four control buttons in shrinkable grid columns; their labels wrap instead of widening the page', () => {
+  it('four icon buttons in one row of shrinkable grid columns, at least 56 px tall', () => {
     for (const id of ['ctl-prev', 'ctl-toggle', 'ctl-next', 'ctl-restart']) expect(body).toContain(`id="${id}"`);
-    expect(rule(portrait, '.ctl')).toMatch(/grid-template-columns:minmax\(0,[\d.]+fr\) minmax\(0,[\d.]+fr\) minmax\(0,[\d.]+fr\)/);
-    expect(rule(portrait, '.ctl')).toContain('"prev toggle next" "restart restart restart"');
+    expect(rule(portrait, '.ctl')).toMatch(/grid-template-columns:minmax\(0,[\d.]+fr\) minmax\(0,[\d.]+fr\) minmax\(0,[\d.]+fr\) minmax\(0,[\d.]+fr\)/);
+    expect(rule(portrait, '.ctl')).toContain('grid-template-areas:"restart prev toggle next"');
     expect(rule(landscape, '.ctl')).toMatch(/min-width:0;grid-template-columns:repeat\(4,minmax\(0,auto\)\)/);
     const b = rule(portrait, '.ctl button');
-    for (const d of ['min-width:0', 'word-break:keep-all', 'overflow-wrap:anywhere']) expect(b).toContain(d);
+    expect(b).toContain('min-width:0');
+    expect(Number(/min-height:(\d+)px/.exec(b)![1])).toBeGreaterThanOrEqual(56);
+    expect(Number(/min-height:(\d+)px/.exec(rule(landscape, '.ctl button'))![1])).toBeGreaterThanOrEqual(56);
     // Each button sends its own command.
     expect(script).toContain("$('ctl-prev').addEventListener('click', () => sendCommand('prev-bar'))");
     expect(script).toContain("$('ctl-next').addEventListener('click', () => sendCommand('next-bar'))");
     expect(script).toContain("$('ctl-restart').addEventListener('click', () => sendCommand('restart'))");
     expect(script).toContain("$('ctl-toggle').addEventListener('click', () => sendCommand('toggle'))");
+  });
+});
+
+/** The markup of the button with id `id`. */
+function button(id: string): string {
+  const m = new RegExp(`<button id="${id}"[^>]*>([\\s\\S]*?)</button>`).exec(body);
+  if (!m) throw new Error(`no button ${id}`);
+  return m[0];
+}
+
+describe('minimal phone stand (real-iPhone feedback on PR #19)', () => {
+  it('shows no auto-lock notice, capo, bar number, beat countdown text, beat dots or connection text', () => {
+    for (const gone of ['id="lock"', 'lock-ok', '자동 잠금', 'id="capo"', 'id="where"', 'id="dots"', 'id="count"', 'id="ctl-msg"', 'class="rule"']) expect(html, gone).not.toContain(gone);
+    for (const gone of ['localStorage', '박 뒤에 바뀜', '카포 ', '모양`', '마디\'', 'Mac과 연결됨', "'lock'", 'view.title']) expect(script, gone).not.toContain(gone);
+  });
+
+  it('icon-only buttons: each has a Korean aria-label and title, an inline SVG and no visible text', () => {
+    const labels: Record<string, string> = { 'ctl-prev': '이전 마디', 'ctl-toggle': '재생', 'ctl-next': '다음 마디', 'ctl-restart': '처음부터' };
+    for (const [id, label] of Object.entries(labels)) {
+      const b = button(id);
+      expect(b, id).toContain(`aria-label="${label}"`);
+      expect(b, id).toContain(`title="${label}"`);
+      expect(b, id).toMatch(/<svg [^>]*aria-hidden="true"/);
+      expect(b.replace(/<[^>]*>/g, '').trim(), `${id} text`).toBe('');
+    }
+    // Play and pause icons are both in the toggle; the page shows one by the 'pause' class.
+    expect(button('ctl-toggle')).toContain('class="i-play"');
+    expect(button('ctl-toggle')).toContain('class="i-pause"');
+    expect(css).toContain('#ctl-toggle .i-pause,#ctl-toggle.pause .i-play{display:none}');
+    expect(css).toContain('#ctl-toggle.pause .i-pause{display:block}');
+    expect(script).toContain("setClass(toggle, 'pause', look.pause)");
+    expect(script).toContain("toggle.setAttribute('aria-label', look.label)");
+  });
+
+  it('play/pause shows what a tap does: pause while playing or counting in, play otherwise', () => {
+    expect(toggleLook(false, false)).toEqual({ pause: false, label: '재생' });
+    expect(toggleLook(true, false)).toEqual({ pause: true, label: '일시정지' });
+    expect(toggleLook(false, true)).toEqual({ pause: true, label: '일시정지' });
+  });
+
+  it('the bar card: one segment per big beat, filled up to the beat under the playhead', () => {
+    expect(beatSegments(4, 3, 0)).toEqual({ total: 4, filled: 1 });
+    expect(beatSegments(4, 3, 2)).toEqual({ total: 4, filled: 3 });
+    expect(beatSegments(4, 3, 3)).toEqual({ total: 4, filled: 4 });
+    expect(beatSegments(4, 3, 9)).toEqual({ total: 4, filled: 4 });
+    expect(beatSegments(2, 0, 1)).toEqual({ total: 2, filled: 2 }); // 6/8: two big beats
+    expect(beatSegments(3, 0, 0)).toEqual({ total: 3, filled: 1 });
+    expect(beatSegments(4, -1, 0)).toEqual({ total: 4, filled: 0 }); // outside every bar
+    expect(beatSegments(0, 0, 0).total).toBe(1);
+    // The card is in the markup between the current and the next chord; its parts are styled.
+    expect(body).toMatch(/<section class="now"[\s\S]*<div id="meter" class="meter"[\s\S]*<section class="nx"/);
+    expect(rule(css, '.ticks i.on')).toContain('background:var(--accent)');
+    expect(rule(css, '.ph')).toMatch(/position:absolute;top:0;bottom:0/);
+    expect(script).toContain('beatSegments(s.big.bigPerBar, f.bar, f.bigInBar)');
+    expect(script).toContain('drawMeter(seg.total, seg.filled, f.bar, f.barFraction)');
+  });
+
+  it('the status line is hidden while all is well and shown only when something needs attention', () => {
+    const quiet = { text: '', alert: false };
+    const ok = { ready: true, live: true, ad: false, message: quiet };
+    expect(statusLine(ok)).toBeNull(); // connected and playing or paused: no title, no "Mac과 연결됨"
+    expect(statusLine({ ...ok, live: false })).toEqual({ text: NO_POSITION_TEXT, alert: false });
+    expect(statusLine({ ...ok, ad: true })).toEqual({ text: AD_TEXT, alert: true });
+    const failed = { text: '마지막 마디예요 · 더 갈 마디가 없어요', alert: true };
+    expect(statusLine({ ...ok, message: failed })).toEqual(failed);
+    expect(statusLine({ ...ok, ad: true, message: failed })).toEqual(failed); // the newest word wins
+    // Not ready (connecting, reconnecting, panel off, no song): the waiting screen says it instead.
+    expect(statusLine({ ...ok, ready: false, ad: true, message: failed })).toBeNull();
+    // Successes are not said; failures and the count-in are, for a few seconds.
+    expect(script).not.toContain('재생했어요');
+    expect(script).not.toContain('다음 마디로 옮겼어요');
+    expect(script).toContain('카운트인 뒤에 재생해요');
+    expect(script).toContain("'Mac과 연결이 끊겼어요 · 다시 연결하는 중'");
+    expect(script).toMatch(/if \(message\.text && t > message\.until\) message = \{ text: '', alert: false, until: 0 \};/);
   });
 });
 
