@@ -20,8 +20,8 @@
   .now,.nx{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:0}
   .now .chord{font-size:min(34vw,16vh)}
   .nx .chord{font-size:min(22vw,10vh)}
-  .now-dia svg{width:min(42vw,25vh);height:auto}
-  .next-dia svg{width:min(32vw,19vh);height:auto}
+  #now-dia svg{width:min(42vw,25vh);height:auto}
+  #next-dia svg{width:min(32vw,19vh);height:auto}
   .rule{border-top:3px solid var(--line)}
   .lbl{font-size:24px;font-weight:700;color:var(--ink-2)}
   .dots{display:flex;gap:12px;margin-top:12px}
@@ -59,8 +59,8 @@
     .nx{border-left:3px solid var(--line);padding-left:28px;justify-content:flex-start;gap:min(3vw,24px)}
     .now .chord{font-size:min(17vw,34vh)}
     .nx .chord{font-size:min(11vw,22vh)}
-    .now-dia svg{width:min(22vw,46vh)}
-    .next-dia svg{width:min(15vw,34vh)}
+    #now-dia svg{width:auto;height:min(50vh,30vw)}
+    #next-dia svg{width:auto;height:min(40vh,22vw)}
     .foot{flex-direction:row;align-items:center;justify-content:space-between;gap:20px}
     .lock{font-size:18px;padding:8px 12px;flex:1}
     .status{flex:none;max-width:45%}
