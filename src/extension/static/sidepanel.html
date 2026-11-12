@@ -73,8 +73,12 @@
         <button class="play" id="play-btn" aria-label="재생"></button>
         <div class="time"><b id="t-now">0:00</b> / <span id="t-dur">0:00</span></div>
         <div class="sec-now" id="sec-now"></div>
-        <div class="seg" id="rate-seg" role="group" aria-label="재생 속도" hidden><button data-rate="0.5" aria-pressed="false">0.5×</button><button data-rate="1" aria-pressed="true">1×</button></div>
         <button class="fix-open" id="fix-open" aria-controls="fix" aria-expanded="false" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/></svg>코드 고치기</button>
+      </div>
+      <div class="t-row practice" id="practice">
+        <div class="seg" id="rate-seg" role="group" aria-label="재생 속도"><button data-rate="0.5" aria-pressed="false">0.5×</button><button data-rate="0.75" aria-pressed="false">0.75×</button><button data-rate="1" aria-pressed="true">1×</button><span class="rate-other" id="rate-other" hidden></span></div>
+        <button class="loop-btn" id="loop-btn" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 2l3 3-3 3"/><path d="M4 11V9a4 4 0 0 1 4-4h12"/><path d="M7 22l-3-3 3-3"/><path d="M20 13v2a4 4 0 0 1-4 4H4"/></svg><span id="loop-btn-text">구간 반복</span></button>
+        <p class="loop-note" id="loop-note" aria-live="polite"></p>
       </div>
       <div id="countin-status" class="small err"></div>
     </footer>

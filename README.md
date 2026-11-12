@@ -95,7 +95,28 @@ Port of the approved mockup B ("진행표형", diagrams 3x):
   line, auto-follow with "현재 위치로" after manual scrolling, click a bar to seek, and a "soon" border on the
   bar of the next change.
 - **Transport**: seek bar with section ticks, play/pause (with the count-in when it is on), time, section
-  and the **코드 고치기** button. Play/pause/seek control the YouTube player through the content script.
+  and the **코드 고치기** button; below them the speed buttons and **구간 반복**. Play/pause/seek/speed control
+  the YouTube (and YouTube Music) player through the content script.
+- **Speed (0.5× / 0.75× / 1×)**: sets the player's playback rate (the demo clock in demo playback). The
+  buttons show the rate the player reports, so a change in the site's own speed menu shows there too (a rate
+  other than the three is shown next to them, e.g. "1.25×"). The speed stays until the user changes it; when
+  another recording plays in that tab, a speed the panel set goes back to 1×. Not during an ad. The Apple
+  Music adapter supports speed only through a media element (not MusicKit).
+- **A/B loop (구간 반복)**: press it, then press the first and the last bar of the passage in the bar grid
+  (either order; the same bar twice loops one bar). Only while choosing do bar presses pick bars; otherwise
+  a bar press still seeks. The looped bars are tinted green with A and B tags and playback moves to A; when
+  playback passes the end of B it seeks back to the start of A. "반복 해제" clears it with one press. The
+  loop uses the chart's bar grid (not lyric lines). It clears on a recording or tab change, on entering or
+  leaving demo playback, and when the chart changes so that its bars no longer exist ("코드표가 바뀌어 반복을
+  풀었어요"); a chord fix or a level/capo change keeps it. The jump is decided from the player's observed
+  position, not from the seek reply: after a seek the panel waits until the reported position is back near
+  the target (at most 1.5 s, then judges from the current position), a crossing of B up to 3 s late still
+  jumps, a move more than 3 s past B (the site's own slider) does not, and nothing jumps while an ad plays or
+  while paused. With the loop on, play outside the loop starts at A.
+- **Count-in with speed and loop**: an explicit start (play button or Space) counts in, from A when the loop
+  is on and the playhead is outside it, else from the current bar, timed for the current speed. Automatic
+  loop repeats only seek and never count in. A speed change during a count-in cancels it ("속도가 바뀌어서
+  카운트인을 멈췄어요. 다시 눌러 주세요.").
 - **Fixing one chord (코드 고치기)**: the button opens a small panel at the chord under the playhead (‹ ›
   step to the previous/next chord and seek there; the bar gets a dashed outline). Pick a root and a kind (or
   코드 없음) and press "이 코드로 고치기". Names follow the screen: with a capo the picker shows shape names
@@ -148,7 +169,8 @@ median (chance level) by 25 % and 4+ changes; otherwise it stays 0.
 simulated clock: the current recording's chart, any stored chart chosen in the demo bar, or a built-in
 synthetic song (made-up 6/8 progression in A♭ named with sharps, a beat grid that starts mid-bar, and
 placeholder lyrics 0.4 s early) that exercises the spelling, phase and offset fixes. Stored recordings use
-cached lyrics only (no request in demo mode). Query parameters: `t=<sec>`, `play`, `rate=0.5`,
+cached lyrics only (no request in demo mode). Query parameters: `t=<sec>`, `play`, `rate=0.5|0.75`,
+`loop=<a>-<b>` (mark bars a–b, 1-based, as the loop),
 `theme=light|dark`, `level=beginner|novice|intermediate|advanced`, `capo=auto|0..7`, `snd` (sounding
 names), `sheet=1`, `lyrics=0`, `mute` (no count-in click).
 
@@ -165,7 +187,10 @@ After the toolbar click starts capture, the offscreen document also runs listeni
   this chord?", not for play-along), the heard coverage of the song, and whether audio is being recorded.
   Audio is stored only while the song plays at 1x with no ad; pauses and seeks start a new segment. Each
   captured block is placed by its AudioContext sample time (player reports are mapped to that clock), so late
-  message delivery does not move audio on the timeline.
+  message delivery does not move audio on the timeline. Practice at 0.5×/0.75× is therefore never stored, and
+  each A/B loop jump starts a new segment, so coverage lists only the looped bars, not the gap a jump skips.
+  Every 1× loop pass is stored again; the 20-minute per-session cap (`MAX_SESSION_SEC`) bounds that, and once
+  it is reached listening stops storing for that session.
 - When at least 90 % of the song was heard and playback reaches the end, an **auto chart** is built with full
   context (Beat This! beats/downbeats, BTC chords smoothed per beat). Or press
   **들은 구간으로 자동 코드표 만들기** at any time. Auto charts have `source: auto` events with per-event

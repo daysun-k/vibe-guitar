@@ -1,9 +1,10 @@
 /**
  * Player adapter for www.youtube.com and music.youtube.com (isolated world).
  * Reads the playing <video> element and page metadata, reports to the side panel,
- * and accepts play/pause/seek controls for the count-in.
+ * and accepts play/pause/seek controls (count-in, practice loop) and the practice speed.
  */
 import type { Recording } from '../../chart/types';
+import { isPracticeRate } from '../../play/practice';
 import { sendQuietly, type ExtensionMessage, type PlayerControlResult, type PlayerStateMessage } from '../messages';
 import { chooseRecordingId, isVideoId, type PlayerVideoData, type RecordingIdChoice } from './recording-id';
 import { claimInstance, onRuntimeMessage } from './instance';
@@ -147,6 +148,14 @@ onRuntimeMessage(instanceSignal, (msg: ExtensionMessage, _sender, sendResponse) 
   if (!video) {
     sendResponse({ ok: false, reason: 'no video element on this page' } satisfies PlayerControlResult);
     return;
+  }
+  if (msg.action === 'rate') {
+    if (!isPracticeRate(msg.rate)) {
+      sendResponse({ ok: false, reason: `unsupported rate ${String(msg.rate)}` } satisfies PlayerControlResult);
+      return;
+    }
+    // The page's own player follows a change of the <video> rate (its ratechange report updates the panel).
+    video.playbackRate = msg.rate;
   }
   if (msg.action === 'seek' && typeof msg.time === 'number') video.currentTime = Math.max(0, msg.time);
   if (msg.action === 'pause') video.pause();
