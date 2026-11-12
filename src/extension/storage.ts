@@ -3,6 +3,7 @@ import { DEFAULT_PROFILE, type Level, type Profile } from '../arrange/levels';
 import { chartStorageKey, type Chart, type RecordingSource } from '../chart/types';
 import { mergeAutoCharts } from '../chart/merge';
 import { validateChart } from '../chart/validate';
+import { CorrectionConflict, correctChordEvent, type EventRef } from '../editor/correct';
 import type { ChartWriteMessage, ChartWriteResult } from './messages';
 
 export interface Settings {
@@ -185,6 +186,38 @@ export class ChartStore {
       return auto;
     });
   }
+
+  /**
+   * Fixes one event's chord on the chart in use (play view), inside the write turn so it
+   * applies to the stored chart even if an auto chart arrived after the panel read it.
+   */
+  correctEvent(source: RecordingSource, id: string, event: EventRef, chord: string, at: Date): Promise<{ before: Chart; after: Chart }> {
+    return this.exclusive(async () => {
+      const before = await this.load(source, id);
+      if (!before) throw new CorrectionConflict('저장된 코드표가 없어요.');
+      const after = checked(correctChordEvent(before, event, chord, at));
+      await this.area.set({ [chartStorageKey(before.recording.source, before.recording.id)]: after });
+      return { before, after };
+    });
+  }
+
+  /**
+   * Undoes correctEvent while the stored chart is still the corrected one. An auto chart in
+   * use is restored as the latest stored auto chart (later analyses were merged into it).
+   */
+  undoCorrection(before: Chart, after: Chart): Promise<Chart> {
+    checked(before);
+    return this.exclusive(async () => {
+      const { source, id } = after.recording;
+      const current = await this.load(source, id);
+      const same = current && current.provenance.updatedAt === after.provenance.updatedAt && JSON.stringify(current.events) === JSON.stringify(after.events);
+      if (!same) throw new CorrectionConflict('그 사이에 코드표가 바뀌어서 되돌리지 못했어요.');
+      const auto = before.provenance.createdBy === 'recognizer' ? await this.loadAuto(source, id) : null;
+      const restored = auto ? { ...auto, recording: { ...auto.recording, source, id } } : before;
+      await this.area.set({ [chartStorageKey(source, id)]: restored });
+      return restored;
+    });
+  }
 }
 
 let swStore: ChartStore | null = null;
@@ -213,6 +246,20 @@ export async function adoptAutoChart(source: RecordingSource, id: string): Promi
   return r.chart ?? null;
 }
 
+/** Side panel: fixes one chord of the chart in use through the serialized ChartStore. */
+export async function correctChartEvent(source: RecordingSource, id: string, event: EventRef, chord: string): Promise<{ before: Chart; after: Chart }> {
+  const r = await requestWrite({ type: 'chart-write', op: 'correct-event', source, id, event, chord, at: new Date().toISOString() });
+  if (!r.chart || !r.before) throw new Error('서비스 워커가 고친 코드표를 돌려주지 않았어요');
+  return { before: r.before, after: r.chart };
+}
+
+/** Side panel: undoes correctChartEvent through the serialized ChartStore. */
+export async function undoChartCorrection(before: Chart, after: Chart): Promise<Chart> {
+  const r = await requestWrite({ type: 'chart-write', op: 'undo-correct', before, after });
+  if (!r.chart) throw new Error('서비스 워커가 되돌린 코드표를 돌려주지 않았어요');
+  return r.chart;
+}
+
 /** Service worker: runs one chart write request on the serialized store. */
 export async function handleChartWrite(store: ChartStore, msg: ChartWriteMessage): Promise<ChartWriteResult> {
   try {
@@ -220,6 +267,11 @@ export async function handleChartWrite(store: ChartStore, msg: ChartWriteMessage
       await store.saveManual(msg.chart);
       return { ok: true };
     }
+    if (msg.op === 'correct-event') {
+      const { before, after } = await store.correctEvent(msg.source, msg.id, msg.event, msg.chord, new Date(msg.at));
+      return { ok: true, chart: after, before };
+    }
+    if (msg.op === 'undo-correct') return { ok: true, chart: await store.undoCorrection(msg.before, msg.after) };
     return { ok: true, chart: await store.adoptAuto(msg.source, msg.id) };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };

@@ -147,6 +147,8 @@ export class PlayScreen {
     addEventListener('resize', () => {
       this.last.line = -2;
     });
+    // The fixing panel, lyrics and diagrams resize the lane after it opens: keep the marked bar in view.
+    new ResizeObserver(() => this.lane.querySelector('.bar.fix-at')?.scrollIntoView({ block: 'nearest', behavior: 'instant' })).observe(this.lane);
   }
 
   private showSounding = false;
@@ -176,6 +178,17 @@ export class PlayScreen {
     const first = this.barEls[hits[0]];
     first?.scrollIntoView({ block: 'center', behavior: 'instant' });
     first?.focus({ preventScroll: true });
+  }
+
+  /** Dashed outline on the bar holding `sec` (the chord being fixed); null clears it. */
+  markFix(sec: number | null): void {
+    const k = sec === null || !this.m ? -1 : this.m.bars.findIndex((b) => sec + 0.001 >= b.startSec && sec + 0.001 < b.endSec);
+    this.barEls.forEach((b, i) => b.classList.toggle('fix-at', i === k));
+    if (sec === null) this.fol.reset();
+    else if (k >= 0) {
+      this.fol.release();
+      this.barEls[k].scrollIntoView({ block: 'nearest', behavior: 'instant' });
+    }
   }
 
   private concert(c: NonNullable<PlayModel['labels'][number]['change']>, includeMerge = true): string {
