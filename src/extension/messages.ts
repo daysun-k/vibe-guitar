@@ -31,8 +31,10 @@ export interface PlayerStateMessage {
 
 export interface PlayerControlMessage {
   type: 'player-control';
-  action: 'play' | 'pause' | 'seek';
+  /** 'rate': set the playback speed to `rate` (one of PRACTICE_RATES). */
+  action: 'play' | 'pause' | 'seek' | 'rate';
   time?: number;
+  rate?: number;
 }
 
 /** Reply of a content script to a PlayerControlMessage. */

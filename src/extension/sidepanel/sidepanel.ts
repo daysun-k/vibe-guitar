@@ -29,6 +29,19 @@ import { keyLabel, prettyChord, respellChartForKey, shapeName } from '../../musi
 import { DEMO_RECORDING, DemoClock, demoChart, demoLyrics } from '../../play/demo';
 import { LevelFitController, type LevelFitState, type LevelWorkerLike } from '../../play/level-fit';
 import { buildPlayModel, frameAt, type PlayModel } from '../../play/model';
+import {
+  LoopJumper,
+  explicitStartSec,
+  insideLoop,
+  isPracticeRate,
+  loopBarIndexes,
+  loopStartTarget,
+  makeLoop,
+  pressedRate,
+  rateLabel,
+  resolveLoop,
+  type PracticeLoop,
+} from '../../play/practice';
 import type { LyricsReply } from '../lyrics-service';
 import type {
   AutoChartSavedMessage,
@@ -48,7 +61,7 @@ import { LyricsAsker, lyricsOutcome, lyricsLookupReady } from './lyrics-asker';
 import { controlTabId, keepPlayerAfterDemo } from './player-target';
 import { prepareCountIn } from './countin-prep';
 import { ChordFixer } from './fix';
-import { capoReason, unplayableLine, PlayScreen, formatTime } from './play';
+import { capoReason, unplayableLine, PlayScreen, formatTime, type LoopMarks } from './play';
 
 // ---------- DOM helpers ----------
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
@@ -109,6 +122,13 @@ let fixer: ChordFixer;
 let lastFix: { key: string; recording: Pick<Recording, 'source' | 'id'> | null; before: Chart; after: Chart } | null = null;
 let fixNote: { key: string; text: string; undo: boolean; error: boolean } | null = null;
 let fixModelKey = '';
+/** Practice loop (A/B bars) of the shown chart, the bars being chosen, and why it was cleared. */
+let practiceLoop: PracticeLoop | null = null;
+let loopPick: { key: string; a: number | null } | null = null;
+let loopNote = '';
+const jumper = new LoopJumper();
+/** Speed the user chose in the panel, for the recording and tab it was chosen on (another recording there goes back to 1x). */
+let practiceRate: { key: string; tabId: number | null; rate: number } | null = null;
 
 // ---------- player sync ----------
 function snapshot(): PlayerSnapshot | null {
@@ -137,8 +157,10 @@ async function onPlayerState(msg: PlayerStateMessage, sender: chrome.runtime.Mes
   playerTabId = tab.id;
   if (msg.adapter === 'applemusic') renderAppleMusicStatus(msg);
   const key = recordingKey(msg.recording);
+  resetRateForNewRecording(msg, key, tab.id);
   if (key !== chartKey) {
     stopCountIn();
+    clearLoop();
     chartKey = key;
     lyrics = null;
     lyricsNote = '';
@@ -151,11 +173,13 @@ async function onPlayerState(msg: PlayerStateMessage, sender: chrome.runtime.Mes
   }
   void requestLyrics();
   renderHeader();
+  checkLoop();
 }
 
 /** Forget the current player (tab switch, demo exit) until the active tab's player reports. */
 function forgetPlayer(): void {
   stopCountIn(); // the count-in loop must not outlive the model it counts against
+  clearLoop();
   if (player === null && playerTabId === null) return;
   switchDraft(null);
   player = null;
@@ -295,6 +319,7 @@ function recompute(): void {
   }
   fixer.onModel();
   renderFixNote();
+  syncLoop();
   // Any song or settings change drops pending replies. The current level's line comes from the
   // model; the worker adds only its "with root changes" count (it also computes the other levels).
   levelFit.update(c && model ? { chart: c, capo: opts.capo, profile: { ...settings.profile }, allowRootChange: settings.allowRootChange } : null, [...LEVELS]);
@@ -372,6 +397,7 @@ function renderHeader(): void {
     setText('rec-meta', `${player.adapter}${r ? ` · ${r.id}` : ''} · ${state}${rate}${via} · ${formatTime(positionNow(false))}`);
   }
   $('ad-banner').hidden = !player?.isAd || !!demo;
+  renderRate();
   const idWarn = $('id-warning');
   const fallback = !demo && player?.adapter === 'ytmusic' && player.idSource && player.idSource !== 'player';
   idWarn.hidden = demo !== null || (!fallback && !player?.urlIdMismatch);
@@ -514,6 +540,7 @@ function loop(now: number): void {
     if (demo) {
       demo.clock.tick(now);
     }
+    checkLoop();
     renderHeader();
     if (model && (demo || (player && !player.isAd))) {
       const t = positionNow();
@@ -922,7 +949,8 @@ async function sendControl(msg: PlayerControlMessage): Promise<PlayerControlResu
   if (demo) {
     if (msg.action === 'play') demo.clock.play(performance.now());
     else if (msg.action === 'pause') demo.clock.pause();
-    else if (msg.time !== undefined) demo.clock.seek(msg.time);
+    else if (msg.action === 'rate' && isPracticeRate(msg.rate)) demo.clock.rate = msg.rate;
+    else if (msg.action === 'seek' && msg.time !== undefined) demo.clock.seek(msg.time);
     return { ok: true };
   }
   // Never control a player that is not in the active tab (e.g. the old tab after a demo).
@@ -967,13 +995,18 @@ function stopCountIn(): void {
 
 async function seekTo(sec: number): Promise<void> {
   stopCountIn();
+  jumper.seeked(Math.max(0, sec), Date.now());
   const r = await sendControl({ type: 'player-control', action: 'seek', time: Math.max(0, sec) });
   if (!r.ok) setText('countin-status', `이동하지 못했어요 (${r.reason ?? '알 수 없음'}).`);
   else setText('countin-status', '');
   lastT = -10;
 }
 
-/** Play / pause from the panel. Starting plays a count-in of big beats from the bar start. */
+/**
+ * Play / pause from the panel. Starting plays a count-in of big beats from the bar start; with a
+ * loop on and the playhead outside it, playback starts from the loop's first bar. Automatic loop
+ * repeats never come through here, so they never count in.
+ */
 async function togglePlay(): Promise<void> {
   setText('countin-status', '');
   if (countingIn) return stopCountIn();
@@ -983,6 +1016,12 @@ async function togglePlay(): Promise<void> {
     return;
   }
   if (!settings.countInBars || !model) {
+    const loopStart = practiceLoop && !insideLoop(practiceLoop, positionNow(false)) ? loopStartTarget(practiceLoop) : null;
+    if (loopStart !== null) {
+      jumper.seeked(loopStart, Date.now());
+      const s = await sendControl({ type: 'player-control', action: 'seek', time: loopStart });
+      if (!s.ok) return setText('countin-status', `반복 구간 처음으로 이동하지 못했어요 (${s.reason ?? '알 수 없음'}).`);
+    }
     const r = await sendControl({ type: 'player-control', action: 'play' });
     if (!r.ok) setText('countin-status', `이 플레이어는 패널에서 재생할 수 없어요 (${r.reason ?? '알 수 없음'}).`);
     return;
@@ -992,7 +1031,8 @@ async function togglePlay(): Promise<void> {
   const pos = positionNow(false);
   const f = frameAt(m, pos);
   const bar = f.bar >= 0 ? m.bars[f.bar] : null;
-  const target = Math.max(0, bar ? bar.startSec : pos);
+  const target = explicitStartSec(practiceLoop, pos, bar ? bar.startSec : null);
+  jumper.seeked(target, Date.now());
   const prep = await prepareCountIn(sendControl, () => run === countInRun, target);
   if (prep.kind === 'cancelled') return;
   if (prep.kind === 'failed') {
@@ -1000,7 +1040,7 @@ async function togglePlay(): Promise<void> {
       ? `이 플레이어에서는 카운트인 재생을 지원하지 않아요 (${prep.reason ?? '알 수 없음'}).`
       : `마디 처음으로 이동하지 못해 카운트인을 취소했어요 (${prep.reason ?? '알 수 없음'}).`);
   }
-  const rate = (demo ? demo.clock.rate : player?.playbackRate) || 1;
+  const rate = currentRate();
   const n = settings.countInBars * m.big.bigPerBar;
   const stepMs = (screen.bigBeatSec() * 1000) / rate;
   const box = $('countin');
@@ -1009,6 +1049,11 @@ async function togglePlay(): Promise<void> {
   box.classList.add('on');
   for (let i = n; i >= 1; i--) {
     if (run !== countInRun) return;
+    // A speed change (the panel or the site's own menu) cancels the count-in: its beats were timed for the old rate.
+    if (currentRate() !== rate) {
+      stopCountIn();
+      return setText('countin-status', RATE_CANCELS_COUNTIN);
+    }
     num.textContent = String(i);
     click((n - i) % m.big.bigPerBar === 0);
     await new Promise((r) => setTimeout(r, stepMs));
@@ -1018,6 +1063,142 @@ async function togglePlay(): Promise<void> {
   box.classList.remove('on');
   const play = await sendControl({ type: 'player-control', action: 'play' });
   if (!play.ok) setText('countin-status', `재생을 다시 시작하지 못했어요 (${play.reason ?? '알 수 없음'}).`);
+}
+
+// ---------- practice: speed, A/B loop ----------
+const RATE_CANCELS_COUNTIN = '속도가 바뀌어서 카운트인을 멈췄어요. 다시 눌러 주세요.';
+
+function currentRate(): number {
+  return (demo ? demo.clock.rate : player?.playbackRate) || 1;
+}
+
+/** The speed buttons show the reported rate; another rate (the site's own menu) shows next to them. */
+function renderRate(): void {
+  const rate = currentRate();
+  const pressed = pressedRate(rate);
+  for (const b of document.querySelectorAll<HTMLElement>('#rate-seg [data-rate]')) {
+    const on = String(Number(b.dataset.rate) === pressed);
+    if (b.getAttribute('aria-pressed') !== on) b.setAttribute('aria-pressed', on);
+  }
+  $('rate-other').hidden = pressed !== null;
+  if (pressed === null) setText('rate-other', rateLabel(rate));
+}
+
+async function setRate(rate: number): Promise<void> {
+  if (!isPracticeRate(rate)) return;
+  if (!demo && player?.isAd) return setText('countin-status', '광고가 끝난 뒤에 속도를 바꿔 주세요.');
+  if (countingIn) {
+    stopCountIn();
+    setText('countin-status', RATE_CANCELS_COUNTIN);
+  } else setText('countin-status', '');
+  const forKey = chartKey;
+  const forTab = playerTabId;
+  const r = await sendControl({ type: 'player-control', action: 'rate', rate });
+  if (!r.ok) return setText('countin-status', `이 플레이어는 속도를 바꿀 수 없어요 (${r.reason ?? '알 수 없음'}).`);
+  if (!demo) practiceRate = rate === 1 ? null : { key: forKey, tabId: forTab, rate };
+  renderRate();
+}
+
+/** Another recording plays in the tab where the panel slowed one down: back to 1x (not during an ad). */
+function resetRateForNewRecording(msg: PlayerStateMessage, key: string, tabId: number): void {
+  const pr = practiceRate;
+  if (!pr || !key || key === pr.key || tabId !== pr.tabId || msg.isAd) return;
+  practiceRate = null;
+  // Only a rate the panel set; a rate chosen in the site's own menu since then is the user's.
+  if (Math.abs(msg.playbackRate - pr.rate) > 1e-3) return;
+  void sendControl({ type: 'player-control', action: 'rate', rate: 1 }).then((r) => {
+    if (!r.ok) setText('countin-status', `속도를 1×로 되돌리지 못했어요 (${r.reason ?? '알 수 없음'}).`);
+  });
+}
+
+function loopMarks(): LoopMarks {
+  const at = practiceLoop && model ? loopBarIndexes(practiceLoop, model.bars) : null;
+  return { range: at ? { from: at[0], to: at[1] } : null, picking: loopPick ? { a: loopPick.a } : null };
+}
+
+function renderLoop(): void {
+  const marks = loopMarks();
+  screen.setLoop(marks);
+  const btn = $('loop-btn');
+  btn.setAttribute('aria-pressed', String(!!practiceLoop));
+  btn.classList.toggle('picking', !!loopPick);
+  setText('loop-btn-text', practiceLoop ? '반복 해제' : loopPick ? '취소' : '구간 반복');
+  const r = marks.range;
+  const note = loopPick
+    ? loopPick.a === null ? '시작 마디를 눌러요' : '끝 마디를 눌러요'
+    : r ? `${r.from === r.to ? `${r.from + 1}` : `${r.from + 1}–${r.to + 1}`}마디 반복 중` : loopNote;
+  setText('loop-note', note);
+}
+
+/** Sets or clears the loop; `note` says why a loop the user did not clear went away. */
+function setLoop(next: PracticeLoop | null, note = ''): void {
+  practiceLoop = next;
+  loopNote = next ? '' : note;
+  jumper.set(next);
+  renderLoop();
+}
+
+/** Recording, tab or demo change: the loop and any half-chosen loop go away without a note. */
+function clearLoop(): void {
+  loopPick = null;
+  if (practiceLoop || loopNote) setLoop(null);
+  else renderLoop();
+}
+
+function cancelLoopPick(): void {
+  loopPick = null;
+  renderLoop();
+}
+
+/** Off → choose bars; choosing → cancel; on → one press clears it. */
+function onLoopButton(): void {
+  if (practiceLoop) return setLoop(null);
+  if (loopPick) return cancelLoopPick();
+  if (!model) return;
+  loopPick = { key: shownKey(), a: null };
+  loopNote = '';
+  renderLoop();
+}
+
+/** A lane bar pressed while choosing: the first is A, the second B (either order); then play from A. */
+function pickLoopBar(index: number): boolean {
+  if (!loopPick) return false;
+  if (!model || loopPick.key !== shownKey()) {
+    cancelLoopPick();
+    return false;
+  }
+  if (loopPick.a === null) {
+    loopPick.a = index;
+    renderLoop();
+    return true;
+  }
+  const next = makeLoop(shownKey(), model.bars, loopPick.a, index, model.durationSec);
+  loopPick = null;
+  setLoop(next);
+  if (next) void seekTo(loopStartTarget(next));
+  return true;
+}
+
+/** After a model rebuild: keep the loop while its recording and both bars still exist, else clear it. */
+function syncLoop(): void {
+  const key = shownKey();
+  if (loopPick && (loopPick.key !== key || !model)) loopPick = null;
+  if (!practiceLoop) return renderLoop();
+  const next = model ? resolveLoop(practiceLoop, key, model.bars, model.durationSec) : null;
+  if (!next) return setLoop(null, practiceLoop.key === key ? '코드표가 바뀌어 반복을 풀었어요' : '');
+  if (next.startSec !== practiceLoop.startSec || next.endSec !== practiceLoop.endSec) return setLoop(next);
+  renderLoop();
+}
+
+/** Jumps back to A when playback crossed the end of B (decided from the observed position). */
+function checkLoop(): void {
+  if (!jumper.active || countingIn) return;
+  const target = jumper.observe({ positionSec: positionNow(false), playing: isPlaying(), isAd: !demo && !!player?.isAd, nowMs: Date.now() });
+  if (target === null) return;
+  lastT = -10;
+  void sendControl({ type: 'player-control', action: 'seek', time: target }).then((r) => {
+    if (!r.ok) setText('countin-status', `반복 구간 처음으로 돌아가지 못했어요 (${r.reason ?? '알 수 없음'}).`);
+  });
 }
 
 // ---------- demo playback ----------
@@ -1060,11 +1241,10 @@ async function startDemo(preferKey?: string): Promise<void> {
   const start = demo === null && params.has('t') ? Number(params.get('t')) : 0;
   const clock = new DemoClock(end, start);
   const rate = Number(params.get('rate'));
-  if (rate === 0.5) clock.rate = 0.5;
+  if (isPracticeRate(rate)) clock.rate = rate;
+  clearLoop(); // a loop belongs to one playback: the real player's or one demo's
   demo = { clock, chart: pick.chart, lyrics: await demoLyricsFor(pick.chart), key: pick.key };
   $('demo-bar').hidden = false;
-  $('rate-seg').hidden = false;
-  for (const b of document.querySelectorAll('#rate-seg [data-rate]')) b.setAttribute('aria-pressed', String(Number((b as HTMLElement).dataset.rate) === clock.rate));
   showTab('play');
   closeSheet();
   recompute();
@@ -1074,9 +1254,9 @@ async function startDemo(preferKey?: string): Promise<void> {
 
 async function exitDemo(): Promise<void> {
   stopCountIn();
+  clearLoop();
   demo = null;
   $('demo-bar').hidden = true;
-  $('rate-seg').hidden = true;
   // Tab switches were not followed during the demo: drop a player that is no longer in the
   // active tab, re-check which tab is active now, and wait for that tab's player to report.
   if (!keepPlayerAfterDemo(playerTabId, activeTabId)) forgetPlayer();
@@ -1395,9 +1575,12 @@ async function main(): Promise<void> {
   screen = new PlayScreen({
     seek: (sec) => void seekTo(sec),
     togglePlay: () => void togglePlay(),
-    setRate: (r) => {
-      if (demo) demo.clock.rate = r;
-    },
+    setRate: (r) => void setRate(r),
+    barClick: (k) => pickLoopBar(k),
+  });
+  $('loop-btn').onclick = onLoopButton;
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && loopPick) cancelLoopPick();
   });
   fixer = new ChordFixer({
     model: () => model,
@@ -1440,6 +1623,8 @@ async function main(): Promise<void> {
   renderHeader();
   if (params.get('demo') === '1') await startDemo(params.get('rec') ?? undefined);
   if (params.has('fix')) fixer.open(); // screenshots: open the chord fixing panel
+  const lp = /^(\d+)-(\d+)$/.exec(params.get('loop') ?? ''); // screenshots: mark bars a–b (1-based) as the loop
+  if (demo && lp && model) setLoop(makeLoop(shownKey(), model.bars, Number(lp[1]) - 1, Number(lp[2]) - 1, model.durationSec));
   if (params.get('sheet') === '1') openSheet();
   requestAnimationFrame(loop);
 }

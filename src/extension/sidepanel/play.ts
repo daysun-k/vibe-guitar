@@ -25,7 +25,16 @@ export function unplayableLine(a: Pick<Arrangement, 'unplayable' | 'capo'>, show
 export interface PlayHost {
   seek(sec: number): void;
   togglePlay(): void;
+  /** A speed button was pressed (the buttons show the reported rate, set by the panel). */
   setRate?(rate: number): void;
+  /** A lane bar was pressed: true when the host used it (choosing loop bars), else it seeks. */
+  barClick?(index: number): boolean;
+}
+
+/** Lane marks of the practice loop: the looped bar indexes, and the A bar while B is being chosen. */
+export interface LoopMarks {
+  range: { from: number; to: number } | null;
+  picking: { a: number | null } | null;
 }
 
 const reduceMotion = (): boolean => matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -128,6 +137,7 @@ export class PlayScreen {
     this.lane.addEventListener('click', (e) => {
       const b = (e.target as HTMLElement).closest<HTMLElement>('.bar');
       if (!b) return;
+      if (this.host.barClick?.(Number(b.dataset.k))) return;
       this.host.seek(Math.max(0, Number(b.dataset.t)) + 0.01);
       this.fol.reset();
     });
@@ -139,10 +149,7 @@ export class PlayScreen {
     this.seek.addEventListener('blur', () => this.scrub.end());
     $('play-btn').addEventListener('click', () => this.host.togglePlay());
     for (const b of document.querySelectorAll<HTMLButtonElement>('#rate-seg [data-rate]')) {
-      b.addEventListener('click', () => {
-        for (const x of document.querySelectorAll('#rate-seg [data-rate]')) x.setAttribute('aria-pressed', String(x === b));
-        this.host.setRate?.(Number(b.dataset.rate));
-      });
+      b.addEventListener('click', () => this.host.setRate?.(Number(b.dataset.rate)));
     }
     addEventListener('resize', () => {
       this.last.line = -2;
@@ -191,6 +198,25 @@ export class PlayScreen {
     }
   }
 
+  private loopMarks: LoopMarks = { range: null, picking: null };
+
+  /** Marks the looped bars (A and B tagged) and, while choosing, the A bar; kept across rebuilds. */
+  setLoop(marks: LoopMarks): void {
+    this.loopMarks = marks;
+    this.applyLoop();
+  }
+
+  private applyLoop(): void {
+    const { range, picking } = this.loopMarks;
+    this.lane.classList.toggle('loop-picking', picking !== null);
+    this.barEls.forEach((b, i) => {
+      const inRange = !!range && i >= range.from && i <= range.to;
+      b.classList.toggle('loop', inRange || picking?.a === i);
+      b.classList.toggle('loop-a', (inRange && i === range!.from) || picking?.a === i);
+      b.classList.toggle('loop-b', inRange && i === range!.to);
+    });
+  }
+
   private concert(c: NonNullable<PlayModel['labels'][number]['change']>, includeMerge = true): string {
     return changeConcertLabel(c, this.showSounding, includeMerge);
   }
@@ -217,6 +243,7 @@ export class PlayScreen {
     }
     this.buildStrip(m);
     this.buildLane(m);
+    this.applyLoop();
     this.seek.max = String(m.durationSec);
     $('t-dur').textContent = formatTime(m.durationSec);
     $('seek-ticks').innerHTML = m.sections

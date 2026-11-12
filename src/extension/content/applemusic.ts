@@ -5,6 +5,7 @@
  *   3. reports "unreachable" so the side panel can show that result.
  */
 import type { Recording } from '../../chart/types';
+import { isPracticeRate } from '../../play/practice';
 import {
   sendQuietly,
   type AdapterVia,
@@ -154,8 +155,17 @@ function controlViaMusicKit(msg: PlayerControlMessage): Promise<PlayerControlRes
 
 onRuntimeMessage(instanceSignal, (msg: ExtensionMessage, _sender, sendResponse) => {
   if (msg.type !== 'player-control') return;
+  if (msg.action === 'rate' && !isPracticeRate(msg.rate)) {
+    sendResponse({ ok: false, reason: `unsupported rate ${String(msg.rate)}` } satisfies PlayerControlResult);
+    return;
+  }
   const viaMusicKit = lastMain !== null && Date.now() - lastMain.at < 1500 && lastMain.payload.via === 'musickit';
   if (viaMusicKit) {
+    // Speed is not wired through MusicKit (experimental adapter): only YouTube and YouTube Music are supported.
+    if (msg.action === 'rate') {
+      sendResponse({ ok: false, reason: 'speed is not supported through MusicKit' } satisfies PlayerControlResult);
+      return;
+    }
     void controlViaMusicKit(msg).then(sendResponse);
     return true; // async response
   }
@@ -163,6 +173,7 @@ onRuntimeMessage(instanceSignal, (msg: ExtensionMessage, _sender, sendResponse) 
     sendResponse({ ok: false, reason: 'unsupported on this player: no reachable MusicKit or media element' } satisfies PlayerControlResult);
     return;
   }
+  if (msg.action === 'rate' && isPracticeRate(msg.rate)) media.playbackRate = msg.rate;
   if (msg.action === 'seek' && typeof msg.time === 'number') media.currentTime = msg.time;
   if (msg.action === 'pause') media.pause();
   if (msg.action === 'play') void media.play().catch(() => undefined);
