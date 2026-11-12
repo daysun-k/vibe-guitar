@@ -106,7 +106,7 @@ let countInRun = 0;
 let countingIn = false;
 /** Play view chord fixing: the panel, the last fix (undoable) and its status line. */
 let fixer: ChordFixer;
-let lastFix: { key: string; before: Chart; after: Chart } | null = null;
+let lastFix: { key: string; recording: Pick<Recording, 'source' | 'id'> | null; before: Chart; after: Chart } | null = null;
 let fixNote: { key: string; text: string; undo: boolean; error: boolean } | null = null;
 let fixModelKey = '';
 
@@ -871,6 +871,7 @@ async function saveFix(event: EventRef, concert: string, names: { from: string; 
   try {
     let before: Chart;
     let after: Chart;
+    let recording: Pick<Recording, 'source' | 'id'> | null = null;
     if (demo) {
       before = demo.chart;
       after = correctChordEvent(before, event, concert);
@@ -878,11 +879,12 @@ async function saveFix(event: EventRef, concert: string, names: { from: string; 
     } else {
       const target = chartWriteTarget(currentRecording(), false);
       if (!target.ok) throw new Error('재생 중인 곡이 없어요.');
-      ({ before, after } = await correctChartEvent(target.recording.source, target.recording.id, event, concert));
+      recording = { source: target.recording.source, id: target.recording.id };
+      ({ before, after } = await correctChartEvent(recording.source, recording.id, event, concert));
       if (key !== shownKey()) return; // the song changed while saving
       chart = after;
     }
-    lastFix = { key, before, after };
+    lastFix = { key, recording, before, after };
     fixNote = { key, text: `고쳤어요: ${names.from} → ${names.to}${demo ? ' (데모라서 저장하지는 않아요)' : ''}`, undo: true, error: false };
     recompute();
     if (!demo) await refreshPendingAuto();
@@ -899,7 +901,8 @@ async function undoFix(): Promise<void> {
   try {
     if (demo) demo.chart = fix.before;
     else {
-      const restored = await undoChartCorrection(fix.before, fix.after);
+      if (!fix.recording) throw new Error('재생 중인 곡이 없어요.');
+      const restored = await undoChartCorrection(fix.recording.source, fix.recording.id, fix.before, fix.after);
       if (fix.key !== shownKey()) return;
       chart = restored;
     }

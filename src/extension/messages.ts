@@ -135,7 +135,7 @@ export type ChartWriteMessage =
   | { type: 'chart-write'; op: 'adopt-auto'; source: RecordingSource; id: string }
   /** Play view: fix one event's chord (identified by its start and current chord). */
   | { type: 'chart-write'; op: 'correct-event'; source: RecordingSource; id: string; event: EventRef; chord: string; at: string }
-  | { type: 'chart-write'; op: 'undo-correct'; before: Chart; after: Chart };
+  | { type: 'chart-write'; op: 'undo-correct'; source: RecordingSource; id: string; before: Chart; after: Chart };
 
 /** Service worker → side panel: reply to a ChartWriteMessage (`before`: the chart a correction replaced). */
 export type ChartWriteResult = { ok: true; chart?: Chart | null; before?: Chart } | { ok: false; error: string };

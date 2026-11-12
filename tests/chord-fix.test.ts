@@ -159,7 +159,7 @@ describe('ChartStore: corrections go through the serialized writes', () => {
     const store = new ChartStore(area);
     await store.saveManual(chart('manual', [[0, 'C'], [2, 'G']], [[0, 8]]));
     const m = await store.correctEvent('youtube', rec.id, { startSec: 2, chord: 'G' }, 'Em', NOW);
-    expect(await store.undoCorrection(m.before, m.after)).toEqual(m.before);
+    expect(await store.undoCorrection('youtube', rec.id, m.before, m.after)).toEqual(m.before);
     expect(area.data[MAIN]).toEqual(m.before);
 
     const area2 = new MemArea();
@@ -167,7 +167,7 @@ describe('ChartStore: corrections go through the serialized writes', () => {
     await store2.saveAuto(auto());
     const a = await store2.correctEvent('youtube', rec.id, { startSec: 2, chord: 'G#' }, 'Em', NOW);
     await store2.saveAuto(chart('recognizer', [[30, 'D']], [[30, 34]], '2026-11-12T11:00:00.000Z'));
-    const restored = await store2.undoCorrection(a.before, a.after);
+    const restored = await store2.undoCorrection('youtube', rec.id, a.before, a.after);
     expect(restored.provenance.createdBy).toBe('recognizer');
     expect(restored.events.map((e) => e.chord)).toEqual(['C', 'G#', 'Am', 'F', 'D']);
   });
@@ -178,7 +178,7 @@ describe('ChartStore: corrections go through the serialized writes', () => {
     await store.saveManual(chart('manual', [[0, 'C'], [2, 'G']], [[0, 8]]));
     const m = await store.correctEvent('youtube', rec.id, { startSec: 2, chord: 'G' }, 'Em', NOW);
     await store.saveManual(chart('manual', [[0, 'D']], [[0, 8]]));
-    await expect(store.undoCorrection(m.before, m.after)).rejects.toThrow(CorrectionConflict);
+    await expect(store.undoCorrection('youtube', rec.id, m.before, m.after)).rejects.toThrow(CorrectionConflict);
     expect((area.data[MAIN] as Chart).events[0].chord).toBe('D');
   });
 });
@@ -218,5 +218,46 @@ describe('editor save of a loaded auto chart', () => {
   it('quantizing leaves the loaded event times alone', () => {
     const t = { ...timing, firstDownbeatSec: 0.13 };
     expect(quantizeStamps([0.2, 2.07, 3.1], t, 2, new Set([2.07]))).toEqual([0.13, 2.07, 3.13]);
+  });
+});
+
+describe('review vgt12-r1 regressions', () => {
+  it('F1: undo is refused after an import that changed timing and coverage but not events or updatedAt', async () => {
+    const area = new MemArea();
+    const store = new ChartStore(area);
+    await store.saveManual(chart('manual', [[0, 'C'], [2, 'G']], [[0, 8]]));
+    const m = await store.correctEvent('youtube', rec.id, { startSec: 2, chord: 'G' }, 'Em', NOW);
+    const imported: Chart = { ...structuredClone(m.after), timing: { ...m.after.timing, bpm: 96 }, coverage: [{ fromSec: 0, toSec: 30 }] };
+    await store.saveManual(imported);
+    await expect(store.undoCorrection('youtube', rec.id, m.before, m.after)).rejects.toThrow(CorrectionConflict);
+    expect(area.data[MAIN]).toEqual(imported);
+  });
+
+  it('F1: a stored chart equal in content but with another key order still undoes', async () => {
+    const area = new MemArea();
+    const store = new ChartStore(area);
+    await store.saveManual(chart('manual', [[0, 'C'], [2, 'G']], [[0, 8]]));
+    const m = await store.correctEvent('youtube', rec.id, { startSec: 2, chord: 'G' }, 'Em', NOW);
+    const reordered = Object.fromEntries(Object.entries(area.data[MAIN] as Chart).reverse());
+    area.data[MAIN] = reordered;
+    await expect(store.undoCorrection('youtube', rec.id, m.before, m.after)).resolves.toMatchObject({ events: m.before.events });
+  });
+
+  it('F2: through the YouTube Music fallback, undo restores the newer YouTube analysis', async () => {
+    const area = new MemArea();
+    const store = new ChartStore(area);
+    const ytm = { ...auto(), recording: { ...rec, source: 'ytmusic' as const } };
+    area.data[chartStorageKey('ytmusic', rec.id)] = ytm;
+    area.data[autoChartKey('ytmusic', rec.id)] = ytm;
+    const fix = await store.correctEvent('youtube', rec.id, { startSec: 2, chord: 'G#' }, 'Em', NOW);
+    expect(fix.after.recording.source).toBe('youtube');
+    expect(area.data[MAIN]).toEqual(fix.after);
+    const newer = chart('recognizer', [[30, 'D']], [[30, 34]], '2026-11-12T11:00:00.000Z');
+    expect(await store.saveAuto(newer)).toBe('pending');
+    const restored = await store.undoCorrection('youtube', rec.id, fix.before, fix.after);
+    expect(restored.recording.source).toBe('youtube');
+    expect(restored.events.map((e) => e.chord)).toEqual(['C', 'G#', 'Am', 'F', 'D']);
+    expect(restored.coverage).toEqual([{ fromSec: 0, toSec: 6 }, { fromSec: 20, toSec: 24 }, { fromSec: 30, toSec: 34 }]);
+    expect(await store.load('youtube', rec.id)).toEqual(restored);
   });
 });
