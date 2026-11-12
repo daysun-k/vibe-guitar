@@ -33,11 +33,18 @@ export interface PanelTransport {
   seek(sec: number): Promise<PlayerControlResult>;
   /** Where 처음부터 goes, or null when there is nowhere to go. */
   restartTarget(): number | null;
+  /** Cancels the count-in this command started (never one started from the panel), so it never plays. */
+  cancelCountIn(): void;
 }
 
 export interface RunOptions {
   /** Progress before the final outcome (the count-in started). */
   progress?: (o: CommandOutcome) => void;
+  /**
+   * Aborted when the phone loses the right to control (switch off, 승인 해제, phone or relay gone, panel
+   * replaced): a count-in this command started is cancelled and its play never happens.
+   */
+  signal?: AbortSignal;
   observeMs?: number;
   pollMs?: number;
   now?: () => number;
@@ -48,8 +55,16 @@ const fail = (code: CommandFailure): CommandOutcome => ({ ok: false, code });
 
 /** A seek landed this close before its target counts (players round to frames). */
 const SEEK_EARLY_SEC = 0.35;
-/** ... and this far after it, plus what playback covers meanwhile. */
+/** ... and this far after it, plus what playback at the real rate covers meanwhile. */
 const SEEK_LATE_SEC = 0.6;
+
+/** Pauses the player if it plays (e.g. started on the Mac during a count-in) and reports what it shows. */
+async function settlePaused(player: ObservedPlayer, transport: PanelTransport, observeMs: number, pollMs: number, now: () => number, sleep: (ms: number) => Promise<void>): Promise<CommandOutcome> {
+  if (!player.playing()) return { ok: true, state: 'paused' };
+  const r = await transport.toggle(() => {});
+  if (!r.ok) return fail('failed');
+  return (await waitUntil(() => !player.playing(), observeMs, pollMs, now, sleep)) ? { ok: true, state: 'paused' } : fail('timeout');
+}
 
 /** Polls `pred` until it holds or `ms` passed. */
 export async function waitUntil(pred: () => boolean, ms: number, pollMs: number, now: () => number, sleep: (ms: number) => Promise<void>): Promise<boolean> {
@@ -82,14 +97,30 @@ export async function runPhoneCommand(cmd: PhoneCommand, player: ObservedPlayer,
   if (!player.hasTarget()) return fail('no-target');
 
   if (cmd === 'toggle') {
-    // Pause during a count-in cancels it; the player was never started.
+    // Pause during a count-in cancels it. The player itself may still play (started on the Mac
+    // meanwhile): then it is paused as well, and only an observed pause is reported.
     if (player.countingIn()) {
       await transport.toggle(() => {});
-      return { ok: true, state: 'paused' };
+      return settlePaused(player, transport, observeMs, pollMs, now, sleep);
     }
     const want = !player.playing();
-    const r = await transport.toggle(() => o.progress?.({ ok: true, state: 'countin' }));
-    if (r.cancelled) return { ok: true, state: 'paused' };
+    let countIn = false;
+    const onAbort = () => {
+      if (countIn) transport.cancelCountIn();
+    };
+    o.signal?.addEventListener('abort', onAbort, { once: true });
+    let r: TransportResult;
+    try {
+      r = await transport.toggle(() => {
+        countIn = true;
+        // Lost the right to control while the count-in was being prepared: cancel it at once.
+        if (o.signal?.aborted) return transport.cancelCountIn();
+        o.progress?.({ ok: true, state: 'countin' });
+      });
+    } finally {
+      o.signal?.removeEventListener('abort', onAbort);
+    }
+    if (r.cancelled) return { ok: true, state: player.playing() ? 'playing' : 'paused' };
     if (!r.ok) return fail('failed');
     if (await waitUntil(() => player.playing() === want, observeMs, pollMs, now, sleep)) return { ok: true, state: want ? 'playing' : 'paused' };
     return fail(want ? 'autoplay' : 'timeout');
@@ -100,9 +131,12 @@ export async function runPhoneCommand(cmd: PhoneCommand, player: ObservedPlayer,
   const r = await transport.seek(target);
   if (!r.ok) return fail('failed');
   const t0 = now();
+  // Landed: the position is near the target, allowing only for what playback at the real rate
+  // covered since the seek. A seek that was accepted but never applied keeps the old position, which
+  // moves at the same rate as this window and so never falls into it.
   const landed = () => {
     const p = player.position();
-    const moved = player.playing() ? (Math.max(1, player.rate()) * (now() - t0)) / 1000 : 0;
+    const moved = player.playing() ? (Math.max(0, player.rate()) * (now() - t0)) / 1000 : 0;
     return p >= target - SEEK_EARLY_SEC && p <= target + SEEK_LATE_SEC + moved;
   };
   if (await waitUntil(landed, observeMs, pollMs, now, sleep)) return { ok: true, state: player.playing() ? 'playing' : 'paused' };

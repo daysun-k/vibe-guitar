@@ -1374,14 +1374,23 @@ const phonePlayer: ObservedPlayer = {
   hasTarget: () => !!model && (!!demo || (!!player && hasChrome && controlTabId(playerTabId, activeTabId) !== null)),
 };
 
+/** countInRun of the count-in the phone started (cancelCountIn stops only that one). */
+let phoneCountInRun = -1;
 const phoneTransport: PanelTransport = {
-  toggle: (onCountIn) => togglePlay(onCountIn),
+  toggle: (onCountIn) =>
+    togglePlay(() => {
+      phoneCountInRun = countInRun;
+      onCountIn();
+    }),
+  cancelCountIn: () => {
+    if (countingIn && countInRun === phoneCountInRun) stopCountIn();
+  },
   seek: (sec) => seekTo(sec),
   restartTarget: () => (model ? restartTargetSec(practiceLoop ? loopStartTarget(practiceLoop) : null, model.bars, positionNow(false)) : null),
 };
 
-function onPhoneCommand(cmd: PhoneCommand, progress: (o: CommandOutcome) => void): Promise<CommandOutcome> {
-  return runPhoneCommand(cmd, phonePlayer, phoneTransport, { progress });
+function onPhoneCommand(cmd: PhoneCommand, progress: (o: CommandOutcome) => void, signal: AbortSignal): Promise<CommandOutcome> {
+  return runPhoneCommand(cmd, phonePlayer, phoneTransport, { progress, signal });
 }
 
 function renderPhones(list: readonly PhoneEntry[]): void {

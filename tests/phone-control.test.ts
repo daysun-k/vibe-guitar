@@ -203,9 +203,17 @@ describe('restart target', () => {
 });
 
 /** A fake panel: the player reacts after `lagMs` (or never, like an autoplay block). */
-function fakePanel(o: { playing?: boolean; countIn?: boolean; ad?: boolean; target?: boolean; lagMs?: number; blockPlay?: boolean; position?: number } = {}) {
+function fakePanel(o: { playing?: boolean; countIn?: boolean; countingIn?: boolean; heldCountIn?: boolean; ad?: boolean; target?: boolean; lagMs?: number; blockPlay?: boolean; position?: number; rate?: number; noSeek?: boolean; target10?: boolean } = {}) {
   let t = 0;
-  const st = { playing: o.playing ?? false, countingIn: false, position: o.position ?? 10, ad: o.ad ?? false };
+  const st = { playing: o.playing ?? false, countingIn: o.countingIn ?? false, position: o.position ?? 10, ad: o.ad ?? false };
+  let countInDone: ((r: TransportResult) => void) | null = null;
+  /** The held count-in reaches its end: plays only if nobody cancelled it. */
+  const endCountIn = () => {
+    if (!st.countingIn || !countInDone) return;
+    st.countingIn = false;
+    st.playing = true;
+    countInDone({ ok: true });
+  };
   const later = (fn: () => void) => {
     const at = t + (o.lagMs ?? 200);
     pendingFx.push({ at, fn });
@@ -216,7 +224,7 @@ function fakePanel(o: { playing?: boolean; countIn?: boolean; ad?: boolean; targ
     playing: () => st.playing,
     countingIn: () => st.countingIn,
     position: () => st.position,
-    rate: () => 1,
+    rate: () => o.rate ?? 1,
     isAd: () => st.ad,
     hasTarget: () => o.target ?? true,
   };
@@ -231,6 +239,13 @@ function fakePanel(o: { playing?: boolean; countIn?: boolean; ad?: boolean; targ
         later(() => (st.playing = false));
         return { ok: true };
       }
+      if (o.heldCountIn) {
+        // A count-in that really waits: it plays only when endCountIn() runs, unless cancelled first.
+        st.countingIn = true;
+        const p = new Promise<TransportResult>((r) => (countInDone = r));
+        onCountIn();
+        return p;
+      }
       if (o.countIn) {
         st.countingIn = true;
         onCountIn();
@@ -241,24 +256,32 @@ function fakePanel(o: { playing?: boolean; countIn?: boolean; ad?: boolean; targ
     },
     seek: async (sec) => {
       calls.push(`seek ${sec}`);
-      later(() => (st.position = sec));
+      if (!o.noSeek) later(() => (st.position = sec));
       return { ok: true };
     },
-    restartTarget: () => 4,
+    restartTarget: () => (o.target10 ? 10 : 4),
+    cancelCountIn: () => {
+      calls.push('cancelCountIn');
+      if (!st.countingIn) return;
+      st.countingIn = false;
+      countInDone?.({ ok: false, cancelled: true });
+    },
   };
-  const run = (cmd: PhoneCommand, progress?: (x: CommandOutcome) => void) =>
+  const run = (cmd: PhoneCommand, progress?: (x: CommandOutcome) => void, signal?: AbortSignal) =>
     runPhoneCommand(cmd, player, transport, {
       progress,
+      signal,
       now: () => t,
       sleep: async (ms) => {
         t += ms;
+        if (st.playing) st.position += ((o.rate ?? 1) * ms) / 1000;
         for (const fx of pendingFx.filter((x) => x.at <= t)) {
           fx.fn();
           pendingFx.splice(pendingFx.indexOf(fx), 1);
         }
       },
     });
-  return { st, calls, run, time: () => t };
+  return { st, calls, run, endCountIn, time: () => t };
 }
 
 describe('runPhoneCommand: the outcome follows the observed player state', () => {
@@ -316,6 +339,56 @@ describe('runPhoneCommand: the outcome follows the observed player state', () =>
     expect(await f.run('restart')).toEqual({ ok: true, state: 'playing' });
   });
 
+  it('S6-R1-01: losing control during a phone-started count-in cancels it, so it never plays', async () => {
+    const f = fakePanel({ heldCountIn: true });
+    const ctl = new AbortController();
+    const progress: CommandOutcome[] = [];
+    const done = f.run('toggle', (x) => progress.push(x), ctl.signal);
+    await Promise.resolve();
+    expect(progress).toEqual([{ ok: true, state: 'countin' }]);
+    ctl.abort(); // switch off, 승인 해제, phone or relay gone, panel replaced
+    f.endCountIn(); // the count-in would have reached its play now
+    expect(f.st.playing).toBe(false);
+    expect(f.calls).toContain('cancelCountIn');
+    expect(await done).toEqual({ ok: true, state: 'paused' });
+  });
+
+  it('S6-R1-01: control lost while the count-in was being prepared cancels it as soon as it starts', async () => {
+    const f = fakePanel({ heldCountIn: true });
+    const ctl = new AbortController();
+    ctl.abort();
+    const progress: CommandOutcome[] = [];
+    const done = f.run('toggle', (x) => progress.push(x), ctl.signal);
+    f.endCountIn();
+    expect(f.st.playing).toBe(false);
+    expect(progress).toEqual([]);
+    expect(await done).toEqual({ ok: true, state: 'paused' });
+  });
+
+  it('S6-R1-02: pause during a count-in also pauses a player started on the Mac meanwhile', async () => {
+    const f = fakePanel({ countingIn: true, playing: true });
+    expect(await f.run('toggle')).toEqual({ ok: true, state: 'paused' });
+    expect(f.calls).toEqual(['toggle', 'toggle']);
+    expect(f.st.playing).toBe(false);
+  });
+
+  it('S6-R1-02: a pause during a count-in that never shows is not reported as paused', async () => {
+    const f = fakePanel({ countingIn: true, playing: true, lagMs: 60_000 });
+    expect(await f.run('toggle')).toEqual({ ok: false, code: 'timeout' });
+  });
+
+  it('S6-R1-03: at 0.5x a seek that was accepted but not applied is not reported as success', async () => {
+    const f = fakePanel({ playing: true, rate: 0.5, position: 11.5, noSeek: true, target10: true });
+    expect(await f.run('restart')).toEqual({ ok: false, code: 'timeout' });
+    expect(f.st.position).toBeGreaterThan(12.4);
+  });
+
+  it('S6-R1-03: at 0.5x a seek that lands is reported once the position reaches the target', async () => {
+    const f = fakePanel({ playing: true, rate: 0.5, position: 11.5, target10: true, lagMs: 400 });
+    expect(await f.run('restart')).toEqual({ ok: true, state: 'playing' });
+    expect(f.time()).toBeGreaterThanOrEqual(400);
+  });
+
   it('restart that never lands times out', async () => {
     const f = fakePanel({ position: 9, lagMs: 60_000 });
     expect(await f.run('restart')).toEqual({ ok: false, code: 'timeout' });
@@ -356,14 +429,14 @@ function linkHarness() {
   const sockets: FakeSocket[] = [];
   const commands: PhoneCommand[] = [];
   const phones: PhoneEntry[][] = [];
-  let answer: (cmd: PhoneCommand, progress: (o: CommandOutcome) => void) => Promise<CommandOutcome> = async () => ({ ok: true, state: 'playing' });
+  let answer: (cmd: PhoneCommand, progress: (o: CommandOutcome) => void, signal: AbortSignal) => Promise<CommandOutcome> = async () => ({ ok: true, state: 'playing' });
   const link = new PhoneLink({
     onStatus: () => {},
     sample: () => ({ position: 1, rate: 1, paused: true, ad: false, loop: null }),
     onPhones: (l) => phones.push(l),
-    onCommand: (cmd, progress) => {
+    onCommand: (cmd, progress, signal) => {
       commands.push(cmd);
-      return answer(cmd, progress);
+      return answer(cmd, progress, signal);
     },
     makeSocket: () => {
       const s = new FakeSocket();
@@ -554,6 +627,58 @@ describe('PhoneLink: the panel checks every forwarded command again', () => {
     await flush();
     expect(h.commands).toEqual([]);
     expect(h.results()[0]).toMatchObject({ code: 'off' });
+  });
+
+  it('S6-R1-01: a running command is aborted on switch-off, 승인 해제, phone or relay gone, and panel replacement', async () => {
+    const triggers: [string, (h: ReturnType<typeof linkHarness>) => void][] = [
+      ['switch off', (h) => h.link.setControl(false)],
+      ['revoke', (h) => h.link.revoke()],
+      ['phone disconnected', (h) => h.ws.rx({ t: 'phones', list: [] })],
+      ['approval moved to another phone', (h) => h.ws.rx({ t: 'phones', list: [{ id: ID_B, code: '5678', state: 'approved' }] })],
+      ['relay disconnected', (h) => h.ws.drop()],
+      ['panel replaced', (h) => {
+        h.ws.readyState = 3;
+        h.ws.onclose?.({ code: 4000 } as CloseEvent);
+      }],
+      ['phone stand off', (h) => h.link.setEnabled(false)],
+    ];
+    for (const [name, trigger] of triggers) {
+      const h = linkHarness();
+      h.link.setControl(true);
+      h.approve();
+      // The real runner with a count-in that waits for its end.
+      const f = fakePanel({ heldCountIn: true });
+      let signal: AbortSignal | null = null;
+      h.answer = (c, progress, sig) => {
+        signal = sig;
+        return f.run(c, progress, sig);
+      };
+      h.cmd(1);
+      await flush();
+      expect(f.st.countingIn, name).toBe(true);
+      expect(signal!.aborted, name).toBe(false);
+      trigger(h);
+      expect(signal!.aborted, name).toBe(true);
+      f.endCountIn(); // the moment the count-in would have played
+      await flush();
+      expect(f.st.playing, `${name}: no play reaches the player`).toBe(false);
+      expect(f.calls, name).toEqual(['toggle', 'cancelCountIn']);
+    }
+  });
+
+  it('a phones update that keeps the same approved phone does not abort its command', async () => {
+    const h = linkHarness();
+    h.link.setControl(true);
+    h.approve();
+    let signal: AbortSignal | null = null;
+    h.answer = (_c, _p, sig) => {
+      signal = sig;
+      return new Promise(() => {});
+    };
+    h.cmd(1);
+    await flush();
+    h.ws.rx({ t: 'phones', list: [{ id: ID_A, code: '1234', state: 'approved' }, { id: ID_B, code: '5678', state: 'pending' }] });
+    expect(signal!.aborted).toBe(false);
   });
 
   it('approve / reject / revoke carry the shown code', () => {

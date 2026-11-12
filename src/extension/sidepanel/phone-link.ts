@@ -65,7 +65,7 @@ export interface PhoneLinkOptions {
    * Carries out a command from the approved phone (already checked here). `progress` sends an
    * intermediate outcome (the count-in started); the resolved outcome is the final one.
    */
-  onCommand?: (cmd: PhoneCommand, progress: (o: CommandOutcome) => void) => Promise<CommandOutcome>;
+  onCommand?: (cmd: PhoneCommand, progress: (o: CommandOutcome) => void, signal: AbortSignal) => Promise<CommandOutcome>;
   port?: number;
   makeSocket?: (url: string) => SocketLike;
   now?: () => number;
@@ -121,6 +121,8 @@ export class PhoneLink {
   private readonly seen = new Map<string, number>();
   private bucket: TokenBucket;
   private busy = false;
+  /** Commands still running, by the phone connection they came from: aborted when it loses control. */
+  private readonly running = new Set<{ from: string; ctl: AbortController }>();
   private readonly o: Required<Omit<PhoneLinkOptions, 'port'>> & { url: string };
 
   constructor(opts: PhoneLinkOptions) {
@@ -172,7 +174,10 @@ export class PhoneLink {
     if (on === this.control) return;
     this.control = on;
     this.seen.clear();
-    if (!on) this.setPhones([]);
+    if (!on) {
+      this.setPhones([]);
+      this.abortRunning();
+    }
     if (this.isOpen()) this.send({ t: 'control', on });
   }
 
@@ -189,6 +194,16 @@ export class PhoneLink {
   /** 승인 해제. */
   revoke(): void {
     if (this.control) this.send({ t: 'revoke' });
+    this.abortRunning();
+  }
+
+  /** Aborts running commands (all, or those not from `keep`). */
+  private abortRunning(keep: string | null = null): void {
+    for (const r of [...this.running]) {
+      if (r.from === keep) continue;
+      this.running.delete(r);
+      r.ctl.abort();
+    }
   }
 
   /** Reconnect now instead of waiting for the backoff (sheet opened, window focused). */
@@ -343,6 +358,8 @@ export class PhoneLink {
   }
 
   private setPhones(list: PhoneEntry[]): void {
+    // Only the approved phone's commands may keep running (revoked, disconnected or list cleared: abort).
+    this.abortRunning(this.control ? (list.find((p) => p.state === 'approved')?.id ?? null) : null);
     if (JSON.stringify(list) === JSON.stringify(this.phones)) return;
     this.phones = list;
     this.o.onPhones(list);
@@ -369,14 +386,21 @@ export class PhoneLink {
       if (!released) this.busy = false;
       released = true;
     };
+    const run = { from: m.from, ctl: new AbortController() };
+    this.running.add(run);
     this.o
-      .onCommand(m.cmd, (o) => {
-        // Once the count-in runs, the phone may send the next command (pause cancels it).
-        release();
-        reply(o);
-      })
+      .onCommand(
+        m.cmd,
+        (o) => {
+          // Once the count-in runs, the phone may send the next command (pause cancels it).
+          release();
+          reply(o);
+        },
+        run.ctl.signal,
+      )
       .catch((): CommandOutcome => ({ ok: false, code: 'failed' }))
       .then((o) => {
+        this.running.delete(run);
         release();
         reply(o);
       });
