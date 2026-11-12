@@ -65,7 +65,7 @@ import { ChordFixer } from './fix';
 import { OVERVIEW_EMPTY, renderOverviewHtml } from './overview';
 import { capoReason, unplayableLine, PlayScreen, formatTime, type LoopMarks } from './play';
 import { PhoneLink, phoneStatusText, type PhoneStatus, type PlaybackSample } from './phone-link';
-import { restartTargetSec, runPhoneCommand, type CommandContext, type ObservedPlayer, type PanelTransport } from './phone-control';
+import { ShownModel, playerTargetKey, restartTargetSec, runPhoneCommand, type CommandContext, type ObservedPlayer, type PanelTransport } from './phone-control';
 import type { CommandOutcome, PhoneCommand, PhoneEntry } from '../../phone/protocol';
 import { buildSongView } from '../../phone/song-view';
 
@@ -102,6 +102,8 @@ let chartKey = '';
 /** The recording key `chart` was loaded for: while it differs from chartKey, the chart shown is the previous song's. */
 let chartFor = '';
 let model: PlayModel | null = null;
+/** Every replacement of `model` goes through here (see ShownModel). */
+const shownModel = new ShownModel<PlayModel>(() => phoneSongChanging());
 let screen: PlayScreen;
 let editor: StampState = { chords: [], stamps: [] };
 let taps: number[] = [];
@@ -362,18 +364,21 @@ function recompute(): void {
     allowRootChange: settings.allowRootChange,
     durationSec: demo ? demo.clock.durationSec : player?.duration,
   };
+  let next: PlayModel | null;
   try {
-    model = c ? buildPlayModel(c, opts, ly) : null;
+    next = c ? buildPlayModel(c, opts, ly) : null;
   } catch (e) {
     console.error(e);
     // Lyrics are optional: if they break the model, keep the chord view without them.
     try {
-      model = c && ly ? buildPlayModel(c, opts, null) : null;
+      next = c && ly ? buildPlayModel(c, opts, null) : null;
     } catch (e2) {
       console.error(e2);
-      model = null;
+      next = null;
     }
   }
+  // The only place the model is replaced: phone commands for the previous model stop first (VGT-16).
+  model = shownModel.replace(next);
   screen.setModel(model);
   screen.setLook(settings.lookAheadBars);
   if (shownKey() !== fixModelKey) {
@@ -1364,13 +1369,15 @@ const phonePlayer: ObservedPlayer = {
   rate: currentRate,
   isAd: () => !demo && !!player?.isAd,
   // The same tab sendControl would use, so an unchanged target means the same tab gets the command.
-  target: () => {
-    if (!model) return null;
-    if (demo) return JSON.stringify(['demo', demo.run, demo.key]);
-    if (chartFor !== chartKey) return null; // the model shown is still the previous song's
-    const tab = player && hasChrome ? controlTabId(playerTabId, activeTabId) : null;
-    return tab === null ? null : JSON.stringify(['tab', tab, recordingKey(player!.recording), chartKey]);
-  },
+  target: () =>
+    playerTargetKey({
+      modelVersion: model ? shownModel.version : null,
+      demo,
+      chartLoaded: chartFor === chartKey,
+      tab: player && hasChrome ? controlTabId(playerTabId, activeTabId) : null,
+      recordingKey: recordingKey(player?.recording ?? null),
+      chartKey,
+    }),
 };
 
 /** countInRun of the count-in the phone started (cancelCountIn stops only that one). */

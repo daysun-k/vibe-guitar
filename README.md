@@ -253,7 +253,7 @@ phone or switching control off ends the grant on the panel at once, without wait
 When the phone loses control while one of its commands is still running, the panel sends nothing further for it: no next seek or play, and a count-in it started stops before playing;
 the phone, if still connected, then hears "조작 권한이 바뀌어서 취소했어요". A pause, seek or play already sent
 before that may still take effect, and the phone is then told what the player actually did.
-An ad starting, or a song or tab change on the Mac, stops a running phone command the same way, because the panel checks again before every further seek, play or count-in (and, from the moment the Mac's song or tab changes until the phone has the new song, refuses every phone command), so nothing goes out during an ad or to another song or tab; the phone says "광고 중에는 조작할 수 없어요" or "곡이 바뀌었어요 · 다시 눌러 주세요".
+An ad starting, or a song, tab or chart change on the Mac (a reload, save, import, chord fix or setting that rebuilds the chart view), stops a running phone command the same way, because the panel checks again before every further seek, play or count-in and until the outcome is seen (and, from the moment the Mac's song, tab or chart changes until the phone has the new view, refuses every phone command), so nothing goes out during an ad or to another song, tab or chart; the phone says "광고 중에는 조작할 수 없어요" or "곡이 바뀌었어요 · 다시 눌러 주세요".
 A tap on the phone does not count as a click on the Mac's page, so Chrome may block a
 remote play until the page has been clicked once: the phone then says "맥에서 한 번 재생을 눌러 주세요". Use it
 on a trusted home Wi-Fi only (plain http, see above).

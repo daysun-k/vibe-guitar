@@ -16,7 +16,13 @@
  *     for, so a player that changed before the panel published the new song is never reached (else
  *     `stale`; at the start, no target at all is `no-target`),
  *   - no ad is playing (else `ad`).
- * Once it fails nothing further is sent, and the phone (if still connected) gets that code.
+ * Once it fails nothing further is sent, and the phone (if still connected) gets that code. While the
+ * panel then waits to observe the change, a song or target change (`stale`) or an ad that starts
+ * (`ad`) before the change is seen is reported instead of success.
+ *
+ * The player target includes the version of the play model the panel shows (ShownModel): a chart
+ * reload, save, import, chord fix or settings change that replaces the model is a new target, and the
+ * replacement first marks the phone's song as changing (PhoneLink.songChanging).
  */
 import { CONTROL_OBSERVE_MS, type CommandFailure, type CommandOutcome, type PhoneCommand } from '../../phone/protocol';
 import type { PlayerControlResult } from '../messages';
@@ -100,7 +106,7 @@ async function settlePaused(player: ObservedPlayer, transport: PanelTransport, g
   const r = await transport.toggle(() => {}, g.allowed);
   if (r.cancelled) return g.refused();
   if (!r.ok) return fail('failed');
-  if (await waitUntil(() => g.moved() || !player.playing(), observeMs, pollMs, now, sleep)) return g.moved() ? fail('stale') : { ok: true, state: 'paused' };
+  if (await waitUntil(() => g.observed() !== null || !player.playing(), observeMs, pollMs, now, sleep)) return outcome(g, { ok: true, state: 'paused' });
   return fail('timeout');
 }
 
@@ -109,8 +115,8 @@ interface Gate {
   why: () => CommandFailure | null;
   /** The gate holds. */
   allowed: () => boolean;
-  /** The song or player target changed since the command started (what is observed is another song's). */
-  moved: () => boolean;
+  /** While observing the outcome: `stale` (another song's player is observed now) or `ad`, else null. */
+  observed: () => CommandFailure | null;
   /** The failure to report once the gate failed. */
   refused: () => CommandOutcome;
   /** The target the command is bound to. */
@@ -131,10 +137,19 @@ function gate(player: ObservedPlayer, signal: AbortSignal | undefined, context: 
   return {
     why,
     allowed: () => why() === null,
-    moved: () => why() === 'stale',
+    observed: () => {
+      const w = why();
+      return w === 'stale' ? 'stale' : player.isAd() ? 'ad' : null;
+    },
     refused: () => fail(why() ?? 'cancelled'),
     target,
   };
+}
+
+/** The success observed, unless the song or target changed or an ad started first. */
+function outcome(g: Gate, ok: CommandOutcome): CommandOutcome {
+  const f = g.observed();
+  return f ? fail(f) : ok;
 }
 
 /** Polls `pred` until it holds or `ms` passed. */
@@ -195,7 +210,7 @@ export async function runPhoneCommand(cmd: PhoneCommand, player: ObservedPlayer,
     }
     if (r.cancelled) return allowed() ? { ok: true, state: player.playing() ? 'playing' : 'paused' } : g.refused();
     if (!r.ok) return fail('failed');
-    if (await waitUntil(() => g.moved() || player.playing() === want, observeMs, pollMs, now, sleep)) return g.moved() ? fail('stale') : { ok: true, state: want ? 'playing' : 'paused' };
+    if (await waitUntil(() => g.observed() !== null || player.playing() === want, observeMs, pollMs, now, sleep)) return outcome(g, { ok: true, state: want ? 'playing' : 'paused' });
     return fail(want ? 'autoplay' : 'timeout');
   }
 
@@ -206,7 +221,7 @@ export async function runPhoneCommand(cmd: PhoneCommand, player: ObservedPlayer,
   const r = await transport.seek(target);
   if (!r.ok) return fail('failed');
   const landed = landedAt(target, player);
-  if (await waitUntil(() => g.moved() || landed(), observeMs, pollMs, now, sleep)) return g.moved() ? fail('stale') : { ok: true, state: player.playing() ? 'playing' : 'paused' };
+  if (await waitUntil(() => g.observed() !== null || landed(), observeMs, pollMs, now, sleep)) return outcome(g, { ok: true, state: player.playing() ? 'playing' : 'paused' });
   return fail('timeout');
 }
 
@@ -231,4 +246,49 @@ export function landedAt(target: number, player: Pick<ObservedPlayer, 'position'
     streak = p >= target - SEEK_EARLY_SEC && p <= target + SEEK_LATE_SEC ? streak + 1 : 0;
     return streak >= LANDED_SAMPLES;
   };
+}
+
+/**
+ * The play model the panel shows. `replace` is the only way it changes: when it is another model, the
+ * phone's song is marked as changing first (synchronously), then the version goes up, so a phone
+ * revision published for the previous model never acts on this one.
+ */
+export class ShownModel<M> {
+  private current: M | null = null;
+  private n = 0;
+  constructor(private readonly beforeReplace: () => void) {}
+
+  get version(): number {
+    return this.n;
+  }
+
+  replace(next: M | null): M | null {
+    if (next !== this.current) {
+      this.beforeReplace();
+      this.current = next;
+      this.n++;
+    }
+    return next;
+  }
+}
+
+/** What the player target of a phone command is made of (see ObservedPlayer.target). */
+export interface TargetParts {
+  /** ShownModel.version, or null without a model. */
+  modelVersion: number | null;
+  demo: { run: number; key: string } | null;
+  /** The chart shown was loaded for the current recording (not the previous song's, still loading). */
+  chartLoaded: boolean;
+  /** The tab player commands would go to, or null. */
+  tab: number | null;
+  recordingKey: string;
+  chartKey: string;
+}
+
+/** The player target: which song, model and player commands would act on right now, or null. */
+export function playerTargetKey(s: TargetParts): string | null {
+  if (s.modelVersion === null) return null;
+  if (s.demo) return JSON.stringify(['demo', s.demo.run, s.demo.key, s.modelVersion]);
+  if (!s.chartLoaded || s.tab === null) return null;
+  return JSON.stringify(['tab', s.tab, s.recordingKey, s.chartKey, s.modelVersion]);
 }

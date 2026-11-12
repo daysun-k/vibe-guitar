@@ -1,5 +1,6 @@
 // VGT-16 phone control, pure parts: message validation, the pairing state machine, the rate limit, the
 // panel's own command gate (PhoneLink) and how a command is carried out and reported (phone-control).
+import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   CONTROL_OBSERVE_MS,
@@ -14,7 +15,7 @@ import {
 } from '../src/phone/protocol';
 import { Pairing } from '../src/phone/pairing';
 import { PhoneLink, type SocketLike } from '../src/extension/sidepanel/phone-link';
-import { restartTargetSec, runPhoneCommand, type CommandContext, type ObservedPlayer, type PanelTransport, type TransportResult } from '../src/extension/sidepanel/phone-control';
+import { ShownModel, playerTargetKey, restartTargetSec, runPhoneCommand, type CommandContext, type ObservedPlayer, type PanelTransport, type TransportResult } from '../src/extension/sidepanel/phone-control';
 import { playToggle, type PlayToggleEnv } from '../src/extension/sidepanel/play-toggle';
 import type { PlayerControlMessage, PlayerControlResult } from '../src/extension/messages';
 import { DEFAULT_SETTINGS, normalizeSettings } from '../src/extension/storage';
@@ -1370,11 +1371,10 @@ describe('S6-R6-01: an ad that starts while a phone command waits stops it befor
         await finish(p);
         expect(p.sent, 'no player command once the ad started').toEqual(point.sentBefore);
         expect(p.st.countingIn).toBe(false);
-        if (!point.sentBefore.includes('play')) {
-          expect(p.st.playing, 'never plays').toBe(false);
-          const results = h.results().filter((r) => r.id === 1 && r.state !== 'countin');
-          expect(results).toEqual([expect.objectContaining({ ok: false, code: 'ad' })]);
-        }
+        if (!point.sentBefore.includes('play')) expect(p.st.playing, 'never plays').toBe(false);
+        // S6-R7-02: also when play went out before the ad, the phone hears ad, not success.
+        const results = h.results().filter((r) => r.id === 1 && r.state !== 'countin');
+        expect(results).toEqual([expect.objectContaining({ ok: false, code: 'ad' })]);
       });
     }
   }
@@ -1497,5 +1497,153 @@ describe('S6-R6: the link context also carries the grant (every revoke trigger, 
       expect(p.sent).toEqual(countIn ? ['pause', 'seek 4', 'play'] : ['seek 5', 'play']);
       expect(h.results().at(-1)).toMatchObject({ id: 1, ok: true, state: 'playing' });
     }
+  });
+});
+
+describe('S6-R7-02: an ad that starts before the outcome is observed is reported as ad', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('restart: the ad starts while the seek reply is pending', async () => {
+    const p = gatePanel({ countIn: false });
+    const h = wiredHarness(p);
+    h.ws.rx({ t: 'cmd', id: 1, epoch: h.epoch, rev: h.rev, cmd: 'restart', from: ID_A, grant: h.grant() });
+    await settle();
+    expect(p.sent).toEqual(['seek 4']);
+    p.st.ad = true;
+    await finish(p);
+    expect(p.sent).toEqual(['seek 4']);
+    expect(h.results().at(-1)).toMatchObject({ id: 1, ok: false, code: 'ad' });
+  });
+
+  it('pause: the ad starts while the pause reply is pending', async () => {
+    const p = gatePanel({ countIn: false });
+    p.st.playing = true;
+    const h = wiredHarness(p);
+    h.cmd(1);
+    await settle();
+    expect(p.sent).toEqual(['pause']);
+    p.st.ad = true;
+    await finish(p);
+    expect(p.sent).toEqual(['pause']);
+    expect(h.results().at(-1)).toMatchObject({ id: 1, ok: false, code: 'ad' });
+  });
+
+  it('without an ad the same steps still report success', async () => {
+    const p = gatePanel({ countIn: false });
+    const h = wiredHarness(p);
+    h.ws.rx({ t: 'cmd', id: 1, epoch: h.epoch, rev: h.rev, cmd: 'restart', from: ID_A, grant: h.grant() });
+    await finish(p);
+    expect(h.results().at(-1)).toMatchObject({ id: 1, ok: true });
+  });
+});
+
+// ---------- S6-R7-01: replacing the play model (same song) invalidates the published revision ----------
+type Bars = { bars: { startSec: number }[] };
+const MODEL_8: Bars = { bars: [{ startSec: 0 }, { startSec: 8 }] };
+const MODEL_9: Bars = { bars: [{ startSec: 0 }, { startSec: 9 }] };
+
+/** The panel's model, target and 처음부터 as sidepanel.ts wires them, for one recording in tab 101. */
+function modelPanel(marked: boolean) {
+  const p = gatePanel({ countIn: false });
+  const m = { link: null as PhoneLink | null, model: null as Bars | null };
+  const shown = new ShownModel<Bars>(() => {
+    if (marked) m.link?.songChanging();
+  });
+  m.model = shown.replace(MODEL_8);
+  p.player.target = () =>
+    playerTargetKey({ modelVersion: m.model ? shown.version : null, demo: null, chartLoaded: true, tab: 101, recordingKey: 'youtube:A', chartKey: 'youtube:A' });
+  p.st.target = 'unused';
+  p.transport.restartTarget = () => (m.model ? restartTargetSec(null, m.model.bars, p.st.position) : null);
+  // sentTo records the panel's real target.
+  const send = p.env.send;
+  p.env.send = (msg) => {
+    p.st.target = p.player.target();
+    return send(msg);
+  };
+  return { p, m, shown };
+}
+
+describe('S6-R7-01: a chart or model replaced for the same song stops commands for the previous model', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  for (const marked of [true, false]) {
+    it(`restart with the old revision after the model changed (bar 8 -> 9), ${marked ? 'marked by ShownModel' : 'model version in the target alone'}: stale, no seek`, async () => {
+      const { p, m, shown } = modelPanel(marked);
+      const h = wiredHarness(p);
+      m.link = h.link;
+      publish(h, SONG_A, p.player.target());
+      // A chart reload, save, import, chord fix or settings change: recompute() replaces the model.
+      m.model = shown.replace(MODEL_9);
+      h.ws.rx({ t: 'cmd', id: 1, epoch: h.epoch, rev: h.rev, cmd: 'restart', from: ID_A, grant: h.grant() });
+      await finish(p);
+      expect(p.sent).toEqual([]);
+      expect(h.results().at(-1)).toMatchObject({ id: 1, ok: false, code: 'stale' });
+
+      // syncPhoneSong publishes the new model's view: a command with that revision uses the new bars.
+      publish(h, SONG_B, p.player.target());
+      h.ws.rx({ t: 'cmd', id: 2, epoch: h.epoch, rev: h.rev, cmd: 'restart', from: ID_A, grant: h.grant() });
+      await finish(p);
+      expect(p.sent).toEqual(['seek 9']);
+      expect(h.results().at(-1)).toMatchObject({ id: 2, ok: true });
+    });
+  }
+
+  it('a model replaced while a play waits for the loop-start seek reply sends no play', async () => {
+    const p = gatePanel({ countIn: false, loopStart: 5 });
+    let link: PhoneLink | null = null;
+    const shown = new ShownModel<Bars>(() => link?.songChanging());
+    shown.replace(MODEL_8);
+    const h = wiredHarness(p);
+    link = h.link;
+    h.cmd(1);
+    await settle();
+    expect(p.sent).toEqual(['seek 5']);
+    shown.replace(MODEL_9);
+    await finish(p);
+    expect(p.sent).toEqual(['seek 5']);
+    expect(h.results().at(-1)).toMatchObject({ id: 1, ok: false, code: 'stale' });
+  });
+
+  it('ShownModel: only another model counts as a replacement, and the phone is told before it is shown', () => {
+    const order: string[] = [];
+    let current: Bars | null = null;
+    const shown = new ShownModel<Bars>(() => order.push(`changing (shown ${current === MODEL_8 ? '8' : current === MODEL_9 ? '9' : 'none'})`));
+    current = shown.replace(MODEL_8);
+    const v = shown.version;
+    current = shown.replace(MODEL_8);
+    expect(shown.version).toBe(v);
+    current = shown.replace(MODEL_9);
+    current = shown.replace(null);
+    expect(order).toEqual(['changing (shown none)', 'changing (shown 8)', 'changing (shown 9)']);
+    expect(shown.version).toBe(v + 2);
+  });
+
+  it('the target changes with the model version, and is null while the chart shown is the previous song\'s', () => {
+    const base = { modelVersion: 3, demo: null, chartLoaded: true, tab: 101, recordingKey: 'youtube:A', chartKey: 'youtube:A' };
+    expect(playerTargetKey(base)).not.toBe(playerTargetKey({ ...base, modelVersion: 4 }));
+    expect(playerTargetKey({ ...base, chartLoaded: false })).toBeNull();
+    expect(playerTargetKey({ ...base, modelVersion: null })).toBeNull();
+    expect(playerTargetKey({ ...base, tab: null })).toBeNull();
+    const demo = { ...base, demo: { run: 1, key: 'd' } };
+    expect(playerTargetKey(demo)).not.toBe(playerTargetKey({ ...demo, modelVersion: 4 }));
+  });
+
+  it('sidepanel.ts replaces the model only through ShownModel and builds the phone target with its version', () => {
+    const src = readFileSync(new URL('../src/extension/sidepanel/sidepanel.ts', import.meta.url), 'utf8');
+    // `const model = …` in renderModelState is a local, not the shown model.
+    const assigns = [...src.matchAll(/(?<![\w.]|const )model = (.*);/g)].map((x) => x[1]);
+    expect(assigns).toEqual(['shownModel.replace(next)']);
+    expect(src).toMatch(/modelVersion: model \? shownModel\.version : null/);
+    expect(src).toMatch(/new ShownModel<PlayModel>\(\(\) => phoneSongChanging\(\)\)/);
   });
 });
