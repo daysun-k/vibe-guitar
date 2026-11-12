@@ -1,0 +1,150 @@
+{
+  "format": "vibe-guitar-accuracy-overview",
+  "version": 1,
+  "exportedAt": "2026-11-12T09:00:00.000Z",
+  "changeWindowSec": 1,
+  "note": "timing.medianOffsetMs = auto chord change minus reference chord change (positive: auto is later). Estimate only. timing is null for edited references (their times are the auto chart's) and is pooled from manual references only.",
+  "rows": [
+    {
+      "source": "youtube",
+      "id": "sample-a",
+      "title": "예시 연습곡 1",
+      "artist": "합성 예시",
+      "referenceKind": "manual",
+      "referenceFrom": "main",
+      "manualEvents": 24,
+      "events": 24,
+      "overlapSec": 48,
+      "majmin": {
+        "score": 0.7025000000000002,
+        "evaluatedSec": 48
+      },
+      "root": {
+        "score": 0.9358333333333336,
+        "evaluatedSec": 48
+      },
+      "sevenths": {
+        "score": 0.7025000000000002,
+        "evaluatedSec": 48
+      },
+      "timing": {
+        "medianOffsetMs": 120.000000000001,
+        "matched": 23,
+        "unmatched": 0
+      }
+    },
+    {
+      "source": "youtube",
+      "id": "sample-b",
+      "title": "예시 연습곡 2",
+      "artist": "합성 예시",
+      "referenceKind": "manual",
+      "referenceFrom": "main",
+      "manualEvents": 20,
+      "events": 20,
+      "overlapSec": 40,
+      "majmin": {
+        "score": 0.9145000000000001,
+        "evaluatedSec": 40
+      },
+      "root": {
+        "score": 0.9145000000000001,
+        "evaluatedSec": 40
+      },
+      "sevenths": {
+        "score": 0.687,
+        "evaluatedSec": 40
+      },
+      "timing": {
+        "medianOffsetMs": 179.99999999999972,
+        "matched": 19,
+        "unmatched": 0
+      }
+    },
+    {
+      "source": "youtube",
+      "id": "sample-c",
+      "title": "예시 연습곡 3 (고친 코드표)",
+      "artist": "합성 예시",
+      "referenceKind": "edited",
+      "referenceFrom": "main",
+      "manualEvents": 8,
+      "events": 16,
+      "overlapSec": 32,
+      "majmin": {
+        "score": 0.75,
+        "evaluatedSec": 32
+      },
+      "root": {
+        "score": 1,
+        "evaluatedSec": 32
+      },
+      "sevenths": {
+        "score": 0.75,
+        "evaluatedSec": 32
+      },
+      "timing": null
+    }
+  ],
+  "totals": {
+    "manual": {
+      "songs": 2,
+      "overlapSec": 88,
+      "majmin": {
+        "score": 0.7988636363636364,
+        "evaluatedSec": 88
+      },
+      "root": {
+        "score": 0.926136363636364,
+        "evaluatedSec": 88
+      },
+      "sevenths": {
+        "score": 0.6954545454545457,
+        "evaluatedSec": 88
+      },
+      "timing": {
+        "medianOffsetMs": 160.00000000000014,
+        "matched": 42,
+        "unmatched": 0
+      }
+    },
+    "edited": {
+      "songs": 1,
+      "overlapSec": 32,
+      "majmin": {
+        "score": 0.75,
+        "evaluatedSec": 32
+      },
+      "root": {
+        "score": 1,
+        "evaluatedSec": 32
+      },
+      "sevenths": {
+        "score": 0.75,
+        "evaluatedSec": 32
+      },
+      "timing": null
+    },
+    "all": {
+      "songs": 3,
+      "overlapSec": 120,
+      "majmin": {
+        "score": 0.7858333333333334,
+        "evaluatedSec": 120
+      },
+      "root": {
+        "score": 0.9458333333333335,
+        "evaluatedSec": 120
+      },
+      "sevenths": {
+        "score": 0.7100000000000002,
+        "evaluatedSec": 120
+      },
+      "timing": {
+        "medianOffsetMs": 160.00000000000014,
+        "matched": 42,
+        "unmatched": 0
+      }
+    }
+  }
+}

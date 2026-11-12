@@ -11,6 +11,7 @@
     "watch": "node scripts/build.mjs --watch",
     "fetch-models": "node scripts/fetch-models.mjs",
     "bench": "node scripts/bench.mjs",
+    "accuracy-report": "node scripts/accuracy-report.mjs",
     "phone": "node scripts/phone.mjs",
     "phone-check": "node scripts/phone-check.mjs"
   },
