@@ -21,3 +21,33 @@ export async function prepareCountIn(
   if (!seek.ok) return { kind: 'failed', step: 'seek', reason: seek.reason };
   return { kind: 'ready' };
 }
+
+export type CountInRun = { kind: 'played'; result: PlayerControlResult } | { kind: 'cancelled' } | { kind: 'rate-changed' };
+
+/**
+ * The count-in beats, then play. A speed change (the panel or the site's own menu) cancels it: the
+ * beats were timed for the old rate. The rate and the run are checked before every beat and again
+ * after the last wait, so a change reported during the last beat never lets the play command go out.
+ */
+export async function runCountIn(o: {
+  beats: number;
+  stepMs: number;
+  startRate: number;
+  rate: () => number;
+  isCurrent: () => boolean;
+  onBeat: (left: number, index: number) => void;
+  play: () => Promise<PlayerControlResult>;
+  wait?: (ms: number) => Promise<void>;
+}): Promise<CountInRun> {
+  const wait = o.wait ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  const stop = (): CountInRun | null => (!o.isCurrent() ? { kind: 'cancelled' } : o.rate() !== o.startRate ? { kind: 'rate-changed' } : null);
+  for (let k = 0; k < o.beats; k++) {
+    const s = stop();
+    if (s) return s;
+    o.onBeat(o.beats - k, k);
+    await wait(o.stepMs);
+  }
+  const s = stop();
+  if (s) return s;
+  return { kind: 'played', result: await o.play() };
+}

@@ -22,6 +22,7 @@ import {
   rateLabel,
   resolveLoop,
 } from '../src/play/practice';
+import { runCountIn } from '../src/extension/sidepanel/countin-prep';
 import { AudioPlacer, type PlayerAnchor } from '../src/recognize/placement';
 import { ListeningSession, MAX_SESSION_SEC } from '../src/recognize/session';
 
@@ -211,10 +212,65 @@ describe('count-in only on an explicit start', () => {
     expect(body).toContain('countingIn) return'); // no loop decisions during a count-in either
   });
 
-  it('a speed change during a count-in cancels it (the beats were timed for the old rate)', () => {
+  /** Runs a 4-beat count-in at 1x; `change(k)` may change the reported rate during wait k (0-based). */
+  async function countIn(change: (waitIndex: number, setRate: (r: number) => void) => void, current = () => true) {
+    let rate = 1;
+    const beats: number[] = [];
+    let plays = 0;
+    let waits = 0;
+    const r = await runCountIn({
+      beats: 4,
+      stepMs: 500,
+      startRate: 1,
+      rate: () => rate,
+      isCurrent: current,
+      onBeat: (left) => beats.push(left),
+      play: async () => {
+        plays++;
+        return { ok: true };
+      },
+      wait: async () => {
+        change(waits++, (x) => (rate = x)); // a status report arrives while this beat waits
+      },
+    });
+    return { r, beats, plays };
+  }
+
+  it('plays after all beats when nothing changes', async () => {
+    const { r, beats, plays } = await countIn(() => undefined);
+    expect(r).toEqual({ kind: 'played', result: { ok: true } });
+    expect(beats).toEqual([4, 3, 2, 1]);
+    expect(plays).toBe(1);
+  });
+
+  it('a speed change during the first beat cancels the count-in without playing', async () => {
+    const { r, beats, plays } = await countIn((k, set) => k === 0 && set(0.5));
+    expect(r).toEqual({ kind: 'rate-changed' });
+    expect(beats).toEqual([4]);
+    expect(plays).toBe(0);
+  });
+
+  it('a speed change during the LAST beat (e.g. the site menu) cancels it too: no play command (review VGT9-R1-01)', async () => {
+    const { r, beats, plays } = await countIn((k, set) => k === 3 && set(0.75));
+    expect(r).toEqual({ kind: 'rate-changed' });
+    expect(beats).toEqual([4, 3, 2, 1]);
+    expect(plays).toBe(0);
+  });
+
+  it('a count-in stopped during its last beat (play pressed again, tab change) does not play', async () => {
+    let live = true;
+    const { r, plays } = await countIn((k) => {
+      if (k === 3) live = false;
+    }, () => live);
+    expect(r).toEqual({ kind: 'cancelled' });
+    expect(plays).toBe(0);
+  });
+
+  it('the panel uses runCountIn for its count-in and plays only through it', () => {
     const src = readFileSync(new URL('../src/extension/sidepanel/sidepanel.ts', import.meta.url), 'utf8');
     const toggle = src.slice(src.indexOf('async function togglePlay(): Promise<void> {'), src.indexOf('// ---------- practice: speed'));
-    expect(toggle).toMatch(/if \(currentRate\(\) !== rate\) \{\s*stopCountIn\(\);\s*return setText\('countin-status', RATE_CANCELS_COUNTIN\)/);
+    expect(toggle).toContain('await runCountIn({');
+    expect(toggle).toMatch(/done\.kind === 'rate-changed'\) \{\s*stopCountIn\(\);\s*return setText\('countin-status', RATE_CANCELS_COUNTIN\)/);
     const setRate = src.slice(src.indexOf('async function setRate('), src.indexOf('function resetRateForNewRecording'));
     expect(setRate).toMatch(/if \(countingIn\) \{\s*stopCountIn\(\);/);
   });

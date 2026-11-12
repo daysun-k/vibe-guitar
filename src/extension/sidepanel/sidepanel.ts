@@ -59,7 +59,7 @@ import { adoptAutoChart, correctChartEvent, listCharts, loadAutoChart, loadChart
 import { escapeHtml, renderShapeDiagram } from './diagram';
 import { LyricsAsker, lyricsOutcome, lyricsLookupReady } from './lyrics-asker';
 import { controlTabId, keepPlayerAfterDemo } from './player-target';
-import { prepareCountIn } from './countin-prep';
+import { prepareCountIn, runCountIn } from './countin-prep';
 import { ChordFixer } from './fix';
 import { capoReason, unplayableLine, PlayScreen, formatTime, type LoopMarks } from './play';
 
@@ -1047,22 +1047,28 @@ async function togglePlay(): Promise<void> {
   const num = box.querySelector('b')!;
   countingIn = true;
   box.classList.add('on');
-  for (let i = n; i >= 1; i--) {
-    if (run !== countInRun) return;
-    // A speed change (the panel or the site's own menu) cancels the count-in: its beats were timed for the old rate.
-    if (currentRate() !== rate) {
-      stopCountIn();
-      return setText('countin-status', RATE_CANCELS_COUNTIN);
-    }
-    num.textContent = String(i);
-    click((n - i) % m.big.bigPerBar === 0);
-    await new Promise((r) => setTimeout(r, stepMs));
+  const done = await runCountIn({
+    beats: n,
+    stepMs,
+    startRate: rate,
+    rate: currentRate,
+    isCurrent: () => run === countInRun,
+    onBeat: (left, k) => {
+      num.textContent = String(left);
+      click(k % m.big.bigPerBar === 0);
+    },
+    play: () => {
+      countingIn = false;
+      box.classList.remove('on');
+      return sendControl({ type: 'player-control', action: 'play' });
+    },
+  });
+  if (done.kind === 'cancelled') return;
+  if (done.kind === 'rate-changed') {
+    stopCountIn();
+    return setText('countin-status', RATE_CANCELS_COUNTIN);
   }
-  if (run !== countInRun) return;
-  countingIn = false;
-  box.classList.remove('on');
-  const play = await sendControl({ type: 'player-control', action: 'play' });
-  if (!play.ok) setText('countin-status', `재생을 다시 시작하지 못했어요 (${play.reason ?? '알 수 없음'}).`);
+  if (!done.result.ok) setText('countin-status', `재생을 다시 시작하지 못했어요 (${done.result.reason ?? '알 수 없음'}).`);
 }
 
 // ---------- practice: speed, A/B loop ----------
