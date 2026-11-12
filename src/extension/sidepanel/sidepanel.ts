@@ -9,6 +9,7 @@ import { EXAMPLE_CHARTS } from '../../chart/examples';
 import type { Chart, Recording, Timing } from '../../chart/types';
 import { validateChart } from '../../chart/validate';
 import { compareCharts } from '../../eval/metrics';
+import { accuracyExport, accuracyRow, overviewFromRows, type AccuracyOverview, type AccuracyRow } from '../../eval/overview';
 import {
   addTap,
   attachChartToRecording,
@@ -55,12 +56,13 @@ import type {
   PlayerStateMessage,
 } from '../messages';
 import { estimatePosition, type PlayerSnapshot } from '../playview';
-import { adoptAutoChart, correctChartEvent, listCharts, loadAutoChart, loadChart, loadSettings, normalizeSettings, saveChart, saveSettings, undoChartCorrection, type Settings } from '../storage';
+import { adoptAutoChart, correctChartEvent, listCharts, loadAccuracyPairs, loadAutoChart, loadChart, loadSettings, normalizeSettings, saveChart, saveSettings, undoChartCorrection, type Settings } from '../storage';
 import { escapeHtml, renderShapeDiagram } from './diagram';
 import { LyricsAsker, lyricsOutcome, lyricsLookupReady } from './lyrics-asker';
 import { controlTabId, keepPlayerAfterDemo } from './player-target';
 import { prepareCountIn, runCountIn } from './countin-prep';
 import { ChordFixer } from './fix';
+import { OVERVIEW_EMPTY, renderOverviewHtml } from './overview';
 import { capoReason, unplayableLine, PlayScreen, formatTime, type LoopMarks } from './play';
 
 // ---------- DOM helpers ----------
@@ -239,6 +241,49 @@ function renderPending(): void {
       ? `직접 만든 코드표와의 일치율(겹친 ${formatTime(c.overlapSec)}): 장·단 ${pct(c.majmin.score)} · 근음 ${pct(c.root.score)} · 7th 포함 ${pct(c.sevenths.score)}${c.beatF ? ` · 박 F ${c.beatF.f.toFixed(2)}` : ''}`
       : '두 코드표가 겹치는 구간이 없습니다.',
   );
+}
+
+// ---------- accuracy overview ----------
+let overview: AccuracyOverview | null = null;
+let overviewRun = 0;
+
+/**
+ * Recomputes the overview each time the section opens. Read-only. Runs on the panel's
+ * thread, one song per task (a few ms each), so many songs never block the panel for long.
+ */
+async function refreshOverview(): Promise<void> {
+  const run = ++overviewRun;
+  const body = $('acc-body');
+  $('acc-export').hidden = true;
+  overview = null;
+  if (!hasChrome) return setHtml(body, `<p class="muted">${OVERVIEW_EMPTY}</p>`);
+  setHtml(body, '<p class="muted">계산하고 있어요…</p>');
+  try {
+    const pairs = await loadAccuracyPairs();
+    const rows: AccuracyRow[] = [];
+    for (const p of pairs) {
+      rows.push(accuracyRow(p));
+      await new Promise((r) => setTimeout(r, 0));
+      if (run !== overviewRun) return;
+    }
+    if (run !== overviewRun) return;
+    overview = overviewFromRows(rows);
+    setHtml(body, renderOverviewHtml(overview));
+    $('acc-export').hidden = !rows.length;
+  } catch (e) {
+    if (run === overviewRun) setHtml(body, `<p class="err">정확도를 계산하지 못했어요: ${escapeHtml(e instanceof Error ? e.message : String(e))}</p>`);
+  }
+}
+
+function exportOverview(): void {
+  if (!overview) return;
+  const now = new Date();
+  const blob = new Blob([JSON.stringify(accuracyExport(overview, now), null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `vibe-guitar-accuracy-${now.toISOString().slice(0, 10)}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
 // ---------- lyrics ----------
@@ -1509,6 +1554,10 @@ function bindEditor(): void {
     chrome.runtime.sendMessage({ type: 'listen-analyze', target: 'offscreen' } satisfies ExtensionMessage).catch(() => setText('listen-status', '캡처 중이 아닙니다'));
   };
   $('listen-adopt').onclick = () => void doAdoptAuto();
+  $('acc-overview').addEventListener('toggle', () => {
+    if (($('acc-overview') as HTMLDetailsElement).open) void refreshOverview();
+  });
+  $('acc-export').onclick = exportOverview;
   $('cap-stop').onclick = () => {
     chrome.runtime.sendMessage({ type: 'capture-stop', target: 'offscreen' } satisfies ExtensionMessage).catch(() => setText('cap-state', '캡처 중이 아닙니다'));
   };

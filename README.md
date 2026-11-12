@@ -204,6 +204,19 @@ After the toolbar click starts capture, the offscreen document also runs listeni
   ranges only it heard, so a short re-analysis never shrinks coverage. All chart writes (editor save, import,
   auto chart, adopt) run one at a time in the service worker, so an auto chart cannot overwrite a chart you
   saved while it was being stored.
+- **정확도 모아 보기** (듣기·캡처 tab, collapsed): every stored recording that has both your chart and an auto
+  chart, compared with the same numbers as `npm run bench -- --compare` (overlap, majmin / root / sevenths
+  WCSR), plus the chord-change timing: for each of your chord changes inside the overlap, the nearest auto
+  change within ±1 s, reported as the median offset (auto minus yours, ms) with matched and unmatched counts.
+  Your chart is the chart in use when it is manual or edited, otherwise the hand-made chart kept in
+  `chartbackup:`; bundled examples are skipped. Totals are weighted by evaluated seconds. Fixed auto charts
+  (`edited`, see 코드 고치기) are listed as 고친 코드표(일부만 직접 확인) and totalled separately: their unfixed
+  chords and all their times are still the auto chart's, so they inflate agreement and say nothing about timing.
+  From at least 5 matched changes of hand-made charts it suggests a 싱크 오프셋 for playing auto charts (an
+  estimate; nothing is changed automatically, and the 50 ms capture latency constant stays as is).
+  **결과 내보내기** downloads one JSON file with the per-song numbers and totals (no audio, lyrics or chords).
+  It reads storage only, each time the section opens, one song per task on the panel's thread (about 1.5 ms
+  for a 4-minute song), so it needs no worker.
 - YouTube Music: the adapter reports the id of what the player is actually playing
   (`movie_player.getVideoData()`), which can differ from the URL `v=`; a yellow notice shows when it differs or
   when only the URL id was available.
