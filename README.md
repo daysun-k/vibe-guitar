@@ -119,7 +119,8 @@ Port of the approved mockup B ("진행표형", diagrams 3x):
   카운트인을 멈췄어요. 다시 눌러 주세요.").
 - **Fixing one chord (코드 고치기)**: the button opens a small panel at the chord under the playhead (‹ ›
   step to the previous/next chord and seek there; the bar gets a dashed outline). Pick a root and a kind (or
-  코드 없음) and press "이 코드로 고치기". Names follow the screen: with a capo the picker shows shape names
+  코드 없음) and press "이 코드로 고치기". A bass row (베이스 없음 or /C … /B) keeps a slash chord's bass
+  by default (C/B → pick Am → Am/B) and lets you change or remove it; a bass equal to the root is no slash. Names follow the screen: with a capo the picker shows shape names
   (the sounding name only as a small extra when 실제 음 이름 보기 is on); the chart stores the sounding chord,
   moved up by the capo and spelled for the key (shape G with capo 1 in A♭ major → A♭). Only that event's
   chord changes: its time, every other chord with its confidence and the heard ranges stay. The event

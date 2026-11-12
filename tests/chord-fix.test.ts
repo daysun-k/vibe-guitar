@@ -106,8 +106,8 @@ describe('pickToConcert: capo shape names to stored sounding chords', () => {
   });
 
   it('the picker starts at the shown shape and names choices like capo shapes', () => {
-    expect(splitPick('A♭m7')).toEqual({ rootPc: 8, quality: 'm7' });
-    expect(splitPick('C/B')).toEqual({ rootPc: 0, quality: '' });
+    expect(splitPick('A♭m7')).toEqual({ rootPc: 8, quality: 'm7', bassPc: null });
+    expect(splitPick('C/B')).toEqual({ rootPc: 0, quality: '', bassPc: 11 });
     expect(splitPick('N.C.')).toBeNull();
     expect(pickName(8, 'm')).toBe('G#m');
     expect(pickName(8, '')).toBe('Ab');
@@ -117,6 +117,47 @@ describe('pickToConcert: capo shape names to stored sounding chords', () => {
     expect(eventIndexAt([{ startSec: 1 }, { startSec: 3 }, { startSec: 5 }], 4.2)).toBe(1);
     expect(originNote({ source: 'auto', confidence: 0.4 })).toContain('확실하지 않음');
     expect(originNote({ source: 'manual', confidence: 1 })).toBe('직접 고른 코드');
+  });
+});
+
+describe('chord fix keeps a slash bass', () => {
+  const inAb = estimateKey(timedChordsOf(chart('manual', [[0, 'Ab'], [2, 'Db'], [4, 'Eb'], [6, 'Fm'], [8, 'Ab']], [[0, 10]])));
+  const inE = estimateKey(timedChordsOf(chart('manual', [[0, 'E'], [2, 'A'], [4, 'B'], [6, 'C#m'], [8, 'E']], [[0, 10]])));
+
+  it('the picker starts at the original bass, also when shown with ♭/♯', () => {
+    expect(splitPick('Am/G')).toEqual({ rootPc: 9, quality: 'm', bassPc: 7 });
+    expect(splitPick('A♭/E♭')).toEqual({ rootPc: 8, quality: '', bassPc: 3 });
+    expect(splitPick('F♯m7/C♯')).toEqual({ rootPc: 6, quality: 'm7', bassPc: 1 });
+    expect(splitPick('C')?.bassPc).toBeNull(); // 베이스 없음 preselected
+  });
+
+  it('changing the root or kind keeps the bass; removing it drops the slash', () => {
+    const p = splitPick('C/B')!;
+    expect(pickName(9, 'm', p.bassPc)).toBe('Am/B'); // C/B -> pick Am -> Am/B
+    expect(pickName(p.rootPc, 'maj7', p.bassPc)).toBe('Cmaj7/B');
+    expect(pickName(9, 'm', null)).toBe('Am'); // 베이스 없음
+    expect(pickToConcert(pickName(9, 'm', p.bassPc), 0, null)).toBe('Am/B');
+    const fixed = correctChordEvent(chart('recognizer', [[0, 'C'], [2, 'C/B'], [4, 'Am']], [[0, 6]]), { startSec: 2, chord: 'C/B' }, 'Am/B', NOW);
+    expect(fixed.events.map((e) => e.chord)).toEqual(['C', 'Am/B', 'Am']);
+  });
+
+  it('a bass equal to the root is not written as a slash', () => {
+    expect(pickName(0, '', 0)).toBe('C');
+    expect(pickName(9, 'm7', 9)).toBe('Am7');
+    expect(pickToConcert('C/C', 0, null)).toBe('C');
+    expect(pickToConcert('G/G', 1, inAb)).toBe('Ab');
+  });
+
+  it('capo shape names move root and bass up and spell both for the key', () => {
+    expect(pickName(9, 'm', 0)).toBe('Am/C'); // shape names like capo shapes
+    expect(pickName(0, '', 1)).toBe('C/C#');
+    expect(pickName(0, '', 3)).toBe('C/Eb');
+    expect(pickToConcert('Am/C', 1, inAb)).toBe('Bbm/Db'); // not Bbm/C#
+    expect(pickToConcert('Am/C', 1, null)).toBe('Bbm/C#'); // no key: guitar spelling
+    expect(pickToConcert('G/F#', 1, inAb)).toBe('Ab/G');
+    expect(pickToConcert('C/B', 2, inE)).toBe('D/C#');
+    expect(pickToConcert('B/Eb', 0, inE)).toBe('B/D#'); // sharp key respells the bass
+    expect(shownName('Bbm/Db', 1)).toBe('Am/C'); // shown back as the same shape
   });
 });
 
