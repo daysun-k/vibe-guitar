@@ -15,7 +15,7 @@ import {
 } from '../src/phone/protocol';
 import { Pairing } from '../src/phone/pairing';
 import { PhoneLink, type SocketLike } from '../src/extension/sidepanel/phone-link';
-import { ShownModel, modelSongId, playerTargetKey, songIdOf, songViewReady, restartTargetSec, barIndexAt, barStepTargetSec, type TargetParts, runPhoneCommand, type CommandContext, type ObservedPlayer, type PanelTransport, type TransportResult } from '../src/extension/sidepanel/phone-control';
+import { ShownModel, modelSongId, playerTargetKey, songIdOf, songViewReady, restartTargetSec, barIndexAt, barStepTargetSec, type TargetParts, runPhoneCommand, panelClock, intervalProgressSec, RATE_CHANGE_CREDIT_SEC, type CommandContext, type ObservedPlayer, type PanelTransport, type TransportResult, type WrapSample } from '../src/extension/sidepanel/phone-control';
 import { playToggle, type PlayToggleEnv } from '../src/extension/sidepanel/play-toggle';
 import type { PlayerControlMessage, PlayerControlResult } from '../src/extension/messages';
 import { DEFAULT_SETTINGS, chartSongKey, normalizeSettings } from '../src/extension/storage';
@@ -289,7 +289,7 @@ const FAKE_BARS = Array.from({ length: 10 }, (_, i) => ({ startSec: i * 2 }));
 /** A fake panel: the player reacts after `lagMs` (or never, like an autoplay block). */
 function fakePanel(o: { playing?: boolean; countIn?: boolean; countingIn?: boolean; heldCountIn?: boolean; ad?: boolean; target?: boolean; lagMs?: number; blockPlay?: boolean; position?: number; rate?: number; noSeek?: boolean; target10?: boolean; loopBars?: [number, number]; landAt?: number; loopA?: boolean; bars?: { startSec: number }[]; restartAt?: number; pollMs?: number } = {}) {
   let t = 0;
-  const st = { playing: o.playing ?? false, countingIn: o.countingIn ?? false, position: o.position ?? 10, ad: o.ad ?? false, wrap: null as { at: number; position: number } | null };
+  const st = { playing: o.playing ?? false, countingIn: o.countingIn ?? false, position: o.position ?? 10, ad: o.ad ?? false, wrap: null as WrapSample | null };
   let countInDone: ((r: TransportResult) => void) | null = null;
   /** The held count-in reaches its end: plays only if nobody cancelled it. */
   const endCountIn = () => {
@@ -617,7 +617,7 @@ describe('runPhoneCommand: the outcome follows the observed player state', () =>
     // 240 BPM 2/4 (0.5 s bars), loop over bars 0..20 = [0, 10.5), 2x. 이전 마디 at 10.2 seeks 9.51; the
     // next poll comes 500 ms later, after the panel's loop jumped back to A (now at 0.31).
     const bars = Array.from({ length: 30 }, (_, i) => ({ startSec: i * 0.5 }));
-    const scenario = (wrap: { at: number; position: number }, preset: { at: number; position: number } | null = null) => {
+    const scenario = (wrap: WrapSample, preset: WrapSample | null = null) => {
       const f = fakePanel({ playing: true, rate: 2, position: 10.2, bars, loopBars: [0, 20], noSeek: true, pollMs: 500 });
       f.st.wrap = preset;
       f.schedule(500, () => {
@@ -627,17 +627,100 @@ describe('runPhoneCommand: the outcome follows the observed player state', () =>
       return f;
     };
     it('the position seen just before the jump in the window counts', async () => {
-      const f = scenario({ at: 400, position: 9.75 });
+      const f = scenario({ at: 400, position: 9.75, target: 'song' });
       expect(await f.run('prev-bar')).toEqual({ ok: true, state: 'playing' });
       expect(f.calls).toEqual(['seek 9.51']);
     });
     it('a pre-jump position outside the window does not count (dropped seek)', async () => {
-      const f = scenario({ at: 150, position: 10.5 });
+      const f = scenario({ at: 150, position: 10.5, target: 'song' });
       expect(await f.run('prev-bar')).toEqual({ ok: false, code: 'timeout' });
     });
     it('a jump from before the seek is never taken', async () => {
-      const f = scenario({ at: 0, position: 9.6 }, { at: 0, position: 9.6 });
+      const f = scenario({ at: 0, position: 9.6, target: 'song' }, { at: 0, position: 9.6, target: 'song' });
       expect(await f.run('prev-bar')).toEqual({ ok: false, code: 'timeout' });
+    });
+    it('S6-R15-02: a jump the panel saw for another tab (target) never counts, even in the window', async () => {
+      const f = scenario({ at: 400, position: 9.75, target: 'another-tab' });
+      expect(await f.run('prev-bar')).toEqual({ ok: false, code: 'timeout' });
+    });
+  });
+
+  it('S6-R15-01: 0.5x -> 1x just before a late first observation (2.5 s) with a dropped seek is not success', async () => {
+    // Target 10 from 11.5, the first observation after the seek only at 2.5 s, the rate became 1x just
+    // before it: the position is 12.75 (real progress 1.25 s). The higher rate counts for at most 0.1 s,
+    // so the bound is 10 + 1.3 + 0.35 = 11.65, not 12.85; later polls never catch up.
+    const opts = { playing: true, rate: 0.5, position: 11.5, noSeek: true, target10: true, pollMs: 2500 };
+    const f = fakePanel(opts);
+    f.schedule(2500, () => (opts.rate = 1));
+    expect(await f.run('restart')).toEqual({ ok: false, code: 'timeout' });
+    expect(f.calls).toEqual(['seek 10']);
+  });
+
+  it('S6-R15-01: the mirror case (2x -> 0.5x right after the seek, dropped, observed late) is not success either', async () => {
+    // From 11, the rate dropped to 0.5x 50 ms after the seek; at 2.5 s the position is 11 + 0.1 + 1.225
+    // (the fake's own playback ran at 2x until the observation, so the real progress is set here).
+    const opts = { playing: true, rate: 2, position: 11, noSeek: true, target10: true, pollMs: 2500 };
+    const f = fakePanel(opts);
+    f.schedule(2500, () => {
+      opts.rate = 0.5;
+      f.st.position = 11 + 0.1 + 1.225;
+    });
+    expect(await f.run('restart')).toEqual({ ok: false, code: 'timeout' });
+  });
+
+  it('S6-R15-01: per interval, the higher rate is credited for at most RATE_CHANGE_CREDIT_SEC', () => {
+    // A poll-sized interval: the higher rate for all of it (S6-R14-01 keeps the progress already made).
+    expect(intervalProgressSec(2, 0.5, 50)).toBeCloseTo(0.1);
+    expect(intervalProgressSec(0.5, 2, 100)).toBeCloseTo(0.2);
+    // A long gap: the lower rate, plus the difference for 0.1 s only.
+    expect(RATE_CHANGE_CREDIT_SEC).toBe(0.1);
+    expect(intervalProgressSec(0.5, 1, 2500)).toBeCloseTo(1.3);
+    expect(intervalProgressSec(1, 0.5, 2500)).toBeCloseTo(1.3);
+    expect(intervalProgressSec(0, 1, 2500)).toBeCloseTo(0.1); // paused -> playing
+    expect(intervalProgressSec(1, 1, 2500)).toBeCloseTo(2.5);
+    expect(intervalProgressSec(1, 1, -5)).toBe(0);
+  });
+
+  describe('S6-R15-02: seek and wrap times are on the monotonic panel clock', () => {
+    afterEach(() => vi.restoreAllMocks());
+    // Paused at 9; 다음 마디 to 10.01 is accepted but never applied. Real timers, default clock.
+    const run = (wrapAt: () => WrapSample | null) => {
+      const player: ObservedPlayer = {
+        playing: () => false,
+        countingIn: () => false,
+        position: () => 9,
+        rate: () => 1,
+        isAd: () => false,
+        target: () => 'song',
+        wrapSample: wrapAt,
+      };
+      const transport: PanelTransport = {
+        toggle: async () => ({ ok: true }),
+        seek: async () => ({ ok: true }),
+        restartTarget: () => null,
+        barTarget: (step) => barStepTargetSec(step, FAKE_BARS, 9),
+        cancelCountIn: () => {},
+      };
+      return runPhoneCommand('next-bar', player, transport, { pollMs: 10, observeMs: 300 });
+    };
+    it('a wall-clock rollback never makes a wrap taken before the seek count', async () => {
+      const stale: WrapSample = { at: panelClock(), position: 10.05, target: 'song' };
+      const wall = Date.now();
+      vi.spyOn(Date, 'now').mockImplementation(() => wall - 3_600_000); // the wall clock went back an hour
+      expect(await run(() => stale)).toEqual({ ok: false, code: 'timeout' });
+    });
+    it('a wrap taken after the seek still counts across the rollback', async () => {
+      const wall = Date.now();
+      vi.spyOn(Date, 'now').mockImplementation(() => wall - 3_600_000);
+      let fresh: WrapSample | null = null;
+      setTimeout(() => (fresh = { at: panelClock(), position: 10.05, target: 'song' }), 30);
+      expect(await run(() => fresh)).toEqual({ ok: true, state: 'paused' });
+    });
+    it('the panel stamps loop jumps and its seeks on panelClock and binds the wrap to the player target', () => {
+      const src = readFileSync(new URL('../src/extension/sidepanel/sidepanel.ts', import.meta.url), 'utf8');
+      expect(src).not.toMatch(/jumper\.seeked\([^)]*Date\.now/);
+      expect(src).toMatch(/const nowMs = panelClock\(\);/);
+      expect(src).toMatch(/loopWrap = \{ at: nowMs, position: positionSec, target: phonePlayer\.target\(\) \};/);
     });
   });
 

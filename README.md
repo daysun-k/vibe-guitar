@@ -262,9 +262,13 @@ player. A command runs through the panel's own play button and bar-click seek (c
 change (up to 3 s); 처음부터, 이전 마디 and 다음 마디 count only once an observation after the seek has
 the position between 0.1 s before the target (the same 0.1 s the bar lookup uses, so a position still in the
 bar before never counts) and the target plus what playback can have added since the seek (summed per
-observation interval at the higher of the speeds at its two ends) plus 0.35 s (so a
+observation interval: the lower of the speeds at its two ends for the whole interval, and the higher one for
+at most 0.1 s of it, because the moment of a speed change inside the interval is not known; so a late first
+look after a speed change never credits the new speed for the whole wait) plus 0.35 s (so a
 correct seek seen late at a high speed counts). When the panel's A/B loop jumps back to A before the next
-look, the position it saw just before the jump counts as one more observation by the same rule. If a seek is dropped while playing and normal playback
+look, the position it saw just before the jump counts as one more observation by the same rule, but only if
+it was taken after the seek went out (on a monotonic clock, so changing the Mac's clock never revives an
+old one) and for the same tab, song and chart the command was sent for. If a seek is dropped while playing and normal playback
 carries the position into that range before the 3 s are up, it counts as success: the position is then at
 the target. Only the panel
 grants control: pressing 승인 gives that phone a new grant number, the relay stamps it on the phone's commands,

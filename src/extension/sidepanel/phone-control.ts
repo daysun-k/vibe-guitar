@@ -43,12 +43,26 @@ export interface ObservedPlayer {
    */
   target(): string | null;
   /**
-   * The position the panel observed just before its loop jumped back from B to A, and when (ms on the
-   * `now` clock), or null. A seek command that is still waiting takes it as one more observation at
-   * that time, so a step that landed and then played past B before the next poll still counts.
+   * The position the panel observed just before its loop jumped back from B to A, when (ms on the
+   * monotonic `now` clock, panelClock), and the player target it was taken for (target()), or null.
+   * A seek command that is still waiting takes it as one more observation at that time, so a step
+   * that landed and then played past B before the next poll still counts. A sample taken for another
+   * target (another tab, song or chart) never counts.
    */
-  wrapSample?(): { at: number; position: number } | null;
+  wrapSample?(): WrapSample | null;
 }
+
+export interface WrapSample {
+  at: number;
+  position: number;
+  target: string | null;
+}
+
+/**
+ * The panel's clock for phone commands and loop wraps: monotonic (performance.now), so a wall-clock
+ * change (NTP, the user setting the time) never makes an older wrap sample look newer than a seek.
+ */
+export const panelClock = (): number => performance.now();
 
 export type { TransportResult };
 
@@ -96,6 +110,7 @@ export interface RunOptions {
   signal?: AbortSignal;
   observeMs?: number;
   pollMs?: number;
+  /** Defaults to panelClock (monotonic). */
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
 }
@@ -107,6 +122,24 @@ export const SONG_CHANGED: CommandFailure = 'stale';
 
 /** How far past the target, beyond what playback can have added since the seek, an observation may be. */
 export const SEEK_SLACK_SEC = 0.35;
+
+/**
+ * When the rate differs at the two ends of an observation interval, the change happened at an unknown
+ * time inside it: the higher rate is credited for at most this long, the lower one for the rest.
+ */
+export const RATE_CHANGE_CREDIT_SEC = 0.1;
+
+/**
+ * Playback progress (seconds) the allowance may grow by over an interval of `dtMs` whose ends saw the
+ * rates `r0` and `r1` (0 while paused): the lower rate for the whole interval plus the difference for
+ * at most RATE_CHANGE_CREDIT_SEC. For a poll-sized interval (<= 0.1 s) that is the higher rate times
+ * its length; over a long gap (a late first observation) it never credits the higher rate for longer
+ * than 0.1 s, so the allowance exceeds real progress by at most |r1 - r0| x 0.1 s (S6-R15-01).
+ */
+export function intervalProgressSec(r0: number, r1: number, dtMs: number): number {
+  const dt = Math.max(0, dtMs) / 1000;
+  return Math.min(r0, r1) * dt + Math.abs(r1 - r0) * Math.min(dt, RATE_CHANGE_CREDIT_SEC);
+}
 
 /** Pauses the player if it plays (e.g. started on the Mac during a count-in) and reports what it shows. */
 async function settlePaused(player: ObservedPlayer, transport: PanelTransport, g: Gate, observeMs: number, pollMs: number, now: () => number, sleep: (ms: number) => Promise<void>): Promise<CommandOutcome> {
@@ -220,7 +253,7 @@ export function barStepTargetSec(step: -1 | 1, bars: readonly { startSec: number
 }
 
 export async function runPhoneCommand(cmd: PhoneCommand, player: ObservedPlayer, transport: PanelTransport, o: RunOptions = {}): Promise<CommandOutcome> {
-  const now = o.now ?? Date.now;
+  const now = o.now ?? panelClock;
   const sleep = o.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const observeMs = o.observeMs ?? CONTROL_OBSERVE_MS;
   const pollMs = o.pollMs ?? 50;
@@ -266,7 +299,7 @@ export async function runPhoneCommand(cmd: PhoneCommand, player: ObservedPlayer,
   // seek() sends synchronously, so this is the check immediately before the seek goes out.
   if (!allowed()) return g.refused();
   // The window's elapsed time counts from just before the seek goes out.
-  const landed = landedAt(target, player, now);
+  const landed = landedAt(target, player, now, g.target);
   const r = await transport.seek(target);
   if (!r.ok) return fail('failed');
   if (await waitUntil(() => g.observed() !== null || landed(), observeMs, pollMs, now, sleep)) return outcome(g, { ok: true, state: player.playing() ? 'playing' : 'paused' });
@@ -278,8 +311,13 @@ export async function runPhoneCommand(cmd: PhoneCommand, player: ObservedPlayer,
  * taken after the seek was sent has the position p in
  *   target - BAR_EARLY_SEC <= p <= target + allowance + SEEK_SLACK_SEC
  * where allowance starts at 0 just before the seek goes out and grows, per observation interval, by
- * max(rate at the interval's start, rate at its end) x its length (rate 0 while paused). Within
- * CONTROL_OBSERVE_MS; otherwise the caller reports timeout. Nothing else is extrapolated.
+ * intervalProgressSec: the lower of the rates at its two ends x its length, plus the difference for at
+ * most RATE_CHANGE_CREDIT_SEC (rate 0 while paused). The time of a rate change inside an interval is
+ * not known, so a long interval (a late first observation) never credits the higher rate for longer
+ * than that: the allowance never exceeds what playback can have added by more than |change| x 0.1 s
+ * (S6-R15-01), while a change just before a poll-sized observation keeps the progress already made
+ * (S6-R14-01). Within CONTROL_OBSERVE_MS; otherwise the caller reports timeout. Nothing else is
+ * extrapolated.
  * - The lower bound is the bar lookup's own BAR_EARLY_SEC: a position still in the bar before the
  *   target (a seek accepted but not applied, or observed early) never counts (S6-R12-01).
  * - The upper bound grows with what playback can have added since the seek, so a correct seek seen
@@ -288,15 +326,18 @@ export async function runPhoneCommand(cmd: PhoneCommand, player: ObservedPlayer,
  * - A loop jump (B back to A) between two polls would hide a step that landed and played on past B:
  *   the position the panel saw just before the jump (ObservedPlayer.wrapSample) counts as one more
  *   observation at its time, judged by the same window; a pre-wrap position outside it does not count.
+ *   Only a sample taken after the seek went out (on the monotonic panelClock, so a wall-clock change
+ *   never revives an old one) and for the command's own target (`boundTarget`: never another tab's,
+ *   song's or chart's) counts (S6-R15-02).
  * - Decision: if a seek is dropped while playing and normal playback carries the position into the
  *   window before the timeout, that counts as success. Success means "the observed position is at the
  *   target now", which is then true.
  */
-export function landedAt(target: number, player: Pick<ObservedPlayer, 'position' | 'rate' | 'playing' | 'wrapSample'>, now: () => number): () => boolean {
+export function landedAt(target: number, player: Pick<ObservedPlayer, 'position' | 'rate' | 'playing' | 'wrapSample'>, now: () => number, boundTarget: string | null): () => boolean {
   const rateNow = () => (player.playing() ? player.rate() : 0);
   const inWindow = (p: number, allowance: number) => p >= target - BAR_EARLY_SEC && p <= target + allowance + SEEK_SLACK_SEC;
-  // Playback progress the position may show since the seek: per observation interval, the larger of
-  // the rates at its two ends times its length (a rate change never rewrites progress already made).
+  // Playback progress the position may show since the seek, summed per observation interval (a rate
+  // change never rewrites progress already made).
   let lastT = now();
   let lastRate = rateNow();
   let allowanceSec = 0;
@@ -305,15 +346,14 @@ export function landedAt(target: number, player: Pick<ObservedPlayer, 'position'
   return () => {
     const t = now();
     const r = rateNow();
-    const step = Math.max(lastRate, r);
     // A loop jump since the last poll: its pre-wrap position, judged with the allowance at its time.
     const w = player.wrapSample?.() ?? null;
     let wrapLanded = false;
     if (w && w.at > wrapSeenAt) {
       wrapSeenAt = w.at;
-      wrapLanded = inWindow(w.position, allowanceSec + (step * Math.max(0, Math.min(w.at, t) - lastT)) / 1000);
+      wrapLanded = w.target === boundTarget && inWindow(w.position, allowanceSec + intervalProgressSec(lastRate, r, Math.min(w.at, t) - lastT));
     }
-    allowanceSec += (step * Math.max(0, t - lastT)) / 1000;
+    allowanceSec += intervalProgressSec(lastRate, r, t - lastT);
     lastT = t;
     lastRate = r;
     return wrapLanded || inWindow(player.position(), allowanceSec);

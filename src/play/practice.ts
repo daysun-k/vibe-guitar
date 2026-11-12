@@ -104,7 +104,7 @@ export interface LoopObservation {
   positionSec: number;
   playing: boolean;
   isAd: boolean;
-  /** Date.now() of the observation. */
+  /** Time of the observation in ms on a monotonic clock (the panel's panelClock), the same clock as seeked(). */
   nowMs: number;
 }
 
