@@ -119,6 +119,38 @@ Use an auto chart with at least one chord you know is wrong, ideally one only pa
 - [ ] Demo (데모 재생): 코드 고치기 works on the demo chart and says "(데모라서 저장하지는 않아요)"; after 끝내기 the
       real song's chart is unchanged.
 
+### D3. Practice speed and A/B loop (속도, 구간 반복) — run in real Chrome
+
+Use a song with a chart on www.youtube.com, then the same checks on music.youtube.com.
+
+- [ ] Speed: press 0.5×, then 0.75×, then 1× under the transport. The song slows down and speeds up, the
+      pressed button follows, and YouTube's own ⚙ speed menu shows the same rate. Chords and lyrics stay in
+      time at every speed.
+- [ ] Site menu: set 1.25× (or 0.25×) in YouTube's own speed menu. No button stays pressed and "1.25×" shows
+      next to them; pick 1× in the site menu and the 1× button is pressed again.
+- [ ] Speed stays: pause, seek, play again: the speed is unchanged. Let the next video start (autoplay or
+      a playlist): after its ad, if any, the speed goes back to 1×. Repeat on YouTube Music (next track).
+- [ ] Listening at a slow speed: 듣기·캡처 tab shows that audio is not stored ("재생 속도 0.5x (1x에서만 기록)");
+      at 1× it records again.
+- [ ] Loop: press "구간 반복", then a bar (A) and a later bar (B). The bars A…B are tinted green with A and B
+      tags, playback moves to A, and the note says "N–M마디 반복 중". Press the bars in reverse order once
+      too: same loop.
+- [ ] Loop boundaries: play through B several times at 1×, 0.75× and 0.5×. Each time it returns to the start
+      of A right after B ends (no stutter, no double jump to A, no repeated count-in). Note how far past B it
+      goes before jumping (should be well under one beat).
+- [ ] Plain bar presses still seek while the loop is on. Press a bar right after B: playback continues there
+      and does not snap back to A. Drag YouTube's own slider far past B: it plays on; drag into the loop: it
+      loops again.
+- [ ] Count-in (설정 → 카운트인 1마디): with the loop on, pause outside the loop and press play: it counts in
+      and starts at A. Automatic repeats never count in. Change the speed during a count-in: the count-in
+      stops with "속도가 바뀌어서 카운트인을 멈췄어요" and play needs another press.
+- [ ] Ads: let a mid-roll ad play while the loop is on (or start a looped video that shows an ad): nothing
+      jumps during the ad; after it the loop works again.
+- [ ] Clearing: "반복 해제" clears with one press. Switch to another video, another tab and back, and start
+      and end 데모 재생: the loop is gone each time. Fix a chord inside the loop (코드 고치기): the loop stays.
+- [ ] 400 px panel with 카포 1: the speed buttons, "구간 반복" and the note fit on one row; the grid shows only
+      shape names.
+
 ## E. Play view B, lyrics and music fixes
 
 Screenshots of the synthetic demo: [docs/screens/](screens/) (`node scripts/screens.mjs`).
