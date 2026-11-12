@@ -905,3 +905,65 @@ describe('S6-R2-01: once the phone loses control, a phone command sends nothing 
     expect(h.results().at(-1)).toMatchObject({ id: 1, ok: false, code: 'timeout' });
   });
 });
+
+// ---------- S6-R3-01: a local revoke rejects the phone at once, before the relay's update ----------
+describe('S6-R3-01: the panel withdraws control locally before the relay confirms', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const BOTH: PhoneEntry[] = [
+    { id: ID_A, code: '1234', state: 'approved' },
+    { id: ID_B, code: '5678', state: 'pending' },
+  ];
+  const LOCAL_TRIGGERS: [string, (h: ReturnType<typeof linkHarness>) => void, PhoneEntry[]][] = [
+    ['승인 해제', (h) => h.link.revoke(), [{ ...BOTH[0]!, state: 'pending' }, BOTH[1]!]],
+    ['reject', (h) => h.link.reject(ID_A), [{ ...BOTH[0]!, state: 'rejected' }, BOTH[1]!]],
+    ['switch off', (h) => h.link.setControl(false), []],
+    ['악보대 OFF', (h) => h.link.setEnabled(false), []],
+    ['approving another phone', (h) => h.link.approve(ID_B), [{ ...BOTH[0]!, state: 'pending' }, { ...BOTH[1]!, state: 'approved' }]],
+  ];
+
+  for (const stale of [false, true]) {
+    it(`trigger -> command from the old phone${stale ? ' -> (an older list still showing it approved)' : ''} -> relay update: nothing is played`, async () => {
+      for (const [name, trigger, after] of LOCAL_TRIGGERS) {
+        const h = linkHarness();
+        h.link.setControl(true);
+        h.ws.rx({ t: 'phones', list: BOTH });
+        // Count-in off, no loop: the command is a single play.
+        const p = gatePanel({ countIn: false, loopStart: null });
+        h.answer = (c, progress, signal) => runPhoneCommand(c, p.player, p.transport, { progress, signal });
+        trigger(h);
+        if (stale) h.ws.rx({ t: 'phones', list: BOTH }); // sent by the relay before it saw the request
+        h.cmd(1);
+        h.ws.rx({ t: 'phones', list: after });
+        for (let i = 0; i < 10; i++) {
+          while (p.pending.length) p.reply();
+          await vi.advanceTimersByTimeAsync(500);
+        }
+        expect(p.sent, name).toEqual([]);
+        expect(h.commands, name).toEqual([]);
+        expect(p.st.playing, name).toBe(false);
+        const r = h.results().filter((x) => x.id === 1);
+        if (r.length) expect(['not-approved', 'off'], name).toContain(r[0]!.code);
+      }
+    });
+  }
+
+  it('approving the same phone again lifts the local withdrawal', async () => {
+    const h = linkHarness();
+    h.link.setControl(true);
+    h.ws.rx({ t: 'phones', list: BOTH });
+    h.link.revoke();
+    expect(h.link.phoneList.find((x) => x.id === ID_A)?.state).toBe('pending');
+    h.ws.rx({ t: 'phones', list: [{ ...BOTH[0]!, state: 'pending' }, BOTH[1]!] });
+    h.link.approve(ID_A);
+    h.ws.rx({ t: 'phones', list: BOTH });
+    h.cmd(1);
+    await settle();
+    expect(h.commands).toEqual(['toggle']);
+  });
+});

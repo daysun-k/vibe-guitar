@@ -116,7 +116,18 @@ export class PhoneLink {
   private parts: SongPartMessage[] = [];
   private lastAnchor: AnchorMessage | null = null;
   private control = false;
+  /** The phone list as the panel treats it: the relay's list with withdrawn approvals shown as pending. */
   private phones: PhoneEntry[] = [];
+  /** The relay's last phone list. */
+  private relayPhones: PhoneEntry[] = [];
+  /**
+   * Connections whose control the panel itself withdrew (승인 해제, 거절, switch off, another phone
+   * approved). They count as not approved from that moment, before the relay's update arrives, so a
+   * command the relay forwarded before it saw the request is rejected here. Only approving that phone
+   * again (or a new relay session, which starts without approval) lifts this: the relay approves a
+   * phone only when the panel asks it to.
+   */
+  private readonly withdrawn = new Set<string>();
   /** Highest command id handled per phone connection. */
   private readonly seen = new Map<string, number>();
   private bucket: TokenBucket;
@@ -175,6 +186,7 @@ export class PhoneLink {
     this.control = on;
     this.seen.clear();
     if (!on) {
+      this.withdraw(this.approvedId());
       this.setPhones([]);
       this.abortRunning();
     }
@@ -183,18 +195,38 @@ export class PhoneLink {
 
   approve(id: string): void {
     const p = this.phones.find((x) => x.id === id);
-    if (this.control && p && p.state !== 'approved') this.send({ t: 'approve', id, code: p.code });
+    if (!this.control || !p || p.state === 'approved') return;
+    // The relay moves the approval: the phone approved until now loses control at once.
+    const before = this.approvedId();
+    if (before !== id) this.withdraw(before);
+    this.withdrawn.delete(id);
+    this.setPhones(this.relayPhones);
+    this.send({ t: 'approve', id, code: p.code });
   }
 
   reject(id: string): void {
     const p = this.phones.find((x) => x.id === id);
-    if (this.control && p && p.state !== 'rejected') this.send({ t: 'reject', id, code: p.code });
+    if (!this.control || !p || p.state === 'rejected') return;
+    this.withdraw(id);
+    this.send({ t: 'reject', id, code: p.code });
   }
 
-  /** 승인 해제. */
+  /** 승인 해제: local first, then the relay. */
   revoke(): void {
+    this.withdraw(this.approvedId());
     if (this.control) this.send({ t: 'revoke' });
     this.abortRunning();
+  }
+
+  private approvedId(): string | null {
+    return this.phones.find((p) => p.state === 'approved')?.id ?? null;
+  }
+
+  /** Marks `id` as no longer allowed to control (see `withdrawn`) and aborts its running command. */
+  private withdraw(id: string | null): void {
+    if (id === null) return;
+    this.withdrawn.add(id);
+    this.setPhones(this.relayPhones);
   }
 
   /** Aborts running commands (all, or those not from `keep`). */
@@ -293,8 +325,9 @@ export class PhoneLink {
     ws.onopen = () => {
       this.retryMs = FIRST_RETRY_MS;
       this.setStatus({ kind: 'connected', viewers: 0 });
-      // A new relay session: nothing from an earlier one is replayed.
+      // A new relay session: nothing from an earlier one is replayed, and nothing is approved yet.
       this.seen.clear();
+      this.withdrawn.clear();
       if (this.control) this.send({ t: 'control', on: true });
       if (!this.parts.length) this.publishSong(this.songJson ? (JSON.parse(this.songJson) as SongView) : EMPTY_SONG);
       else for (const p of this.parts) this.send(p);
@@ -357,7 +390,9 @@ export class PhoneLink {
     }
   }
 
-  private setPhones(list: PhoneEntry[]): void {
+  private setPhones(relayList: PhoneEntry[]): void {
+    this.relayPhones = relayList;
+    const list = relayList.map((p) => (p.state === 'approved' && this.withdrawn.has(p.id) ? { ...p, state: 'pending' as const } : p));
     // Only the approved phone's commands may keep running (revoked, disconnected or list cleared: abort).
     this.abortRunning(this.control ? (list.find((p) => p.state === 'approved')?.id ?? null) : null);
     if (JSON.stringify(list) === JSON.stringify(this.phones)) return;

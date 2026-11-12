@@ -246,9 +246,12 @@ song the panel currently shows, with an increasing request id and at most about 
 rejected, never queued); the panel checks all of that again and refuses during ads or without a controllable
 player. A command runs through the panel's own play button and bar-click seek (count-in, loop start and
 "pause cancels the count-in" included), and the phone hears the outcome only after the panel saw the player
-change (up to 3 s); 처음부터 counts only once the observed position is at the target. When the phone loses
-control while a command is still running (count-in preparation, a pending seek or play, the count-in beats),
-nothing further reaches the player and the phone, if still connected, hears "조작 권한이 바뀌어서 취소했어요".
+change (up to 3 s); 처음부터 counts only once the observed position is at the target. The panel stops
+accepting the phone's commands the moment you press 승인 해제 or 거절, approve another phone or switch control
+off, without waiting for the relay. When the phone loses control while one of its commands is still running,
+the panel sends nothing further for it: no next seek or play, and a count-in it started stops before playing;
+the phone, if still connected, then hears "조작 권한이 바뀌어서 취소했어요". A pause, seek or play already sent
+before that may still take effect, and the phone is then told what the player actually did.
 A tap on the phone does not count as a click on the Mac's page, so Chrome may block a
 remote play until the page has been clicked once: the phone then says "맥에서 한 번 재생을 눌러 주세요". Use it
 on a trusted home Wi-Fi only (plain http, see above).
