@@ -252,7 +252,7 @@ function drawControl(t: number, ready: boolean) {
   $('pair').hidden = !waitingCode;
   if (waitingCode) {
     setText('pair-code', p.state === 'pending' ? p.code : '');
-    setText('pair-text', p.state === 'pending' ? '조작하려면 Mac 패널 › 휴대폰에서 조작 허용에서 이 번호를 승인해 주세요' : REJECTED_TEXT);
+    setText('pair-text', p.state === 'pending' ? 'Mac 패널에서 이 번호를 승인하면 여기서 조작할 수 있어요' : REJECTED_TEXT);
   }
   const controls = open && p.state === 'approved' && ready;
   $('ctl').hidden = !controls;

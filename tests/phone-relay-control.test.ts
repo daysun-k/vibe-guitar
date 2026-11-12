@@ -26,7 +26,7 @@ function connect(port: number, path: string, host: string, origin: string): Prom
   return new Promise((resolve, reject) => {
     const s = net.connect({ host: '127.0.0.1', port }, () =>
       s.write(`GET ${path} HTTP/1.1\r\nHost: ${host}\r\nOrigin: ${origin}\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: ${randomBytes(16).toString('base64')}\r\n\r\n`));
-    let buf = new Uint8Array(0);
+    let buf: Uint8Array = new Uint8Array(0);
     let upgraded = false;
     let closed = false;
     const waiters: { pred: (m: Record<string, unknown>) => boolean; done: (m: Record<string, unknown>) => void }[] = [];

@@ -240,6 +240,29 @@ home Wi-Fi only (the token is access control, not encryption).
 - [ ] Stop: Ctrl+C prints "stopping relay…" and "중계기가 꺼졌습니다"; closing the Terminal window (confirm
       "종료" if Terminal asks) also stops it. Afterwards `lsof -nP -iTCP:47821 -iTCP:47822` shows nothing.
 
+Phone control (휴대폰에서 조작 허용, VGT-16):
+
+- [ ] Default: with 휴대폰 악보대 on, the sheet shows 휴대폰에서 조작 허용 switched **off**, and the phone shows no
+      code and no buttons. With 휴대폰 악보대 off the switch is hidden.
+- [ ] Pairing: switch it on. The phone shows a 4-digit code; the sheet lists the same code with 승인 / 거절.
+      Open the page on a second phone (or a second browser tab): it gets a different code. Press 승인 for your
+      phone's code only: your phone shows 재생 and 처음부터; the other one keeps showing its code and no buttons.
+- [ ] Play/pause: with a song playing in the active tab, tap 일시정지, then 재생. The Mac's player follows each
+      tap within about a second, and the phone shows "일시정지했어요" / "재생했어요" after the Mac changed.
+      With 카운트인 1마디: 재생 starts the panel's count-in ("카운트인 뒤에 재생해요"); tapping again during
+      the count-in cancels it and nothing plays.
+- [ ] 처음부터: with an A/B loop set, it goes back to the loop's first bar; without a loop, to the start of the
+      current bar. Playing stays playing, paused stays paused.
+- [ ] Autoplay: reload the YouTube tab and do not click it; tap 재생 on the phone. If Chrome blocks it, the phone
+      says "맥에서 한 번 재생을 눌러 주세요" after about 3 s; click play on the Mac once and the phone works again.
+- [ ] Ads: during an ad both buttons answer "광고 중에는 조작할 수 없어요" and the ad is not affected.
+- [ ] Rapid taps: tap 재생/일시정지 five times quickly: the buttons stay disabled while a command is pending and
+      excess taps are refused ("너무 빨리 눌렀어요" or ignored), never replayed later.
+- [ ] Revoke: press 승인 해제 in the sheet: the phone shows "조작 승인이 해제됐어요" and its code again. Approve
+      again, then reload the phone page: it gets a new code and must be approved again. Switch 휴대폰에서 조작
+      허용 off, close the panel, or restart the relay: each time the phone loses its buttons.
+- [ ] Watching still works without approval: a phone that was refused (거절) keeps showing chords.
+
 Please note: phone model / browser, Mac on Wi-Fi or wired, how far apart the changes looked (or the slow-motion
 numbers), whether the screen stayed on, and whether arm's-length reading was comfortable.
 

@@ -227,16 +227,36 @@ WebSocket, plus an exact `Host` (DNS rebinding) and `Origin` match. The token is
 encryption**: traffic is plain http, so use it only on a trusted home Wi-Fi, not on public Wi-Fi. Frames over
 8 KiB, malformed or unknown messages, more than 40 messages a second, more than 4 phones and 20 s of silence
 close the connection; a song view larger than one frame is sent in up to 16 parts and checked as a whole
-before any phone sees it. The phone page is read-only (it can only send clock pings), served with
+before any phone sees it. The phone page sends only clock pings and, with phone control (below), the two
+commands; it is served with
 `Cache-Control: no-store` and a CSP that allows only its own script and WebSocket. No manifest change: the
 extension pages' CSP has no `connect-src` limit, so `ws://127.0.0.1` needs no permission.
+
+**Phone control (휴대폰에서 조작 허용, off by default).** With 휴대폰 악보대 on, a second switch appears:
+휴대폰에서 조작 허용. While it is on, a phone that opens the stand page shows a 4-digit code, and the settings
+sheet lists every connected phone's code with **승인** / **거절**. Approve only the code your own phone shows.
+The approved phone gets two large buttons, **재생/일시정지** and **처음부터** (back to loop A when a loop is
+set, otherwise to the start of the current bar; it keeps playing or paused). Nothing else can be controlled
+from the phone: no seeking to a chosen time, no speed, no other tab or page. Anyone with the QR URL can still
+*watch*, but only the one approved phone can *control*. The approval belongs to that one connection and this
+panel session; it ends with **승인 해제**, when the switch goes off, when the phone disconnects or reloads,
+when the panel closes or another window's panel takes over, and when the relay restarts. Nothing about it is
+stored. The relay forwards a command only from the approved connection, only while control is on, only for the
+song the panel currently shows, with an increasing request id and at most about 4 per second (excess is
+rejected, never queued); the panel checks all of that again and refuses during ads or without a controllable
+player. A command runs through the panel's own play button and bar-click seek (count-in, loop start and
+"pause cancels the count-in" included), and the phone hears the outcome only after the panel saw the player
+change (up to 3 s). A tap on the phone does not count as a click on the Mac's page, so Chrome may block a
+remote play until the page has been clicked once: the phone then says "맥에서 한 번 재생을 눌러 주세요". Use it
+on a trusted home Wi-Fi only (plain http, see above).
 
 **Checks.** `npm run phone-check` starts the relay on this Mac's LAN address, checks the access rules and
 malformed input, publishes the real demo song view (also split into parts), and measures how far a scripted
 phone's extrapolated chord changes land from the panel's (same Mac, so Wi-Fi delay is not included; the
 target is ≤ 100 ms; on the development Mac the worst case was under 2 ms). It also runs a second relay with a
 1.5 s idle time to check the idle auto-stop (stays up with a panel, stops once only a phone is left, both ports
-closed). Real-phone steps:
+closed), and checks phone control: a command is refused while control is off and from an unapproved phone,
+reaches the fake panel once approved, and is refused again after the switch goes off. Real-phone steps:
 [checklist section G](docs/phase0-test-checklist.md#g-phone-music-stand-휴대폰-악보대--real-phone).
 
 ## Demo playback and screenshots
@@ -248,7 +268,7 @@ placeholder lyrics 0.4 s early) that exercises the spelling, phase and offset fi
 cached lyrics only (no request in demo mode). Query parameters: `t=<sec>`, `play`, `rate=0.5|0.75`,
 `loop=<a>-<b>` (mark bars a–b, 1-based, as the loop),
 `theme=light|dark`, `level=beginner|novice|intermediate|advanced`, `capo=auto|0..7`, `snd` (sounding
-names), `sheet=1`, `lyrics=0`, `mute` (no count-in click), `phone` (휴대폰 악보대 switch on; connects to
+names), `sheet=1`, `lyrics=0`, `mute` (no count-in click), `phonectl` (휴대폰에서 조작 허용 on), `phone` (휴대폰 악보대 switch on; connects to
 `127.0.0.1` only).
 
 Opened outside the extension (file://) the page runs the synthetic demo with default settings, which is
