@@ -204,7 +204,9 @@ home Wi-Fi only (the token is access control, not encryption).
 - [ ] 연주 설정 › 휴대폰 악보대 is off on a fresh profile. Off: the service worker and panel DevTools Network panels
       show no connection to 127.0.0.1. On without `npm run phone`: the sheet says 연결 안 됨 and the panel keeps
       retrying quietly (Chrome logs at most one failed-connection line per attempt; attempts slow to every 15 s).
-- [ ] `npm run phone`: QR code, phone address and "받는 확장: <id>" printed. The sheet turns to 연결됨 · 휴대폰 0대.
+- [ ] Double-click `Vibe Guitar Phone.command` in Finder (or `npm run phone` in a terminal): a Terminal window
+      opens with the QR code, phone address, "받는 확장: <id>" and "이 창을 닫거나 Ctrl+C를 누르면 꺼집니다".
+      The sheet turns to 연결됨 · 휴대폰 0대.
       If it stays 연결 안 됨 and the terminal logs "publisher rejected", restart with the
       `--extension-id <id>` it suggests (the extension was loaded from another folder).
 - [ ] The first time, macOS asks whether node may accept incoming connections: allow. Phone on the same Wi-Fi,
@@ -230,7 +232,13 @@ home Wi-Fi only (the token is access control, not encryption).
       a link that stays silent for 6 s). Close the side panel: the phone says the panel's switch is off; reopen it.
 - [ ] Two Chrome windows with the panel open: only one feeds the phone; the other's sheet says another
       window's panel is sending. Focusing that window takes over.
-- [ ] Stop: Ctrl+C prints "stopping relay…" and returns; `lsof -nP -iTCP:47821 -iTCP:47822` shows nothing.
+- [ ] Second start: double-click the launcher again while the first window runs: the new window says the relay
+      is already running and starts nothing (press Enter to close it); the first window keeps working.
+- [ ] Idle auto-stop: switch 휴대폰 악보대 off (or close the side panel) and leave the phone connected: about
+      10 minutes later the window prints "패널이 10분 동안 연결되지 않아 중계기를 껐습니다" and the phone says it
+      lost the Mac. Switching the panel back on within the 10 minutes keeps the relay running.
+- [ ] Stop: Ctrl+C prints "stopping relay…" and "중계기가 꺼졌습니다"; closing the Terminal window (confirm
+      "종료" if Terminal asks) also stops it. Afterwards `lsof -nP -iTCP:47821 -iTCP:47822` shows nothing.
 
 Please note: phone model / browser, Mac on Wi-Fi or wired, how far apart the changes looked (or the slow-motion
 numbers), whether the screen stayed on, and whether arm's-length reading was comfortable.

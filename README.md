@@ -32,6 +32,7 @@ on, the loopback connection to the [phone music stand](#phone-music-stand-휴대
 | `src/play/` | Play-view model (`model.ts`), lane/sections/strip (`lane.ts`), demo clock and synthetic demo song (`demo.ts`) |
 | `src/phone/` | Phone music stand: song view (`song-view.ts`), wire protocol and timing (`protocol.ts`), relay (`relay.ts`), WebSocket frames, QR encoder, phone page (`viewer.ts/html`) |
 | `scripts/phone.mjs`, `scripts/phone-check.mjs` | `npm run phone` (relay + QR) and `npm run phone-check` (scripted relay checks) |
+| `Vibe Guitar Phone.command` | double-click launcher for `npm run phone` (macOS Finder) |
 | `src/eval/metrics.ts` | WCSR (majmin/root/sevenths), beat F-measure, chart-vs-chart comparison |
 | `src/bench/` | Synthetic labeled set and benchmark core (Node script and in-extension bench page) |
 | `scripts/fetch-models.mjs` | Downloads the pinned models (sha256-checked) into `models/` (gitignored) |
@@ -179,16 +180,33 @@ is used, while the song plays on the Mac. Portrait and landscape both work.
 
 1. `npm run build`, reload the extension, then in the panel: 연주 설정 › **휴대폰 악보대** on. The sheet shows
    연결 안 됨 / 연결됨 · 휴대폰 n대.
-2. In a terminal in this repository: `npm run phone`. It prints a QR code and `http://192.168.x.x:47822/?t=…`.
-   The first time, macOS may ask whether node may accept incoming connections: allow it (or later in System
-   Settings › Network › Firewall › Options). Wrong Wi-Fi address picked: `npm run phone -- --host 192.168.x.x`
-   (one private IPv4 of this Mac; `0`, `0.0.0.0`, `::`, hostnames and loopback are refused).
+2. Start the relay: double-click **`Vibe Guitar Phone.command`** in this folder in Finder. A Terminal window
+   opens and prints a QR code and `http://192.168.x.x:47822/?t=…`; keep that window open while playing. It is
+   the same as `npm run phone` in a terminal in this repository, which still works (extra options go after
+   `--`, e.g. `npm run phone -- --idle-minutes 20`; the launcher passes them on too when started from a
+   terminal). The first time, macOS may ask whether node may accept incoming connections: allow it (or later
+   in System Settings › Network › Firewall › Options). Wrong Wi-Fi address picked: `npm run phone -- --host
+   192.168.x.x` (one private IPv4 of this Mac; `0`, `0.0.0.0`, `::`, hostnames and loopback are refused).
 3. Put the phone on **the same home Wi-Fi** and scan the QR code (or type the address).
 4. Turn off the phone's auto-lock while playing (the page says so once): plain http on the home network cannot
    use the browser's keep-screen-on feature. iPhone: 설정 › 디스플레이 및 밝기 › 자동 잠금 › 안 함; Android:
    설정 › 디스플레이 › 화면 자동 꺼짐. Turn it back afterwards.
-5. Stop with **Ctrl+C** in the terminal, or switch 휴대폰 악보대 off (the panel then never connects). Each run
-   makes a new token, so scan the new QR code after a restart.
+5. Stop by closing that Terminal window or pressing **Ctrl+C** in it. If you forget, it stops by itself: when no
+   side panel has been connected for 10 minutes (휴대폰 악보대 switched off, panel closed, Chrome quit) it closes
+   both ports and exits with "패널이 10분 동안 연결되지 않아 중계기를 껐습니다". A phone that is still connected does
+   not keep it running; switching the panel back on within the 10 minutes does. `--idle-minutes <n>` changes
+   the time (default 10, minimum 1). Each run makes a new token, so scan the new QR code after a restart.
+
+**About the launcher.** It installs nothing and needs no administrator password. It looks for Node in the
+usual places even when Finder's PATH lacks them (`/opt/homebrew/bin`, `/usr/local/bin`, nvm's default) and
+says so in Korean when Node 20+ is missing or `npm ci` has not been run in this folder yet. Double-clicking it
+again while the relay runs is refused with a message (it checks whether the relay's ports already answer and
+never stops a process it did not start); the first window keeps working. Gatekeeper: a file that comes from
+`git clone`/`git pull` carries no download quarantine mark, so macOS opens it in Terminal without a warning
+(checked on macOS 27.2: `xattr` shows only `com.apple.provenance`). Only if the repository arrived as a
+browser-downloaded zip may macOS refuse to open it with a message that Apple could not check it; then allow it once under System
+Settings › Privacy & Security › "Open Anyway", or run `npm run phone` instead. The file must keep its execute
+permission (git stores it); after copying it elsewhere by hand, `chmod +x "Vibe Guitar Phone.command"`.
 
 **What is sent, and where.** The side panel (a visible extension page; it exists only while the panel is open)
 connects to `ws://127.0.0.1:47821/publish` on this Mac. It sends a *song view* built from the same play model
@@ -216,7 +234,9 @@ extension pages' CSP has no `connect-src` limit, so `ws://127.0.0.1` needs no pe
 **Checks.** `npm run phone-check` starts the relay on this Mac's LAN address, checks the access rules and
 malformed input, publishes the real demo song view (also split into parts), and measures how far a scripted
 phone's extrapolated chord changes land from the panel's (same Mac, so Wi-Fi delay is not included; the
-target is ≤ 100 ms; on the development Mac the worst case was under 2 ms). Real-phone steps:
+target is ≤ 100 ms; on the development Mac the worst case was under 2 ms). It also runs a second relay with a
+1.5 s idle time to check the idle auto-stop (stays up with a panel, stops once only a phone is left, both ports
+closed). Real-phone steps:
 [checklist section G](docs/phase0-test-checklist.md#g-phone-music-stand-휴대폰-악보대--real-phone).
 
 ## Demo playback and screenshots
