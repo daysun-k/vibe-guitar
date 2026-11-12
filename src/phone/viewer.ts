@@ -7,6 +7,7 @@
  * after a reconnect. Chord names are fitted to the space beside their diagrams (fit.ts) so the page
  * never gets wider than the screen.
  */
+import { slashChordHTML } from '../extension/sidepanel/chord-name';
 import { renderShapeDiagram } from '../extension/sidepanel/diagram';
 import { NEXT_SCALE, fitText } from './fit';
 import {
@@ -191,6 +192,14 @@ function setText(id: string, text: string) {
   if (el.textContent !== text) el.textContent = text;
 }
 
+/** A chord name with its slash bass drawn smaller; the element's text stays the full name. */
+function setChordName(id: string, name: string) {
+  const el = $(id);
+  if (el.dataset.name === name) return;
+  el.dataset.name = name;
+  el.innerHTML = slashChordHTML(name);
+}
+
 function setClass(el: HTMLElement, name: string, on: boolean) {
   if (el.classList.contains(name) !== on) el.classList.toggle(name, on);
 }
@@ -294,7 +303,7 @@ function frame() {
   const nextShape = f.nextEvent >= 0 ? s.events[f.nextEvent]!.shape : -1;
   if (nowShape !== shown.nowShape) {
     const n = nameOf(s, nowShape);
-    setText('now-name', n.name);
+    setChordName('now-name', n.name);
     setText('now-snd', n.snd);
     $('now-dia').innerHTML = diagramHtml(s, nowShape, 170);
     shown.nowShape = nowShape;
@@ -302,7 +311,7 @@ function frame() {
   }
   if (nextShape !== shown.nextShape) {
     const n = nameOf(s, nextShape);
-    setText('next-name', n.name);
+    setChordName('next-name', n.name);
     setText('next-snd', n.snd);
     $('next-dia').innerHTML = diagramHtml(s, nextShape, 130);
     shown.nextShape = nextShape;

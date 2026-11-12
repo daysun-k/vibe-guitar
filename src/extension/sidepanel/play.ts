@@ -7,6 +7,7 @@ import type { Arrangement } from '../../arrange/arrange';
 import { prettyChord, shapeName } from '../../music/key';
 import { bigBeatSeconds } from '../../music/meter';
 import { barsForHardChord, changeConcertLabel, frameAt, upcomingShapes, type PlayModel } from '../../play/model';
+import { bassHTML, slashChordHTML, splitSlashBass } from './chord-name';
 import { escapeHtml, renderShapeDiagram, shapeDiagramHeight } from './diagram';
 import { ScrubState } from './scrub';
 
@@ -55,9 +56,10 @@ export function formatTime(sec: number): string {
  */
 export function chordHTML(name: string): string {
   if (!name || name === 'N.C.' || name === '—') return '<span class="cn">—</span>';
-  const m = /^([A-G])([♭♯]?)(.*)$/.exec(name);
-  if (!m) return `<span class="cn">${escapeHtml(name)}</span>`;
-  return `<span class="cn">${m[1]}${m[2] ? `<span class="acc">${m[2]}</span>` : ''}${m[3] ? `<span class="q">${escapeHtml(m[3])}</span>` : ''}</span>`;
+  const { head, bass } = splitSlashBass(name);
+  const m = /^([A-G])([♭♯]?)(.*)$/.exec(head);
+  if (!m) return `<span class="cn">${escapeHtml(head)}${bassHTML(bass)}</span>`;
+  return `<span class="cn">${m[1]}${m[2] ? `<span class="acc">${m[2]}</span>` : ''}${m[3] ? `<span class="q">${escapeHtml(m[3])}</span>` : ''}${bassHTML(bass)}</span>`;
 }
 
 /** Screen-reader text of a change: "원래 코드 F, 바뀐 코드 Fmaj7. <reason>" (no particle after a chord name). */
@@ -334,7 +336,7 @@ export class PlayScreen {
   private lyricHTML(m: PlayModel, li: number): string {
     const line = m.lyrics!.lines[li];
     const p = m.placed[li];
-    const name = (j: number) => (m.labels[j]?.name === 'N.C.' ? '' : escapeHtml(m.labels[j]?.name ?? ''));
+    const name = (j: number) => (m.labels[j]?.name === 'N.C.' ? '' : slashChordHTML(m.labels[j]?.name ?? ''));
     return line.words
       .map((w, i) => {
         const a = p.anchors[i];

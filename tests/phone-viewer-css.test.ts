@@ -5,6 +5,7 @@
 // the renderer's fixed pixel size.
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { slashChordHTML, splitSlashBass } from '../src/extension/sidepanel/chord-name';
 import { renderShapeDiagram } from '../src/extension/sidepanel/diagram';
 import { FIT_MIN_PX, fitFontPx } from '../src/phone/fit';
 import { AD_TEXT, COUNTIN_TEXT, FAILURE_TEXT, NO_POSITION_TEXT, beatSegments, outcomeText, statusLine, toggleLook } from '../src/phone/stand';
@@ -43,8 +44,10 @@ describe('phone page CSS', () => {
       ...[...script.matchAll(/class=\\?"([\w-]+)/g)].map((m) => m[1]!),
     ]);
     const svgClasses = new Set([...svg.matchAll(/class="([^"]*)"/g)].flatMap((m) => m[1]!.split(/\s+/)));
+    // Chord names as the page draws them (setChordName → slashChordHTML).
+    const nameClasses = new Set([...slashChordHTML('C♯m7♭5/G♯').matchAll(/class="([^"]*)"/g)].flatMap((m) => m[1]!.split(/\s+/)));
     for (const c of classes) {
-      const used = markupClasses.has(c) || svgClasses.has(c) || scriptClasses.has(c);
+      const used = markupClasses.has(c) || svgClasses.has(c) || scriptClasses.has(c) || nameClasses.has(c);
       expect(used, `.${c}`).toBe(true);
     }
   });
@@ -93,6 +96,20 @@ describe('VGT-16 phone page never gets wider than the screen', () => {
     expect(script).toContain("const nowPx = fitText($('now-name'));");
     expect(script).toContain("fitText($('next-name'), Math.round(nowPx * NEXT_SCALE))");
     expect(script).toMatch(/addEventListener\('resize', \(\) => \(fitDirty = true\)\)/);
+  });
+
+  it('the slash bass is drawn smaller inside the fitted name, so fitting measures and shrinks it too', () => {
+    // Both names go through setChordName (escaped slashChordHTML), never plain text or raw innerHTML.
+    expect(script).toContain("setChordName('now-name', n.name);");
+    expect(script).toContain("setChordName('next-name', n.name);");
+    expect(script).toContain('el.innerHTML = slashChordHTML(name);');
+    expect(script).not.toMatch(/setText\('(now|next)-name'/);
+    // em-sized inside .chord: fitText sets the .chord font size, scrollWidth includes the bass span.
+    const bass = rule(portrait, '.chord .slash-bass');
+    expect(bass).toContain('font-size:.6em');
+    expect(bass).not.toMatch(/vertical-align|position|px/);
+    expect(slashChordHTML('C♯m7♭5/G♯')).toBe('C♯m7♭5<span class="slash-bass">/G♯</span>');
+    expect(splitSlashBass('C♯m7♭5/G♯')).toEqual({ head: 'C♯m7♭5', bass: '/G♯' });
   });
 
   it('the one status line wraps to at most three lines (review s9-r1 F1), and is hidden while empty', () => {
