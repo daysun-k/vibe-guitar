@@ -287,9 +287,9 @@ describe('bar step target (이전 마디 / 다음 마디)', () => {
 const FAKE_BARS = Array.from({ length: 10 }, (_, i) => ({ startSec: i * 2 }));
 
 /** A fake panel: the player reacts after `lagMs` (or never, like an autoplay block). */
-function fakePanel(o: { playing?: boolean; countIn?: boolean; countingIn?: boolean; heldCountIn?: boolean; ad?: boolean; target?: boolean; lagMs?: number; blockPlay?: boolean; position?: number; rate?: number; noSeek?: boolean; target10?: boolean; loopBars?: [number, number]; landAt?: number; loopA?: boolean; bars?: { startSec: number }[]; restartAt?: number } = {}) {
+function fakePanel(o: { playing?: boolean; countIn?: boolean; countingIn?: boolean; heldCountIn?: boolean; ad?: boolean; target?: boolean; lagMs?: number; blockPlay?: boolean; position?: number; rate?: number; noSeek?: boolean; target10?: boolean; loopBars?: [number, number]; landAt?: number; loopA?: boolean; bars?: { startSec: number }[]; restartAt?: number; pollMs?: number } = {}) {
   let t = 0;
-  const st = { playing: o.playing ?? false, countingIn: o.countingIn ?? false, position: o.position ?? 10, ad: o.ad ?? false };
+  const st = { playing: o.playing ?? false, countingIn: o.countingIn ?? false, position: o.position ?? 10, ad: o.ad ?? false, wrap: null as { at: number; position: number } | null };
   let countInDone: ((r: TransportResult) => void) | null = null;
   /** The held count-in reaches its end: plays only if nobody cancelled it. */
   const endCountIn = () => {
@@ -311,6 +311,7 @@ function fakePanel(o: { playing?: boolean; countIn?: boolean; countingIn?: boole
     rate: () => o.rate ?? 1,
     isAd: () => st.ad,
     target: () => ((o.target ?? true) ? 'song' : null),
+    wrapSample: () => st.wrap,
   };
   const transport: PanelTransport = {
     toggle: async (onCountIn): Promise<TransportResult> => {
@@ -358,6 +359,7 @@ function fakePanel(o: { playing?: boolean; countIn?: boolean; countingIn?: boole
     runPhoneCommand(cmd, player, transport, {
       progress,
       signal,
+      pollMs: o.pollMs,
       now: () => t,
       sleep: async (ms) => {
         t += ms;
@@ -609,6 +611,34 @@ describe('runPhoneCommand: the outcome follows the observed player state', () =>
     f.schedule(290, () => (opts.rate = 0.5));
     expect(await f.run('next-bar')).toEqual({ ok: true, state: 'playing' });
     expect(f.calls).toEqual(['seek 10.01']);
+  });
+
+  describe('S6-R14-02: a loop jump between two polls', () => {
+    // 240 BPM 2/4 (0.5 s bars), loop over bars 0..20 = [0, 10.5), 2x. 이전 마디 at 10.2 seeks 9.51; the
+    // next poll comes 500 ms later, after the panel's loop jumped back to A (now at 0.31).
+    const bars = Array.from({ length: 30 }, (_, i) => ({ startSec: i * 0.5 }));
+    const scenario = (wrap: { at: number; position: number }, preset: { at: number; position: number } | null = null) => {
+      const f = fakePanel({ playing: true, rate: 2, position: 10.2, bars, loopBars: [0, 20], noSeek: true, pollMs: 500 });
+      f.st.wrap = preset;
+      f.schedule(500, () => {
+        f.st.wrap = wrap;
+        f.st.position = 0.31;
+      });
+      return f;
+    };
+    it('the position seen just before the jump in the window counts', async () => {
+      const f = scenario({ at: 400, position: 9.75 });
+      expect(await f.run('prev-bar')).toEqual({ ok: true, state: 'playing' });
+      expect(f.calls).toEqual(['seek 9.51']);
+    });
+    it('a pre-jump position outside the window does not count (dropped seek)', async () => {
+      const f = scenario({ at: 150, position: 10.5 });
+      expect(await f.run('prev-bar')).toEqual({ ok: false, code: 'timeout' });
+    });
+    it('a jump from before the seek is never taken', async () => {
+      const f = scenario({ at: 0, position: 9.6 }, { at: 0, position: 9.6 });
+      expect(await f.run('prev-bar')).toEqual({ ok: false, code: 'timeout' });
+    });
   });
 
   it('S6-R13: the window: never below target - BAR_EARLY_SEC, above it only by what playback can have added', async () => {

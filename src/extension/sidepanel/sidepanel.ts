@@ -1257,11 +1257,18 @@ function syncLoop(): void {
   renderLoop();
 }
 
+/** The position observed just before the last loop jump back to A, and when (see ObservedPlayer.wrapSample). */
+let loopWrap: { at: number; position: number } | null = null;
+
 /** Jumps back to A when playback crossed the end of B (decided from the observed position). */
 function checkLoop(): void {
   if (!jumper.active || countingIn) return;
-  const target = jumper.observe({ positionSec: positionNow(false), playing: isPlaying(), isAd: !demo && !!player?.isAd, nowMs: Date.now() });
+  const positionSec = positionNow(false);
+  const nowMs = Date.now();
+  const target = jumper.observe({ positionSec, playing: isPlaying(), isAd: !demo && !!player?.isAd, nowMs });
   if (target === null) return;
+  // A phone seek command still waiting for its outcome may have landed before this jump (S6-R14-02).
+  loopWrap = { at: nowMs, position: positionSec };
   lastT = -10;
   void sendControl({ type: 'player-control', action: 'seek', time: target }).then((r) => {
     if (!r.ok) setText('countin-status', `반복 구간 처음으로 돌아가지 못했어요 (${r.reason ?? '알 수 없음'}).`);
@@ -1381,6 +1388,7 @@ const phonePlayer: ObservedPlayer = {
   rate: currentRate,
   isAd: () => !demo && !!player?.isAd,
   target: () => playerTargetKey(phoneTargetParts()),
+  wrapSample: () => loopWrap,
 };
 
 /** What the phone target is made of. The tab is the one sendControl would use, so an unchanged target means the same tab gets the command. */

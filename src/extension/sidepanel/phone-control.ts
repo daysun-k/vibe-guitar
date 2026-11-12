@@ -42,6 +42,12 @@ export interface ObservedPlayer {
    * when no song is shown or its player may not be controlled from this panel.
    */
   target(): string | null;
+  /**
+   * The position the panel observed just before its loop jumped back from B to A, and when (ms on the
+   * `now` clock), or null. A seek command that is still waiting takes it as one more observation at
+   * that time, so a step that landed and then played past B before the next poll still counts.
+   */
+  wrapSample?(): { at: number; position: number } | null;
 }
 
 export type { TransportResult };
@@ -279,25 +285,38 @@ export async function runPhoneCommand(cmd: PhoneCommand, player: ObservedPlayer,
  * - The upper bound grows with what playback can have added since the seek, so a correct seek seen
  *   late at a high rate counts (S6-R13-01). No bar indexes are compared, so a target in a short first
  *   bar (where barIndexAt already sees the next bar) counts when it lands (S6-R13-02).
+ * - A loop jump (B back to A) between two polls would hide a step that landed and played on past B:
+ *   the position the panel saw just before the jump (ObservedPlayer.wrapSample) counts as one more
+ *   observation at its time, judged by the same window; a pre-wrap position outside it does not count.
  * - Decision: if a seek is dropped while playing and normal playback carries the position into the
  *   window before the timeout, that counts as success. Success means "the observed position is at the
  *   target now", which is then true.
  */
-export function landedAt(target: number, player: Pick<ObservedPlayer, 'position' | 'rate' | 'playing'>, now: () => number): () => boolean {
+export function landedAt(target: number, player: Pick<ObservedPlayer, 'position' | 'rate' | 'playing' | 'wrapSample'>, now: () => number): () => boolean {
   const rateNow = () => (player.playing() ? player.rate() : 0);
+  const inWindow = (p: number, allowance: number) => p >= target - BAR_EARLY_SEC && p <= target + allowance + SEEK_SLACK_SEC;
   // Playback progress the position may show since the seek: per observation interval, the larger of
   // the rates at its two ends times its length (a rate change never rewrites progress already made).
   let lastT = now();
   let lastRate = rateNow();
   let allowanceSec = 0;
+  // Loop wraps already seen (or from before the seek) are never taken again.
+  let wrapSeenAt = lastT;
   return () => {
     const t = now();
     const r = rateNow();
-    allowanceSec += (Math.max(lastRate, r) * Math.max(0, t - lastT)) / 1000;
+    const step = Math.max(lastRate, r);
+    // A loop jump since the last poll: its pre-wrap position, judged with the allowance at its time.
+    const w = player.wrapSample?.() ?? null;
+    let wrapLanded = false;
+    if (w && w.at > wrapSeenAt) {
+      wrapSeenAt = w.at;
+      wrapLanded = inWindow(w.position, allowanceSec + (step * Math.max(0, Math.min(w.at, t) - lastT)) / 1000);
+    }
+    allowanceSec += (step * Math.max(0, t - lastT)) / 1000;
     lastT = t;
     lastRate = r;
-    const p = player.position();
-    return p >= target - BAR_EARLY_SEC && p <= target + allowanceSec + SEEK_SLACK_SEC;
+    return wrapLanded || inWindow(player.position(), allowanceSec);
   };
 }
 
