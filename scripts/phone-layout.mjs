@@ -1,10 +1,12 @@
 // VGT-16: measured layout check of the phone music stand page (`npm run phone-layout`).
 // Starts the relay, a fake side panel that publishes a song whose chord names are long ("C#m7b5/G#",
-// the 16-character maximum) with a long title, approves the phone, and opens the real phone page in
+// the 16-character maximum) with a long title (not shown on the phone), approves the phone, and opens the real phone page in
 // headless Chromium at phone sizes (portrait and landscape). For every size and name it measures, in
 // the page, that nothing is wider than the screen: the page itself, both diagrams, the four control
-// buttons, the status line and the position. Diagrams and buttons must also be fully on screen
-// vertically, and the chord name must not overlap its diagram. Then it stops the relay and Chromium.
+// icon buttons, the bar card and the status line. Diagrams and buttons must also be fully on screen
+// vertically, and the chord name must not overlap its diagram. In landscape the buttons must fill the
+// next chord's column under it and the bar card the current chord's column, on one bottom line, with
+// every button at least 44 px wide. Then it stops the relay and Chromium.
 //
 // Chromium: $CHROME, else Playwright's headless shell / Chromium cache, else Google Chrome (as
 // scripts/screens.mjs). Screenshots go to a temp folder (printed) for a look by eye. Without Chromium
@@ -117,6 +119,20 @@ export const MEASURE_SOURCE = `(W, H, vertical) => {
   if (name && dia && name.getBoundingClientRect().right > dia.getBoundingClientRect().left + 0.5) out.push('now name overlaps its diagram');
   const nn = document.getElementById('next-name'), nd = document.querySelector('#next-dia svg');
   if (nn && nd && nn.getBoundingClientRect().right > nd.getBoundingClientRect().left + 0.5) out.push('next name overlaps its diagram');
+  // Landscape: the buttons fill the next chord's column under it, the bar card the current chord's column.
+  const ctl = document.getElementById('ctl'), meter = document.getElementById('meter');
+  const nowEl = document.querySelector('.now'), nxEl = document.querySelector('.nx');
+  if (W > H && ctl && !ctl.hidden && meter && nowEl && nxEl) {
+    const inner = (el) => { const r = el.getBoundingClientRect(), cs = getComputedStyle(el); return { left: r.left + parseFloat(cs.borderLeftWidth) + parseFloat(cs.paddingLeft), right: r.right - parseFloat(cs.borderRightWidth) - parseFloat(cs.paddingRight), top: r.top, bottom: r.bottom }; };
+    const c = inner(ctl), n = inner(nxEl), m = meter.getBoundingClientRect(), w = nowEl.getBoundingClientRect();
+    if (Math.abs(c.left - n.left) > 1 || Math.abs(c.right - n.right) > 1) out.push('buttons not as wide as the next chord column ' + c.left.toFixed(1) + '..' + c.right.toFixed(1) + ' vs ' + n.left.toFixed(1) + '..' + n.right.toFixed(1));
+    if (c.top < n.bottom - 0.5) out.push('buttons not under the next chord');
+    if (Math.abs(m.left - w.left) > 1 || Math.abs(m.right - w.right) > 1) out.push('bar card not as wide as the current chord column');
+    if (m.top < w.bottom - 0.5) out.push('bar card not under the current chord');
+    const cb = ctl.getBoundingClientRect().bottom;
+    if (Math.abs(m.bottom - cb) > 8) out.push('bar card and buttons not on one bottom line ' + m.bottom.toFixed(1) + ' vs ' + cb.toFixed(1));
+    for (const b of ctl.querySelectorAll('button')) if (b.getBoundingClientRect().width < 44) out.push(b.id + ' narrower than 44 px');
+  }
   return { out, name: name?.textContent, font: name ? getComputedStyle(name).fontSize : null, clipped: name ? name.scrollWidth > name.clientWidth + 1 : null, controls: !document.getElementById('ctl').hidden };
 }`;
 
@@ -128,7 +144,7 @@ const viewer = await buildViewer();
 if (serve)
   viewer.viewerJs += `;(() => { const seen = new Set(), bad = new Map(); const m = ${MEASURE_SOURCE};
     setInterval(() => { const r = m(innerWidth, innerHeight, true); if (!r.controls || !r.name || r.name === '–') return;
-      const k = innerWidth + 'x' + innerHeight + (document.getElementById('lock').hidden ? '' : ' notice') + '@' + r.name; seen.add(k);
+      const k = innerWidth + 'x' + innerHeight + '@' + r.name; seen.add(k);
       if (r.out.length || (r.clipped && parseFloat(r.font) > 16)) bad.set(k, r.out.join('; ') || 'clipped at ' + r.font);
       document.title = 'VGLAYOUT seen ' + seen.size + ' bad ' + JSON.stringify([...bad]) + ' last ' + k + ' ' + r.font; }, 300); })();`;
 const NAMES = ['Bm7', 'Bbmaj7', 'F#7sus4', 'C#m7b5/G#', 'C#m7b5(add11)/G#'];
@@ -261,12 +277,13 @@ try {
     { name: 'portrait-390', w: 390, h: 664 },
     { name: 'portrait-320', w: 320, h: 548 },
     { name: 'landscape-844', w: 844, h: 340 },
+    { name: 'landscape-874', w: 874, h: 338 },
     { name: 'landscape-568', w: 568, h: 280 },
   ];
   await setSize(320, 548);
   await send('Page.navigate', { url: `http://${relay.lanHost}/?t=${relay.token}` });
 
-  // Before approval: the auto-lock notice and the pairing code are shown (width only).
+  // Before approval: the pairing code is shown (width only).
   const pending = await (async () => {
     for (let i = 0; i < 50; i++) {
       const p = pub.messages.findLast((m) => m.t === 'phones' && m.list.some((e) => e.state === 'pending'));
@@ -282,9 +299,8 @@ try {
     await sleep(300);
     const m = await evaluate(measure(s.w, s.h, false));
     await shot(`${s.name}-pairing`);
-    check(`${s.name} before approval (auto-lock notice, pairing code): nothing wider than the screen`, m.out.length === 0, m.out.join('; '));
+    check(`${s.name} before approval (pairing code): nothing wider than the screen`, m.out.length === 0, m.out.join('; '));
   }
-  await evaluate("document.getElementById('lock-ok')?.click()");
   pub.send(JSON.stringify({ t: 'approve', id: pending.id, code: pending.code, grant: 1 }));
   await sleep(500);
 

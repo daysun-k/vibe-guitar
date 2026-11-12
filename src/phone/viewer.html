@@ -6,15 +6,12 @@
 <meta name="referrer" content="no-referrer" />
 <title>Vibe Guitar 악보대</title>
 <style>
-  :root{--bg:#F3EFE7;--ink:#1D1A15;--ink-2:#4A443B;--line:#CFC6B6;--accent:#B13E12;color-scheme:light}
+  :root{--bg:#F3EFE7;--ink:#1D1A15;--ink-2:#4A443B;--line:#CFC6B6;--accent:#B13E12;--soft:#F7DCCB;color-scheme:light}
   *{box-sizing:border-box}
   html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:20px/1.3 system-ui,-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;-webkit-text-size-adjust:100%;-webkit-font-smoothing:antialiased}
   body{overflow:hidden}
-  .stand{height:100%;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto minmax(0,1fr) auto;column-gap:28px;padding:max(24px,env(safe-area-inset-top)) max(22px,env(safe-area-inset-right)) max(18px,env(safe-area-inset-bottom)) max(22px,env(safe-area-inset-left))}
+  .stand{height:100%;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto minmax(0,1fr) auto auto;column-gap:28px;padding:max(24px,env(safe-area-inset-top)) max(22px,env(safe-area-inset-right)) max(18px,env(safe-area-inset-bottom)) max(22px,env(safe-area-inset-left))}
   .stand>*{min-width:0}
-  .top{display:flex;justify-content:space-between;align-items:baseline;gap:16px;min-height:1.3em}
-  .capo{font-weight:800;font-size:24px;color:var(--accent);flex:none}
-  .where{font-weight:700;font-size:24px;text-align:right;font-variant-numeric:tabular-nums;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .chord{font-family:ui-rounded,"SF Pro Rounded","Arial Rounded MT Bold",system-ui,-apple-system,sans-serif;font-weight:800;letter-spacing:-.02em;line-height:.95;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
   .snd{font-size:22px;font-weight:700;color:var(--ink-2);margin-top:6px;overflow-wrap:anywhere}
   .snd:empty{display:none}
@@ -23,45 +20,44 @@
   .dia{flex:none}
   /* cqh: the row's own height (diagrams are 100:128), so a short screen shrinks them instead of overlapping; the first value is the fallback. */
   .now .chord{font-size:min(34vw,15vh);font-size:min(34vw,15vh,max(24px,calc(100cqh - 40px)))}
-  .nx .chord{font-size:min(22vw,9vh);font-size:min(22vw,9vh,max(20px,calc(100cqh - 130px)))}
+  .nx .chord{font-size:min(22vw,9vh);font-size:min(22vw,9vh,max(20px,calc(100cqh - 72px)))}
   #now-dia svg{width:min(42vw,22vh);width:min(42vw,22vh,74cqh);height:auto}
   #next-dia svg{width:min(32vw,16vh);width:min(32vw,16vh,74cqh);height:auto}
-  /* A short next-chord row (small landscape phones) drops the beat dots; the count text stays. */
-  @container (max-height:170px){.dots{display:none}}
-  .rule{border-top:3px solid var(--line)}
+  /* The current bar as the side panel's lane cell draws it: a playhead across the bar and one segment per big beat (filled = played). */
+  .meter{position:relative;height:52px;margin:6px 0 14px;border-radius:14px;background:var(--soft);border:2px solid var(--accent);overflow:hidden;display:flex;align-items:flex-end}
+  .ticks{flex:1 1 0;min-width:0;display:flex;gap:8px;padding:0 14px 12px}
+  .ticks i{flex:1 1 0;min-width:0;height:8px;border-radius:4px;background:var(--line);display:block}
+  .ticks i.on{background:var(--accent)}
+  .ph{position:absolute;top:0;bottom:0;left:0;width:4px;margin-left:-2px;border-radius:2px;background:var(--accent)}
+  .ph[hidden]{display:none}
   .lbl{font-size:24px;font-weight:700;color:var(--ink-2)}
-  .dots{display:flex;gap:12px;margin-top:12px}
-  .dots:empty{display:none}
-  .dots i{width:30px;height:30px;border-radius:50%;border:3px solid var(--accent);display:block}
-  .dots i.on{background:var(--accent)}
-  .cnt{font-size:26px;font-weight:800;margin-top:8px;font-variant-numeric:tabular-nums}
   .foot{display:flex;flex-direction:column;gap:10px}
-  .status{font-size:20px;font-weight:600;color:var(--ink-2);min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  /* Shown only when something needs attention (statusLine in the page script); empty = hidden. Wraps to at most three lines, so a message is read whole on a narrow phone. */
+  .status{font-size:20px;line-height:1.3;font-weight:700;color:var(--ink-2);min-width:0;overflow:hidden;word-break:keep-all;overflow-wrap:anywhere;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;line-clamp:3;max-height:3.9em}
+  .status:empty{display:none}
   .status.alert{color:var(--accent);font-weight:800}
-  .lock{min-width:0;margin:0;font-size:20px;line-height:1.4;border:3px solid var(--accent);padding:12px 14px;display:flex;gap:14px;align-items:center;justify-content:space-between}
-  .lock[hidden]{display:none}
-  .lock button{font:inherit;font-weight:800;color:#FFF7EF;background:var(--accent);border:0;border-radius:6px;padding:10px 16px;flex:none}
   .nodia{font-size:22px;font-weight:700;color:var(--ink-2)}
   .pair{min-width:0;margin:0;font-size:20px;line-height:1.35;border:3px dashed var(--line);padding:10px 14px;display:flex;gap:14px;align-items:center;justify-content:space-between}
   .pair[hidden]{display:none}
   .pair b{font-size:40px;font-weight:800;letter-spacing:.18em;color:var(--accent);font-variant-numeric:tabular-nums;flex:none}
-  .ctl{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr) minmax(0,1fr);grid-template-areas:"prev toggle next" "restart restart restart";gap:10px}
+  .ctl{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1.4fr) minmax(0,1fr);grid-template-areas:"restart prev toggle next";gap:10px;margin-top:10px}
   .ctl[hidden]{display:none}
-  .ctl button{min-width:0;font:inherit;font-size:clamp(17px,5.6vw,26px);font-weight:800;line-height:1.15;min-height:64px;padding:6px 8px;word-break:keep-all;overflow-wrap:anywhere;border-radius:12px;border:3px solid var(--accent);background:var(--accent);color:#FFF7EF;touch-action:manipulation}
+  .ctl button{min-width:0;min-height:64px;padding:0;margin:0;display:flex;align-items:center;justify-content:center;border-radius:14px;border:3px solid var(--accent);background:var(--accent);color:#FFF7EF;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+  .ctl svg{display:block;flex:none;width:34px;height:34px}
   #ctl-prev{grid-area:prev}
   #ctl-toggle{grid-area:toggle}
   #ctl-next{grid-area:next}
-  #ctl-restart{grid-area:restart;min-height:50px}
+  #ctl-restart{grid-area:restart}
+  #ctl-toggle svg{width:40px;height:40px}
+  #ctl-toggle .i-pause,#ctl-toggle.pause .i-play{display:none}
+  #ctl-toggle.pause .i-pause{display:block}
   .ctl button.sec{background:transparent;color:var(--accent)}
   .ctl button:disabled{opacity:.45}
-  .ctl-msg{margin:0;font-size:20px;font-weight:700;color:var(--ink-2);overflow-wrap:anywhere}
-  .ctl-msg:empty{display:none}
-  .ctl-msg.alert{color:var(--accent)}
-  .wait{grid-row:2/5;align-self:center;font-size:30px;font-weight:800;line-height:1.35}
+  .wait{grid-row:1/4;align-self:center;font-size:30px;font-weight:800;line-height:1.35}
   .wait small{display:block;font-size:22px;font-weight:600;color:var(--ink-2);margin-top:8px}
-  .stand.waiting .now,.stand.waiting .rule,.stand.waiting .nx{display:none}
+  .stand.waiting .now,.stand.waiting .meter,.stand.waiting .nx{display:none}
   .stand:not(.waiting) .wait{display:none}
-  .stand.stale .now,.stand.stale .nx{opacity:.35}
+  .stand.stale .now,.stand.stale .meter,.stand.stale .nx{opacity:.35}
   .dia{display:block;color:var(--ink)}
   .dia svg{display:block;overflow:visible}
   .dia .d-str{stroke:currentColor;opacity:.7}
@@ -72,59 +68,59 @@
   .dia .d-x{stroke:currentColor;stroke-width:1.9;stroke-linecap:round}
   .dia .d-fr{fill:currentColor;font:700 10px system-ui,sans-serif}
   @media (orientation:landscape){
-    .stand{grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto;padding-top:max(16px,env(safe-area-inset-top))}
-    .top,.foot,.wait{grid-column:1/-1}
-    .wait{grid-row:2}
-    .rule{display:none}
+    /* Two columns: the current chord with its bar card under it, the next chord with the buttons under it. */
+    .stand{grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto auto;column-gap:20px;padding-top:max(16px,env(safe-area-inset-top))}
+    .now{grid-area:1/1/2/2}
+    .meter{grid-area:2/1/3/2;align-self:end;height:44px;margin:8px 0 6px;border-radius:12px}
+    .ticks{gap:6px;padding:0 12px 10px}
+    .ticks i{height:7px}
+    .nx{grid-area:1/2/2/3}
+    .ctl{grid-area:2/2/3/3;align-self:end;margin:0;padding-top:8px;gap:8px;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1.2fr) minmax(0,1fr)}
+    .nx,.ctl{border-left:3px solid var(--line);padding-left:16px}
+    .foot{grid-column:1/-1;grid-row:3}
+    .wait{grid-column:1/-1;grid-row:1/3}
     .names{flex:0 1 auto}
     .now{justify-content:flex-start;gap:min(4vw,32px)}
-    .nx{border-left:3px solid var(--line);padding-left:28px;justify-content:flex-start;gap:min(3vw,24px)}
+    .nx{justify-content:flex-start;gap:min(3vw,24px)}
     .now .chord{font-size:min(17vw,34vh);font-size:min(17vw,34vh,max(24px,calc(100cqh - 40px)))}
-    .nx .chord{font-size:min(11vw,22vh);font-size:min(11vw,22vh,max(20px,calc(100cqh - 130px)))}
-    #now-dia svg{width:auto;height:min(50vh,30vw);height:min(50vh,30vw,94cqh)}
-    #next-dia svg{width:auto;height:min(40vh,22vw);height:min(40vh,22vw,94cqh)}
-    .foot{flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 20px}
-    .lock{font-size:18px;padding:8px 12px;flex:1 1 100%}
-    .pair{font-size:18px;padding:6px 12px;flex:1}
+    .nx .chord{font-size:min(11vw,22vh);font-size:min(11vw,22vh,max(20px,calc(100cqh - 72px)))}
+    #now-dia svg{width:auto;height:min(66vh,34vw);height:min(66vh,34vw,94cqh)}
+    #next-dia svg{width:auto;height:min(44vh,22vw);height:min(44vh,22vw,94cqh)}
+    .pair{font-size:18px;padding:6px 12px;margin-top:8px}
     .pair b{font-size:30px}
-    .ctl{flex:0 1 auto;min-width:0;grid-template-columns:repeat(4,minmax(0,auto));grid-template-areas:"restart prev toggle next"}
-    .ctl button,#ctl-restart{min-height:56px;font-size:clamp(16px,2.6vw,22px);padding:4px 14px}
-    .ctl-msg{flex:1 1 160px}
-    .status{flex:1 1 120px}
+    .status{font-size:18px;margin-top:8px}
+    .ctl button{min-height:56px}
+    .ctl svg{width:28px;height:28px}
+    #ctl-toggle svg{width:32px;height:32px}
   }
 </style>
 </head>
 <body>
 <main id="app" class="stand waiting">
-  <header class="top"><span id="capo" class="capo"></span><span id="where" class="where"></span></header>
   <p id="wait" class="wait">Mac에 연결하는 중<small>Mac 터미널에서 npm run phone이 켜져 있는지 확인해 주세요</small></p>
   <section class="now" aria-label="지금 코드">
     <div class="names"><div id="now-name" class="chord">–</div><div id="now-snd" class="snd"></div></div>
     <div id="now-dia" class="dia"></div>
   </section>
-  <div class="rule" aria-hidden="true"></div>
+  <div id="meter" class="meter" aria-hidden="true"><span id="ticks" class="ticks"></span><span id="ph" class="ph"></span></div>
   <section class="nx" aria-label="다음 코드">
     <div class="names">
       <div class="lbl">다음</div>
       <div id="next-name" class="chord">–</div>
       <div id="next-snd" class="snd"></div>
-      <div id="dots" class="dots" aria-hidden="true"></div>
-      <div id="count" class="cnt"></div>
     </div>
     <div id="next-dia" class="dia"></div>
   </section>
   <footer class="foot">
-    <p id="lock" class="lock" hidden><span>화면이 꺼지지 않게 자동 잠금을 꺼 주세요. iPhone: 설정 › 디스플레이 및 밝기 › 자동 잠금. Android: 설정 › 디스플레이 › 화면 자동 꺼짐.</span><button id="lock-ok" type="button">확인</button></p>
     <p id="pair" class="pair" hidden><span id="pair-text">Mac 패널에서 이 번호를 승인하면 여기서 조작할 수 있어요</span><b id="pair-code"></b></p>
-    <div id="ctl" class="ctl" hidden>
-      <button id="ctl-prev" class="sec" type="button" aria-label="이전 마디">◀ 이전 마디</button>
-      <button id="ctl-toggle" type="button">재생</button>
-      <button id="ctl-next" class="sec" type="button" aria-label="다음 마디">다음 마디 ▶</button>
-      <button id="ctl-restart" class="sec" type="button">처음부터</button>
-    </div>
-    <p id="ctl-msg" class="ctl-msg" aria-live="polite"></p>
-    <div id="status" class="status" aria-live="polite">연결 중</div>
+    <div id="status" class="status" aria-live="polite"></div>
   </footer>
+  <div id="ctl" class="ctl" hidden>
+    <button id="ctl-restart" class="sec" type="button" aria-label="처음부터" title="처음부터"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 15a8.5 8.5 0 1 1-2-8.8L21 8.7"/><path d="M21 3.5v5.2h-5.2"/></svg></button>
+    <button id="ctl-prev" class="sec" type="button" aria-label="이전 마디" title="이전 마디"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4.5 7.5 12l7.5 7.5"/></svg></button>
+    <button id="ctl-toggle" type="button" aria-label="재생" title="재생"><svg class="i-play" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="currentColor"><path d="M7 4.2v15.6a1 1 0 0 0 1.5.86l12.6-7.8a1 1 0 0 0 0-1.72L8.5 3.34A1 1 0 0 0 7 4.2z"/></svg><svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="currentColor"><rect x="5" y="4" width="5" height="16" rx="1.2"/><rect x="14" y="4" width="5" height="16" rx="1.2"/></svg></button>
+    <button id="ctl-next" class="sec" type="button" aria-label="다음 마디" title="다음 마디"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4.5 16.5 12 9 19.5"/></svg></button>
+  </div>
 </main>
 <script src="/viewer.js"></script>
 </body>
