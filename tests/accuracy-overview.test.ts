@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { Chart, EventSource, Provenance, RecordingSource } from '../src/chart/types';
+import { correctChordEvent } from '../src/editor/correct';
 import { chordChangeOffset, compareCharts } from '../src/eval/metrics';
 import { accuracyExport, accuracyOverview, accuracyRow, accuracyTotals } from '../src/eval/overview';
 import { OVERVIEW_EMPTY, renderOverviewHtml, syncOffsetHint } from '../src/extension/sidepanel/overview';
@@ -169,10 +170,37 @@ describe('overview rows and totals', () => {
     expect(o.totals.manual.songs).toBe(2);
     expect(o.totals.edited.songs).toBe(1);
     expect(o.totals.all.songs).toBe(3);
-    expect(o.totals.manual.timing.matched).toBe(30);
-    expect(o.totals.manual.timing.medianMs).toBeCloseTo(150, 6);
+    expect(o.totals.manual.timing?.matched).toBe(30);
+    expect(o.totals.manual.timing?.medianMs).toBeCloseTo(150, 6);
     expect(o.totals.edited.overlapSec).toBe(32);
     expect(syncOffsetHint(o.totals.manual)).toBe(150);
+  });
+
+  it('measures no timing for an edited reference (review s2-r1 F1)', () => {
+    // A chord-only fix keeps the auto chart's times, so its changes would match at 0 ms.
+    const auto = chart([[0, 'C'], [2.1, 'G'], [4.2, 'Am'], [6.3, 'F']], [[0, 8]], 'recognizer');
+    const edited = correctChordEvent(auto, { startSec: 4.2, chord: 'Am' }, 'Em', new Date('2026-11-12T00:00:00Z'));
+    expect(edited.provenance.createdBy).toBe('edited');
+    const o = accuracyOverview([
+      { source: 'youtube', id: 'a', referenceFrom: 'main', reference: song(0), auto: song(0.12, 'recognizer') },
+      { source: 'youtube', id: 'b', referenceFrom: 'main', reference: edited, auto },
+    ]);
+    const row = o.rows.find((r) => r.id === 'b')!;
+    expect(row.timing).toBeNull();
+    expect(row.offsetsMs).toEqual([]);
+    expect(row.comparison.majmin.score).toBeCloseTo(1 - 2.1 / 8, 9); // WCSR is kept: Em vs Am over 4.2..6.3
+    expect(o.totals.edited.timing).toBeNull();
+    expect(o.totals.edited.majmin.evaluatedSec).toBe(8);
+    // The combined total pools hand-made timing only: still +120 ms over 15 changes, not pulled toward 0.
+    expect(o.totals.all.timing).toEqual(o.totals.manual.timing);
+    expect(o.totals.all.timing?.medianMs).toBeCloseTo(120, 6);
+    expect(o.totals.all.timing?.matched).toBe(15);
+    const out = JSON.parse(JSON.stringify(accuracyExport(o, new Date('2026-11-12T00:00:00Z'))));
+    expect(out.rows.find((r: { id: string }) => r.id === 'b').timing).toBeNull();
+    expect(out.rows.find((r: { id: string }) => r.id === 'b').majmin.evaluatedSec).toBe(8);
+    expect(out.totals.edited.timing).toBeNull();
+    expect(out.totals.all.timing).toEqual(out.totals.manual.timing);
+    expect(out.totals.all.timing.medianOffsetMs).toBeCloseTo(120, 6);
   });
 
   it('exports numbers only (no chord events), with NaN as null', () => {

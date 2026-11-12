@@ -211,7 +211,8 @@ After the toolbar click starts capture, the offscreen document also runs listeni
   Your chart is the chart in use when it is manual or edited, otherwise the hand-made chart kept in
   `chartbackup:`; bundled examples are skipped. Totals are weighted by evaluated seconds. Fixed auto charts
   (`edited`, see 코드 고치기) are listed as 고친 코드표(일부만 직접 확인) and totalled separately: their unfixed
-  chords and all their times are still the auto chart's, so they inflate agreement and say nothing about timing.
+  chords and all their times are still the auto chart's, so they inflate agreement and say nothing about timing:
+  their timing is not measured (null in the export) and every timing total pools hand-made charts only.
   From at least 5 matched changes of hand-made charts it suggests a 싱크 오프셋 for playing auto charts (an
   estimate; nothing is changed automatically, and the 50 ms capture latency constant stays as is).
   **결과 내보내기** downloads one JSON file with the per-song numbers and totals (no audio, lyrics or chords).

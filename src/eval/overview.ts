@@ -29,9 +29,19 @@ export interface AccuracyRow {
   manualEvents: number;
   events: number;
   comparison: ChartComparison;
-  timing: { medianMs: number; matched: number; unmatched: number };
-  /** Matched change offsets (ms), kept for the pooled total; not exported. */
+  /**
+   * Chord-change timing, hand-made references only. Null for an edited reference: fixing a
+   * chord keeps the auto chart's times, so its changes would match the auto chart at 0 ms.
+   */
+  timing: ChangeTiming | null;
+  /** Matched change offsets (ms), kept for the pooled total; empty when timing is null; not exported. */
   offsetsMs: number[];
+}
+
+export interface ChangeTiming {
+  medianMs: number;
+  matched: number;
+  unmatched: number;
 }
 
 export interface AccuracyTotals {
@@ -41,8 +51,8 @@ export interface AccuracyTotals {
   majmin: WcsrResult;
   root: WcsrResult;
   sevenths: WcsrResult;
-  /** Median over every matched change of every song. */
-  timing: { medianMs: number; matched: number; unmatched: number };
+  /** Median over every matched change of the songs with timing (hand-made references); null if none. */
+  timing: ChangeTiming | null;
 }
 
 /** Window for matching a reference chord change to the nearest auto change. */
@@ -50,19 +60,20 @@ export const CHANGE_WINDOW_SEC = 1;
 
 export function accuracyRow(pair: AccuracyPair, windowSec = CHANGE_WINDOW_SEC): AccuracyRow {
   const { reference, auto } = pair;
-  const t = chordChangeOffset(reference, auto, windowSec);
+  const referenceKind: ReferenceKind = reference.provenance.createdBy === 'edited' ? 'edited' : 'manual';
+  const t = referenceKind === 'manual' ? chordChangeOffset(reference, auto, windowSec) : null;
   return {
     source: pair.source,
     id: pair.id,
     title: reference.recording.title || auto.recording.title,
     artist: reference.recording.artist || auto.recording.artist,
-    referenceKind: reference.provenance.createdBy === 'edited' ? 'edited' : 'manual',
+    referenceKind,
     referenceFrom: pair.referenceFrom,
     manualEvents: reference.events.filter((e) => e.source === 'manual').length,
     events: reference.events.length,
     comparison: compareCharts(reference, auto),
-    timing: { medianMs: t.medianMs, matched: t.matched, unmatched: t.unmatched },
-    offsetsMs: t.offsetsMs,
+    timing: t ? { medianMs: t.medianMs, matched: t.matched, unmatched: t.unmatched } : null,
+    offsetsMs: t ? t.offsetsMs : [],
   };
 }
 
@@ -80,14 +91,15 @@ function pooled(rows: AccuracyRow[], key: 'majmin' | 'root' | 'sevenths'): WcsrR
 }
 
 export function accuracyTotals(rows: AccuracyRow[]): AccuracyTotals {
-  const offsets = rows.flatMap((r) => r.offsetsMs);
+  const timed = rows.filter((r) => r.timing);
+  const offsets = timed.flatMap((r) => r.offsetsMs);
   return {
     songs: rows.length,
     overlapSec: rows.reduce((s, r) => s + r.comparison.overlapSec, 0),
     majmin: pooled(rows, 'majmin'),
     root: pooled(rows, 'root'),
     sevenths: pooled(rows, 'sevenths'),
-    timing: { medianMs: median(offsets), matched: offsets.length, unmatched: rows.reduce((s, r) => s + r.timing.unmatched, 0) },
+    timing: timed.length ? { medianMs: median(offsets), matched: offsets.length, unmatched: timed.reduce((s, r) => s + (r.timing?.unmatched ?? 0), 0) } : null,
   };
 }
 
@@ -116,14 +128,14 @@ export function overviewFromRows(rows: AccuracyRow[]): AccuracyOverview {
 export function accuracyExport(o: AccuracyOverview, exportedAt: Date, windowSec = CHANGE_WINDOW_SEC): unknown {
   const nan = (x: number) => (Number.isFinite(x) ? x : null);
   const wcsr = (w: WcsrResult) => ({ score: nan(w.score), evaluatedSec: w.evaluatedSec });
-  const timing = (t: { medianMs: number; matched: number; unmatched: number }) => ({ medianOffsetMs: nan(t.medianMs), matched: t.matched, unmatched: t.unmatched });
+  const timing = (t: ChangeTiming | null) => (t ? { medianOffsetMs: nan(t.medianMs), matched: t.matched, unmatched: t.unmatched } : null);
   const totals = (t: AccuracyTotals) => ({ songs: t.songs, overlapSec: t.overlapSec, majmin: wcsr(t.majmin), root: wcsr(t.root), sevenths: wcsr(t.sevenths), timing: timing(t.timing) });
   return {
     format: 'vibe-guitar-accuracy-overview',
     version: 1,
     exportedAt: exportedAt.toISOString(),
     changeWindowSec: windowSec,
-    note: 'timing.medianOffsetMs = auto chord change minus reference chord change (positive: auto is later). Estimate only.',
+    note: 'timing.medianOffsetMs = auto chord change minus reference chord change (positive: auto is later). Estimate only. timing is null for edited references (their times are the auto chart\'s) and is pooled from manual references only.',
     rows: o.rows.map((r) => ({
       source: r.source,
       id: r.id,
