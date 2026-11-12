@@ -8,6 +8,7 @@ import { isNoChord } from '../../arrange/chord';
 import { PICK_QUALITIES, pickBass, pickName, pickRoot, pickToConcert, sameChordSymbol, splitPick, type EventRef } from '../../editor/correct';
 import { prettyChord, shapeName } from '../../music/key';
 import type { PlayModel } from '../../play/model';
+import { slashChordHTML } from './chord-name';
 import { escapeHtml } from './diagram';
 import { formatTime } from './play';
 
@@ -156,7 +157,7 @@ export class ChordFixer {
     this.host.mark(shown.startSec);
     const capo = this.capo(m);
     const snd = this.host.showSounding() && capo && !isNoChord(shown.chord) ? ` <small class="snd">실제 ${escapeHtml(prettyChord(shown.chord))}</small>` : '';
-    $('fix-which').innerHTML = `<time>${formatTime(shown.startSec)}</time> <b>${escapeHtml(shownName(shown.chord, capo))}</b>${snd}<small>${escapeHtml(originNote(shown))}</small>`;
+    $('fix-which').innerHTML = `<time>${formatTime(shown.startSec)}</time> <b>${slashChordHTML(shownName(shown.chord, capo))}</b>${snd}<small>${escapeHtml(originNote(shown))}</small>`;
     ($('fix-prev') as HTMLButtonElement).disabled = i === 0;
     ($('fix-next') as HTMLButtonElement).disabled = i === m.chart.events.length - 1;
     this.renderPicker();
@@ -189,7 +190,7 @@ export class ChordFixer {
     const same = sameChordSymbol(concert, from);
     const to = this.none ? '코드 없음' : prettyChord(this.pick());
     const snd = this.host.showSounding() && capo && !this.none ? ` <small class="snd">실제 ${escapeHtml(prettyChord(concert))}</small>` : '';
-    $('fix-preview').innerHTML = same ? '지금과 같은 코드예요' : `${escapeHtml(shownName(from, capo))} → <b>${escapeHtml(to)}</b>${snd}`;
+    $('fix-preview').innerHTML = same ? '지금과 같은 코드예요' : `${slashChordHTML(shownName(from, capo))} → <b>${slashChordHTML(to)}</b>${snd}`;
     ($('fix-save') as HTMLButtonElement).disabled = same || this.busy;
   }
 

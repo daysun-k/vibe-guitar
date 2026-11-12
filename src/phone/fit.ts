@@ -3,6 +3,8 @@
  * the space beside its diagram. The name is drawn at the CSS size and scaled down until it fits, so
  * the diagram (fixed size, flex:none) always stays fully on screen and the page never gets wider than
  * the viewport. Below FIT_MIN_PX the CSS ellipsis clips the name instead of widening the page.
+ * The small slash bass ("/G#", .slash-bass) is em-sized inside the name, so scrollWidth measures it and
+ * the fitted size shrinks it with the rest.
  */
 
 /** Smallest font size a fitted chord name gets (px). */

@@ -293,6 +293,8 @@ screen; in landscape also that the buttons fill the next chord's column under it
 chord's column, on one bottom line, each button at least 44 px wide (it needs Chromium: `$CHROME`, Playwright's cache or Google Chrome; without one it exits 2 —
 `npm run phone-layout -- --serve` then keeps a fake panel running for any browser, and the page reports its
 own measurement in its title). The phone page fits a long chord name to the space beside its diagram.
+Here and in the side panel the slash bass of a chord name ("/G#" in "C#m7b5/G#") is drawn smaller than
+the rest; the spelling is unchanged and the text stays the full name.
 Real-phone steps:
 [checklist section G](docs/phase0-test-checklist.md#g-phone-music-stand-휴대폰-악보대--real-phone).
 

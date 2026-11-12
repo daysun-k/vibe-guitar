@@ -13,6 +13,8 @@
   .stand{height:100%;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto minmax(0,1fr) auto auto;column-gap:28px;padding:max(24px,env(safe-area-inset-top)) max(22px,env(safe-area-inset-right)) max(18px,env(safe-area-inset-bottom)) max(22px,env(safe-area-inset-left))}
   .stand>*{min-width:0}
   .chord{font-family:ui-rounded,"SF Pro Rounded","Arial Rounded MT Bold",system-ui,-apple-system,sans-serif;font-weight:800;letter-spacing:-.02em;line-height:.95;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+  /* Slash bass ("/G♯") at 0.6 of the name, same baseline; em-sized, so fitting the name shrinks it too. */
+  .chord .slash-bass{font-size:.6em;font-weight:700;letter-spacing:0}
   .snd{font-size:22px;font-weight:700;color:var(--ink-2);margin-top:6px;overflow-wrap:anywhere}
   .snd:empty{display:none}
   .now,.nx{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:0;overflow:hidden;container-type:size}
