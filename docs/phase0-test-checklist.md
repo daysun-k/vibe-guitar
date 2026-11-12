@@ -92,6 +92,10 @@ Use songs with no chart first. Note Chrome version and the 캡처 tab "실행 �
       바꾸기 전 코드표").
 - [ ] Export the overview ("결과 내보내기"): one `vibe-guitar-accuracy-<date>.json` with rows and totals and no
       chords or lyrics. This file is the user-chart vs auto-chart evaluation record (instead of copying numbers).
+- [ ] Turn it into a report: `npm run accuracy-report -- ~/Downloads/vibe-guitar-accuracy-<date>.json` (add more
+      exported files to merge them). It prints the path of one HTML file; open it on the computer and on a phone:
+      the totals match the panel, the table stacks without sideways scrolling, and the suggested 싱크 오프셋
+      equals the panel's (or says why there is none). A non-export JSON (a chart file) is refused with a message.
 - [ ] Open the bench page (캡처 tab link), run WASM with 6 clips and WebGPU with 6 clips; record the latency
       lines and the summary.
 - [ ] Watch CPU in Chrome's task manager (offscreen document) during listening; record the % and whether the

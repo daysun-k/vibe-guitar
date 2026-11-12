@@ -272,6 +272,15 @@ After the toolbar click starts capture, the offscreen document also runs listeni
   From at least 5 matched changes of hand-made charts it suggests a 싱크 오프셋 for playing auto charts (an
   estimate; nothing is changed automatically, and the 50 ms capture latency constant stays as is).
   **결과 내보내기** downloads one JSON file with the per-song numbers and totals (no audio, lyrics or chords).
+  `npm run accuracy-report -- <export.json> [more.json ...] [--out <file.html>]` turns one or more of those files
+  into one self-contained Korean HTML report (inline CSS and SVG, no scripts, no network; default
+  `<export>-report.html` next to the first file, path printed): overall 장·단 / 근음 / 7th 포함 with the evaluated
+  time, a per-song bar chart and table (stacks on a phone), the suggested 싱크 오프셋 for 설정 → 싱크 보정 (same rule
+  as the panel, marked as rough below 20 matched changes) and a plain-language "이 숫자가 뜻하는 것". Several files
+  are merged by recording (`source:id`, latest `exportedAt` wins) and totals are recomputed with
+  `src/eval/overview.ts`; the export keeps only each song's median offset, so a merged timing total is the
+  median of song medians weighted by matched changes (one unmerged file uses its own exact total). Synthetic
+  sample: `tests/fixtures/accuracy-export-sample.json`.
   It reads storage only, each time the section opens, one song per task on the panel's thread (about 1.5 ms
   for a 4-minute song), so it needs no worker.
 - YouTube Music: the adapter reports the id of what the player is actually playing
