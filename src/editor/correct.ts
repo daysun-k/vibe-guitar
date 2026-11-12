@@ -80,21 +80,30 @@ export function pickRoot(rootPc: number, quality: string): string {
   return spellPitchClass(rootPc, minorKind(quality) ? 'guitar-minor' : 'guitar-major');
 }
 
-/** ASCII shape name of a picker choice ("G#m", "Ab7"). */
-export function pickName(rootPc: number, quality: string): string {
-  return pickRoot(rootPc, quality) + quality;
+/** Slash bass of a picker choice, spelled like capo shape basses (C♯, E♭, F♯, A♭, B♭). */
+export function pickBass(pc: number): string {
+  return spellPitchClass(pc, 'guitar-major');
 }
 
 /**
- * Picker state for a shown (shape) chord: its root pitch class and its kind. A kind the
- * picker does not offer (e.g. "7sus4") is returned as is so the picker can keep it
- * selectable; a slash bass is dropped. Null for no chord.
+ * ASCII shape name of a picker choice ("G#m", "Ab7", "Am/B"). A bass equal to the root is
+ * not written as a slash (C with bass C is "C").
  */
-export function splitPick(shape: string): { rootPc: number; quality: string } | null {
+export function pickName(rootPc: number, quality: string, bassPc: number | null = null): string {
+  const bass = bassPc === null || (bassPc - rootPc) % 12 === 0 ? '' : `/${pickBass(bassPc)}`;
+  return pickRoot(rootPc, quality) + quality + bass;
+}
+
+/**
+ * Picker state for a shown (shape) chord: its root pitch class, its kind and its slash bass
+ * pitch class (null without one). A kind the picker does not offer (e.g. "7sus4") is
+ * returned as is so the picker can keep it selectable. Null for no chord.
+ */
+export function splitPick(shape: string): { rootPc: number; quality: string; bassPc: number | null } | null {
   if (isNoChord(shape) || shape === 'N.C.') return null;
   try {
-    const c = parseChord(shape.replace('♭', 'b').replace('♯', '#'));
-    return { rootPc: c.root, quality: qualitySuffix(c) };
+    const c = parseChord(shape.replaceAll('♭', 'b').replaceAll('♯', '#'));
+    return { rootPc: c.root, quality: qualitySuffix(c), bassPc: c.bass };
   } catch {
     return null;
   }

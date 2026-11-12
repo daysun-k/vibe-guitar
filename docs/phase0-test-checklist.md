@@ -100,6 +100,8 @@ Use an auto chart with at least one chord you know is wrong, ideally one only pa
       ‹ › step to the previous/next chord and the player jumps there. Clicking a bar still only seeks.
 - [ ] With 카포 0, pick a root and a kind, check the preview "G → Am", press "이 코드로 고치기". The status line
       says "고쳤어요: G → Am" with "되돌리기"; the grid and strip show the new chord at once.
+- [ ] Slash bass: open a "C/B" (walking bass); the bass row preselects "/B" (a plain chord preselects
+      "베이스 없음"). Pick Am → preview "C/B → Am/B"; "베이스 없음" gives "Am"; with 카포 1 the bass is a shape name too.
 - [ ] Only that chord changed: the other chords, their bars and the "—" gaps look exactly as before.
 - [ ] The badge now reads "자동 코드표 · 1곳 고침 · 나머지는 미확인" (narrow panel: "자동 · 일부 고침"); its
       explanation says how many chords you fixed and that the rest are unchecked.

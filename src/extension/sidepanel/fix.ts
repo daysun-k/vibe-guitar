@@ -1,11 +1,11 @@
 /**
  * Play view "코드 고치기": pick one chord event of the chart, choose a replacement in the
  * names the play view shows (capo shape names; the sounding name only as a small extra when
- * 실제 음 이름 보기 is on) and save. Clicking a bar still only seeks; this panel is opened
+ * 실제 음 이름 보기 is on) and save. A slash bass is kept unless the user changes or removes it. Clicking a bar still only seeks; this panel is opened
  * by its own button and starts at the chord under the playhead.
  */
 import { isNoChord } from '../../arrange/chord';
-import { PICK_QUALITIES, pickName, pickRoot, pickToConcert, sameChordSymbol, splitPick, type EventRef } from '../../editor/correct';
+import { PICK_QUALITIES, pickBass, pickName, pickRoot, pickToConcert, sameChordSymbol, splitPick, type EventRef } from '../../editor/correct';
 import { prettyChord, shapeName } from '../../music/key';
 import type { PlayModel } from '../../play/model';
 import { escapeHtml } from './diagram';
@@ -52,6 +52,8 @@ export class ChordFixer {
   private ref: EventRef | null = null;
   private rootPc = 0;
   private quality = '';
+  /** Slash bass pitch class of the pick; null for 베이스 없음. */
+  private bassPc: number | null = null;
   private none = false;
   private busy = false;
   private readonly panel = $('fix');
@@ -74,6 +76,13 @@ export class ChordFixer {
       if (!b) return;
       this.none = b.dataset.q === 'N';
       if (!this.none) this.quality = b.dataset.q!;
+      this.renderPicker();
+    });
+    $('fix-bass').addEventListener('click', (e) => {
+      const b = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-bass]');
+      if (!b || b.disabled) return;
+      const pc = b.dataset.bass === '' ? null : Number(b.dataset.bass);
+      this.bassPc = pc === this.rootPc ? null : pc; // the root as bass is a plain chord
       this.renderPicker();
     });
     $('fix-save').addEventListener('click', () => void this.save());
@@ -142,6 +151,7 @@ export class ChordFixer {
         this.rootPc = p.rootPc;
         this.quality = p.quality;
       }
+      this.bassPc = p?.bassPc ?? null;
     }
     this.host.mark(shown.startSec);
     const capo = this.capo(m);
@@ -154,7 +164,7 @@ export class ChordFixer {
 
   /** ASCII shape name of the current pick, or "N". */
   private pick(): string {
-    return this.none ? 'N' : pickName(this.rootPc, this.quality);
+    return this.none ? 'N' : pickName(this.rootPc, this.quality, this.bassPc);
   }
 
   private renderPicker(): void {
@@ -169,6 +179,11 @@ export class ChordFixer {
     $('fix-kinds').innerHTML =
       kinds.map((q) => `<button data-q="${escapeHtml(q)}" aria-pressed="${!this.none && q === this.quality}">${escapeHtml(prettyChord(pickName(this.rootPc, q)))}</button>`).join('') +
       `<button data-q="N" aria-pressed="${this.none}">코드 없음</button>`;
+    // A bass equal to the root is shown as 베이스 없음 (the chord carries no slash then).
+    const bass = this.bassPc === null || this.bassPc === this.rootPc ? null : this.bassPc;
+    $('fix-bass').innerHTML =
+      `<button data-bass="" aria-pressed="${!this.none && bass === null}"${this.none ? ' disabled' : ''}>베이스 없음</button>` +
+      Array.from({ length: 12 }, (_, pc) => `<button data-bass="${pc}" aria-pressed="${!this.none && pc === bass}"${this.none ? ' disabled' : ''}>/${escapeHtml(prettyChord(pickBass(pc)))}</button>`).join('');
     const from = m.chart.events[this.index].chord;
     const concert = pickToConcert(this.pick(), capo, m.key);
     const same = sameChordSymbol(concert, from);
