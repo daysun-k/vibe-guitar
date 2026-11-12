@@ -3,16 +3,28 @@
  * the local relay started by `npm run phone` (ws://127.0.0.1 only; the relay serves the phone).
  * Lives in the panel page, not the service worker, so it exists exactly while the panel is open.
  * Off by default; while off it never opens a socket.
+ *
+ * VGT-16: with control allowed (setControl), it tells the relay, mirrors the relay's list of phones
+ * and their pairing codes, sends the panel's 승인 / 거절 / 승인 해제, and checks every forwarded
+ * command again (switch, approved connection, song revision, duplicate id, rate, one at a time)
+ * before handing it to `onCommand`. The outcome goes back only over the same socket.
  */
 import {
   DEFAULT_PUBLISHER_PORT,
   HEARTBEAT_MS,
   RATE_MAX,
   RATE_MIN,
+  TokenBucket,
   positionAt,
   songParts,
+  validateRelayToPanel,
   type AnchorMessage,
+  type CommandFailure,
+  type CommandOutcome,
+  type ForwardedCommand,
   type Loop,
+  type PhoneCommand,
+  type PhoneEntry,
   type SongPartMessage,
 } from '../../phone/protocol';
 import type { SongView } from '../../phone/song-view';
@@ -47,6 +59,13 @@ export interface PhoneLinkOptions {
   onStatus: (s: PhoneStatus) => void;
   /** Current playback, or null when no song is shown. */
   sample: () => PlaybackSample | null;
+  /** The relay's list of phones changed (empty while control is off or disconnected). */
+  onPhones?: (list: PhoneEntry[]) => void;
+  /**
+   * Carries out a command from the approved phone (already checked here). `progress` sends an
+   * intermediate outcome (the count-in started); the resolved outcome is the final one.
+   */
+  onCommand?: (cmd: PhoneCommand, progress: (o: CommandOutcome) => void) => Promise<CommandOutcome>;
   port?: number;
   makeSocket?: (url: string) => SocketLike;
   now?: () => number;
@@ -96,18 +115,27 @@ export class PhoneLink {
   private songJson = '';
   private parts: SongPartMessage[] = [];
   private lastAnchor: AnchorMessage | null = null;
+  private control = false;
+  private phones: PhoneEntry[] = [];
+  /** Highest command id handled per phone connection. */
+  private readonly seen = new Map<string, number>();
+  private bucket: TokenBucket;
+  private busy = false;
   private readonly o: Required<Omit<PhoneLinkOptions, 'port'>> & { url: string };
 
   constructor(opts: PhoneLinkOptions) {
     this.o = {
       onStatus: opts.onStatus,
       sample: opts.sample,
+      onPhones: opts.onPhones ?? (() => {}),
+      onCommand: opts.onCommand ?? (async () => ({ ok: false, code: 'failed' })),
       url: `ws://127.0.0.1:${opts.port ?? DEFAULT_PUBLISHER_PORT}/publish`,
       makeSocket: opts.makeSocket ?? ((url) => new WebSocket(url)),
       now: opts.now ?? Date.now,
       setTimer: opts.setTimer ?? ((fn, ms) => setTimeout(fn, ms)),
       clearTimer: opts.clearTimer ?? ((id) => clearTimeout(id as ReturnType<typeof setTimeout>)),
     };
+    this.bucket = new TokenBucket(undefined, undefined, this.o.now);
   }
 
   get state(): PhoneStatus {
@@ -129,6 +157,38 @@ export class PhoneLink {
       this.drop();
       this.setStatus({ kind: 'off' });
     }
+  }
+
+  get controlAllowed(): boolean {
+    return this.control;
+  }
+
+  get phoneList(): readonly PhoneEntry[] {
+    return this.phones;
+  }
+
+  /** 휴대폰에서 조작 허용. Any change revokes the approval (on the relay as well). */
+  setControl(on: boolean): void {
+    if (on === this.control) return;
+    this.control = on;
+    this.seen.clear();
+    if (!on) this.setPhones([]);
+    if (this.isOpen()) this.send({ t: 'control', on });
+  }
+
+  approve(id: string): void {
+    const p = this.phones.find((x) => x.id === id);
+    if (this.control && p && p.state !== 'approved') this.send({ t: 'approve', id, code: p.code });
+  }
+
+  reject(id: string): void {
+    const p = this.phones.find((x) => x.id === id);
+    if (this.control && p && p.state !== 'rejected') this.send({ t: 'reject', id, code: p.code });
+  }
+
+  /** 승인 해제. */
+  revoke(): void {
+    if (this.control) this.send({ t: 'revoke' });
   }
 
   /** Reconnect now instead of waiting for the backoff (sheet opened, window focused). */
@@ -218,6 +278,9 @@ export class PhoneLink {
     ws.onopen = () => {
       this.retryMs = FIRST_RETRY_MS;
       this.setStatus({ kind: 'connected', viewers: 0 });
+      // A new relay session: nothing from an earlier one is replayed.
+      this.seen.clear();
+      if (this.control) this.send({ t: 'control', on: true });
       if (!this.parts.length) this.publishSong(this.songJson ? (JSON.parse(this.songJson) as SongView) : EMPTY_SONG);
       else for (const p of this.parts) this.send(p);
       this.lastAnchor = null;
@@ -231,18 +294,19 @@ export class PhoneLink {
       this.heartbeat = this.o.setTimer(beat, HEARTBEAT_MS);
     };
     ws.onmessage = (ev) => {
-      try {
-        const m = JSON.parse(String(ev.data)) as { t?: unknown; n?: unknown };
-        if (m.t === 'viewers' && typeof m.n === 'number' && Number.isInteger(m.n) && m.n >= 0) this.setStatus({ kind: 'connected', viewers: m.n });
-      } catch {
-        /* ignore anything else */
-      }
+      if (this.ws !== ws) return;
+      const m = validateRelayToPanel(String(ev.data));
+      if (!m) return; // ignore anything else
+      if (m.t === 'viewers') this.setStatus({ kind: 'connected', viewers: m.n });
+      else if (m.t === 'phones') this.setPhones(this.control ? m.list : []);
+      else this.onCommand(m, ws);
     };
     ws.onclose = (ev) => {
       if (this.ws !== ws) return;
       this.ws = null;
       this.o.clearTimer(this.heartbeat);
       this.heartbeat = null;
+      this.setPhones([]);
       if (!this.enabled) return;
       if (ev?.code === REPLACED) return this.setStatus({ kind: 'replaced' });
       this.setStatus({ kind: 'disconnected' });
@@ -267,6 +331,7 @@ export class PhoneLink {
     }
     const ws = this.ws;
     this.ws = null;
+    this.setPhones([]);
     if (ws) {
       ws.onopen = ws.onmessage = ws.onclose = null;
       try {
@@ -275,6 +340,46 @@ export class PhoneLink {
         /* already closed */
       }
     }
+  }
+
+  private setPhones(list: PhoneEntry[]): void {
+    if (JSON.stringify(list) === JSON.stringify(this.phones)) return;
+    this.phones = list;
+    this.o.onPhones(list);
+  }
+
+  /** The panel's own checks of a command the relay forwarded; then carries it out. */
+  private onCommand(m: ForwardedCommand, ws: SocketLike): void {
+    const reply = (o: CommandOutcome) => {
+      // Only over the socket the command came in on: never to a later connection.
+      if (this.ws === ws) this.send({ t: 'result', to: m.from, id: m.id, ...o });
+    };
+    const fail = (code: CommandFailure) => reply({ ok: false, code });
+    if (!this.control) return fail('off');
+    if (this.phones.find((p) => p.state === 'approved')?.id !== m.from) return fail('not-approved');
+    if (m.id <= (this.seen.get(m.from) ?? 0)) return fail('duplicate');
+    this.seen.set(m.from, m.id);
+    if (!this.bucket.take()) return fail('rate');
+    // A song change waiting for its debounce is already what the panel shows.
+    if (m.epoch !== this.epoch || m.rev !== this.rev || this.songTimer) return fail('stale');
+    if (this.busy) return fail('busy');
+    this.busy = true;
+    let released = false;
+    const release = () => {
+      if (!released) this.busy = false;
+      released = true;
+    };
+    this.o
+      .onCommand(m.cmd, (o) => {
+        // Once the count-in runs, the phone may send the next command (pause cancels it).
+        release();
+        reply(o);
+      })
+      .catch((): CommandOutcome => ({ ok: false, code: 'failed' }))
+      .then((o) => {
+        release();
+        reply(o);
+      });
   }
 
   private setStatus(s: PhoneStatus): void {

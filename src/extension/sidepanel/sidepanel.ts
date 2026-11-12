@@ -65,6 +65,8 @@ import { ChordFixer } from './fix';
 import { OVERVIEW_EMPTY, renderOverviewHtml } from './overview';
 import { capoReason, unplayableLine, PlayScreen, formatTime, type LoopMarks } from './play';
 import { PhoneLink, phoneStatusText, type PhoneStatus, type PlaybackSample } from './phone-link';
+import { restartTargetSec, runPhoneCommand, type ObservedPlayer, type PanelTransport, type TransportResult } from './phone-control';
+import type { CommandOutcome, PhoneCommand, PhoneEntry } from '../../phone/protocol';
 import { buildSongView } from '../../phone/song-view';
 
 // ---------- DOM helpers ----------
@@ -1046,13 +1048,14 @@ function stopCountIn(): void {
   $('countin').classList.remove('on');
 }
 
-async function seekTo(sec: number): Promise<void> {
+async function seekTo(sec: number): Promise<PlayerControlResult> {
   stopCountIn();
   jumper.seeked(Math.max(0, sec), Date.now());
   const r = await sendControl({ type: 'player-control', action: 'seek', time: Math.max(0, sec) });
   if (!r.ok) setText('countin-status', `이동하지 못했어요 (${r.reason ?? '알 수 없음'}).`);
   else setText('countin-status', '');
   lastT = -10;
+  return r;
 }
 
 /**
@@ -1060,24 +1063,30 @@ async function seekTo(sec: number): Promise<void> {
  * loop on and the playhead outside it, playback starts from the loop's first bar. Automatic loop
  * repeats never come through here, so they never count in.
  */
-async function togglePlay(): Promise<void> {
+async function togglePlay(onCountIn?: () => void): Promise<TransportResult> {
   setText('countin-status', '');
-  if (countingIn) return stopCountIn();
+  if (countingIn) {
+    stopCountIn();
+    return { ok: true };
+  }
   if (isPlaying()) {
     const r = await sendControl({ type: 'player-control', action: 'pause' });
     if (!r.ok) setText('countin-status', `이 플레이어는 패널에서 멈출 수 없어요 (${r.reason ?? '알 수 없음'}).`);
-    return;
+    return r;
   }
   if (!settings.countInBars || !model) {
     const loopStart = practiceLoop && !insideLoop(practiceLoop, positionNow(false)) ? loopStartTarget(practiceLoop) : null;
     if (loopStart !== null) {
       jumper.seeked(loopStart, Date.now());
       const s = await sendControl({ type: 'player-control', action: 'seek', time: loopStart });
-      if (!s.ok) return setText('countin-status', `반복 구간 처음으로 이동하지 못했어요 (${s.reason ?? '알 수 없음'}).`);
+      if (!s.ok) {
+        setText('countin-status', `반복 구간 처음으로 이동하지 못했어요 (${s.reason ?? '알 수 없음'}).`);
+        return s;
+      }
     }
     const r = await sendControl({ type: 'player-control', action: 'play' });
     if (!r.ok) setText('countin-status', `이 플레이어는 패널에서 재생할 수 없어요 (${r.reason ?? '알 수 없음'}).`);
-    return;
+    return r;
   }
   const run = ++countInRun;
   const m = model;
@@ -1087,11 +1096,12 @@ async function togglePlay(): Promise<void> {
   const target = explicitStartSec(practiceLoop, pos, bar ? bar.startSec : null);
   jumper.seeked(target, Date.now());
   const prep = await prepareCountIn(sendControl, () => run === countInRun, target);
-  if (prep.kind === 'cancelled') return;
+  if (prep.kind === 'cancelled') return { ok: false, cancelled: true };
   if (prep.kind === 'failed') {
-    return setText('countin-status', prep.step === 'pause'
+    setText('countin-status', prep.step === 'pause'
       ? `이 플레이어에서는 카운트인 재생을 지원하지 않아요 (${prep.reason ?? '알 수 없음'}).`
       : `마디 처음으로 이동하지 못해 카운트인을 취소했어요 (${prep.reason ?? '알 수 없음'}).`);
+    return { ok: false, reason: prep.reason };
   }
   const rate = currentRate();
   const n = settings.countInBars * m.big.bigPerBar;
@@ -1100,6 +1110,7 @@ async function togglePlay(): Promise<void> {
   const num = box.querySelector('b')!;
   countingIn = true;
   box.classList.add('on');
+  onCountIn?.();
   const done = await runCountIn({
     beats: n,
     stepMs,
@@ -1116,12 +1127,14 @@ async function togglePlay(): Promise<void> {
       return sendControl({ type: 'player-control', action: 'play' });
     },
   });
-  if (done.kind === 'cancelled') return;
+  if (done.kind === 'cancelled') return { ok: false, cancelled: true };
   if (done.kind === 'rate-changed') {
     stopCountIn();
-    return setText('countin-status', RATE_CANCELS_COUNTIN);
+    setText('countin-status', RATE_CANCELS_COUNTIN);
+    return { ok: false, cancelled: true };
   }
   if (!done.result.ok) setText('countin-status', `재생을 다시 시작하지 못했어요 (${done.result.reason ?? '알 수 없음'}).`);
+  return done.result;
 }
 
 // ---------- practice: speed, A/B loop ----------
@@ -1351,6 +1364,56 @@ function syncPhoneSong(): void {
   phone.setSong(model ? buildSongView(model, { title: from.title, artist: from.artist, showSounding: from.snd }) : null);
 }
 
+// ---------- 휴대폰에서 조작 (VGT-16) ----------
+const phonePlayer: ObservedPlayer = {
+  playing: () => isPlaying() && !countingIn,
+  countingIn: () => countingIn,
+  position: () => positionNow(false),
+  rate: currentRate,
+  isAd: () => !demo && !!player?.isAd,
+  hasTarget: () => !!model && (!!demo || (!!player && hasChrome && controlTabId(playerTabId, activeTabId) !== null)),
+};
+
+const phoneTransport: PanelTransport = {
+  toggle: (onCountIn) => togglePlay(onCountIn),
+  seek: (sec) => seekTo(sec),
+  restartTarget: () => (model ? restartTargetSec(practiceLoop ? loopStartTarget(practiceLoop) : null, model.bars, positionNow(false)) : null),
+};
+
+function onPhoneCommand(cmd: PhoneCommand, progress: (o: CommandOutcome) => void): Promise<CommandOutcome> {
+  return runPhoneCommand(cmd, phonePlayer, phoneTransport, { progress });
+}
+
+function renderPhones(list: readonly PhoneEntry[]): void {
+  const ul = $('phone-pair-list');
+  const items = list.map((p) => {
+    const li = document.createElement('li');
+    li.className = p.state;
+    const code = document.createElement('b');
+    code.textContent = p.code;
+    const note = document.createElement('span');
+    note.textContent = p.state === 'approved' ? '조작 가능' : p.state === 'rejected' ? '거절함' : '승인 대기';
+    li.append(code, note);
+    const button = (label: string, act: () => void) => {
+      const b = document.createElement('button');
+      b.className = 'btn';
+      b.type = 'button';
+      b.textContent = label;
+      b.setAttribute('aria-label', `휴대폰 ${p.code} ${label}`);
+      b.onclick = act;
+      li.append(b);
+    };
+    if (p.state === 'approved') button('승인 해제', () => phone.revoke());
+    else {
+      button('승인', () => phone.approve(p.id));
+      if (p.state === 'pending') button('거절', () => phone.reject(p.id));
+    }
+    return li;
+  });
+  ul.replaceChildren(...items);
+  $('phone-pair-note').hidden = list.length > 0;
+}
+
 function renderPhoneStatus(s: PhoneStatus): void {
   $('phone-status').hidden = s.kind === 'off';
   setText('phone-state', phoneStatusText(s));
@@ -1358,7 +1421,12 @@ function renderPhoneStatus(s: PhoneStatus): void {
 
 function syncPhone(): void {
   $('phone-sw').setAttribute('aria-checked', String(settings.phoneStand));
+  $('phone-ctl-sw').setAttribute('aria-checked', String(settings.phoneControl));
+  $('phone-ctl-field').hidden = !settings.phoneStand;
+  $('phone-pair').hidden = !settings.phoneStand || !settings.phoneControl;
   if (settings.phoneStand && !phone.isEnabled) phoneSongFrom = null;
+  // Control off first, so a panel switching both off never leaves an approval behind.
+  phone.setControl(settings.phoneStand && settings.phoneControl);
   phone.setEnabled(settings.phoneStand);
   syncPhoneSong();
 }
@@ -1457,6 +1525,11 @@ function bindSheet(): void {
   };
   $('phone-sw').onclick = () => {
     settings.phoneStand = !settings.phoneStand;
+    syncSheet();
+    persist(false);
+  };
+  $('phone-ctl-sw').onclick = () => {
+    settings.phoneControl = !settings.phoneControl;
     syncSheet();
     persist(false);
   };
@@ -1677,8 +1750,9 @@ async function main(): Promise<void> {
   if (params.has('snd')) settings.showSounding = true;
   if (params.has('root')) settings.allowRootChange = true;
   if (params.has('phone')) settings.phoneStand = true; // screenshots: the switch on (connects to 127.0.0.1 only)
+  if (params.has('phonectl')) settings.phoneControl = true; // screenshots: 휴대폰에서 조작 허용 on
   applyTheme();
-  phone = new PhoneLink({ onStatus: renderPhoneStatus, sample: phoneSample });
+  phone = new PhoneLink({ onStatus: renderPhoneStatus, sample: phoneSample, onPhones: renderPhones, onCommand: onPhoneCommand });
   addEventListener('focus', () => phone.retryNow());
   screen = new PlayScreen({
     seek: (sec) => void seekTo(sec),

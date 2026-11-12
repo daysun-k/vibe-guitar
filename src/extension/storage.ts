@@ -28,6 +28,8 @@ export interface Settings {
   allowRootChange: boolean;
   /** 휴대폰 악보대: publish chords and position to the local relay (`npm run phone`). Off by default. */
   phoneStand: boolean;
+  /** 휴대폰에서 조작 허용 (VGT-16): the approved phone may play/pause and restart. Off by default. */
+  phoneControl: boolean;
   profile: Profile;
 }
 
@@ -43,6 +45,7 @@ export const DEFAULT_SETTINGS: Settings = {
   syncOffsetMs: 0,
   allowRootChange: false,
   phoneStand: false,
+  phoneControl: false,
   profile: DEFAULT_PROFILE,
 };
 
@@ -58,7 +61,7 @@ export function normalizeSettings(raw: unknown): Settings {
   const s = (raw && typeof raw === 'object' ? raw : {}) as Partial<Settings>;
   const countInBars = s.countInBars === 0 || s.countInBars === 1 || s.countInBars === 2 ? s.countInBars : s.countIn === false ? 0 : 1;
   const { countIn: _legacy, ...rest } = s;
-  return { ...DEFAULT_SETTINGS, ...rest, countInBars, allowRootChange: s.allowRootChange === true, phoneStand: s.phoneStand === true, profile: { ...DEFAULT_PROFILE, ...(s.profile ?? {}) } };
+  return { ...DEFAULT_SETTINGS, ...rest, countInBars, allowRootChange: s.allowRootChange === true, phoneStand: s.phoneStand === true, phoneControl: s.phoneControl === true, profile: { ...DEFAULT_PROFILE, ...(s.profile ?? {}) } };
 }
 
 export async function saveSettings(s: Settings): Promise<void> {

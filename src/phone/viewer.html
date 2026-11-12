@@ -36,6 +36,17 @@
   .lock[hidden]{display:none}
   .lock button{font:inherit;font-weight:800;color:#FFF7EF;background:var(--accent);border:0;border-radius:6px;padding:10px 16px;flex:none}
   .nodia{font-size:22px;font-weight:700;color:var(--ink-2)}
+  .pair{margin:0;font-size:20px;line-height:1.35;border:3px dashed var(--line);padding:10px 14px;display:flex;gap:14px;align-items:center;justify-content:space-between}
+  .pair[hidden]{display:none}
+  .pair b{font-size:40px;font-weight:800;letter-spacing:.18em;color:var(--accent);font-variant-numeric:tabular-nums;flex:none}
+  .ctl{display:flex;gap:14px}
+  .ctl[hidden]{display:none}
+  .ctl button{flex:1;font:inherit;font-size:26px;font-weight:800;min-height:72px;border-radius:12px;border:3px solid var(--accent);background:var(--accent);color:#FFF7EF;touch-action:manipulation}
+  .ctl button.sec{background:transparent;color:var(--accent)}
+  .ctl button:disabled{opacity:.45}
+  .ctl-msg{margin:0;font-size:20px;font-weight:700;color:var(--ink-2)}
+  .ctl-msg:empty{display:none}
+  .ctl-msg.alert{color:var(--accent)}
   .wait{grid-row:2/5;align-self:center;font-size:30px;font-weight:800;line-height:1.35}
   .wait small{display:block;font-size:22px;font-weight:600;color:var(--ink-2);margin-top:8px}
   .stand.waiting .now,.stand.waiting .rule,.stand.waiting .nx{display:none}
@@ -63,6 +74,10 @@
     #next-dia svg{width:auto;height:min(40vh,22vw)}
     .foot{flex-direction:row;align-items:center;justify-content:space-between;gap:20px}
     .lock{font-size:18px;padding:8px 12px;flex:1}
+    .pair{font-size:18px;padding:6px 12px;flex:1}
+    .pair b{font-size:30px}
+    .ctl{flex:none}
+    .ctl button{min-height:60px;font-size:22px;padding:0 22px}
     .status{flex:none;max-width:45%}
   }
 </style>
@@ -88,6 +103,9 @@
   </section>
   <footer class="foot">
     <p id="lock" class="lock" hidden><span>화면이 꺼지지 않게 자동 잠금을 꺼 주세요. iPhone: 설정 › 디스플레이 및 밝기 › 자동 잠금. Android: 설정 › 디스플레이 › 화면 자동 꺼짐.</span><button id="lock-ok" type="button">확인</button></p>
+    <p id="pair" class="pair" hidden><span id="pair-text">조작하려면 Mac 패널 › 휴대폰에서 조작 허용에서 이 번호를 승인해 주세요</span><b id="pair-code"></b></p>
+    <div id="ctl" class="ctl" hidden><button id="ctl-toggle" type="button">재생</button><button id="ctl-restart" class="sec" type="button">처음부터</button></div>
+    <p id="ctl-msg" class="ctl-msg" aria-live="polite"></p>
     <div id="status" class="status" aria-live="polite">연결 중</div>
   </footer>
 </main>

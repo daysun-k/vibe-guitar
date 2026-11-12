@@ -268,9 +268,9 @@ describe('count-in only on an explicit start', () => {
 
   it('the panel uses runCountIn for its count-in and plays only through it', () => {
     const src = readFileSync(new URL('../src/extension/sidepanel/sidepanel.ts', import.meta.url), 'utf8');
-    const toggle = src.slice(src.indexOf('async function togglePlay(): Promise<void> {'), src.indexOf('// ---------- practice: speed'));
+    const toggle = src.slice(src.indexOf('async function togglePlay(onCountIn?: () => void): Promise<TransportResult> {'), src.indexOf('// ---------- practice: speed'));
     expect(toggle).toContain('await runCountIn({');
-    expect(toggle).toMatch(/done\.kind === 'rate-changed'\) \{\s*stopCountIn\(\);\s*return setText\('countin-status', RATE_CANCELS_COUNTIN\)/);
+    expect(toggle).toMatch(/done\.kind === 'rate-changed'\) \{\s*stopCountIn\(\);\s*setText\('countin-status', RATE_CANCELS_COUNTIN\);\s*return \{ ok: false, cancelled: true \}/);
     const setRate = src.slice(src.indexOf('async function setRate('), src.indexOf('function resetRateForNewRecording'));
     expect(setRate).toMatch(/if \(countingIn\) \{\s*stopCountIn\(\);/);
   });

@@ -1,7 +1,8 @@
 /**
- * VGT-13 phone music stand page (read-only viewer, design B "악보대형"). Served by the relay on the
- * home LAN over plain http, so there is no Screen Wake Lock: the page asks once to turn off
- * auto-lock instead. It never sends anything but clock pings.
+ * VGT-13 phone music stand page (design B "악보대형"). Served by the relay on the home LAN over plain
+ * http, so there is no Screen Wake Lock: the page asks once to turn off auto-lock instead.
+ * It sends clock pings and, VGT-16, only while the panel approved this connection, the two commands
+ * (재생/일시정지, 처음부터) for the song it shows. A pending command is never re-sent after a reconnect.
  */
 import { renderShapeDiagram } from '../extension/sidepanel/diagram';
 import {
@@ -13,9 +14,14 @@ import {
   isNewer,
   positionAt,
   validatePublisherMessage,
+  validateRelayToViewer,
   type AnchorMessage,
   type ClockEstimate,
   type ClockSample,
+  type CommandFailure,
+  type CommandOutcome,
+  type PairMessage,
+  type PhoneCommand,
 } from './protocol';
 import { phoneFrame, readSongView, shapeVoicing, type PhoneSong } from './song-view';
 
@@ -39,12 +45,79 @@ let clock: ClockEstimate | null = null;
 let pingId = 0;
 let backoff = 500;
 
+// ---------- control (VGT-16) ----------
+/** A command's answer may take the panel's 3 s observation plus the trip; past this it is given up. */
+const COMMAND_WAIT_MS = 8000;
+const MESSAGE_MS = 4000;
+let pair: PairMessage = { t: 'pair', state: 'off' };
+let cmdId = 0;
+let pending: { id: number; cmd: PhoneCommand; at: number } | null = null;
+/** Request whose count-in runs: its final result (playing or a failure) still comes. */
+let countinId = 0;
+let message = { text: '', alert: false, until: 0 };
+
+const FAILURE_TEXT: Record<CommandFailure, string> = {
+  off: 'Mac 패널에서 휴대폰 조작이 꺼져 있어요',
+  'not-approved': 'Mac 패널에서 이 휴대폰을 먼저 승인해 주세요',
+  stale: '곡이 바뀌었어요 · 다시 눌러 주세요',
+  duplicate: '이미 보낸 요청이에요',
+  rate: '너무 빨리 눌렀어요 · 잠시 뒤에 다시 눌러 주세요',
+  ad: '광고 중에는 조작할 수 없어요',
+  'no-target': 'Mac에서 조작할 곡이나 플레이어를 찾지 못했어요',
+  busy: 'Mac이 앞 요청을 처리하는 중이에요',
+  autoplay: 'Mac 브라우저가 재생을 막았어요 · 맥에서 한 번 재생을 눌러 주세요',
+  timeout: 'Mac에서 바뀐 것을 확인하지 못했어요 · Mac 화면을 확인해 주세요',
+  failed: 'Mac에서 실행하지 못했어요',
+  'no-panel': 'Mac 패널이 연결되어 있지 않아요',
+};
+
+/** Korean message for an outcome. */
+function outcomeText(cmd: PhoneCommand | null, o: CommandOutcome): string {
+  if (!o.ok) return FAILURE_TEXT[o.code];
+  if (o.state === 'countin') return '카운트인 뒤에 재생해요 · 한 번 더 누르면 멈춰요';
+  if (cmd === 'restart') return o.state === 'playing' ? '처음부터 다시 재생해요' : '처음 위치로 옮겼어요';
+  return o.state === 'playing' ? '재생했어요' : '일시정지했어요';
+}
+
+function say(text: string, alert: boolean) {
+  message = { text, alert, until: now() + MESSAGE_MS };
+}
+
+function sendCommand(cmd: PhoneCommand) {
+  const cur = assembler.current;
+  if (!open || pair.state !== 'approved' || pending || !cur) return;
+  const id = ++cmdId;
+  pending = { id, cmd, at: now() };
+  ws!.send(JSON.stringify({ t: 'cmd', id, epoch: cur.epoch, rev: cur.rev, cmd }));
+}
+
+function onResult(id: number, o: CommandOutcome) {
+  if (pending && id === pending.id) {
+    const cmd = pending.cmd;
+    pending = null;
+    if (o.ok && o.state === 'countin') countinId = id;
+    say(outcomeText(cmd, o), !o.ok);
+  } else if (countinId && id === countinId) {
+    countinId = 0;
+    // The count-in ended: playback started, it was cancelled (paused) or play failed.
+    say(outcomeText('toggle', o), !o.ok);
+  }
+}
+
+/** Forget everything about commands: after a disconnect nothing is retried. */
+function resetControl() {
+  pair = { t: 'pair', state: 'off' };
+  pending = null;
+  countinId = 0;
+}
+
 function ping() {
   if (open) ws!.send(JSON.stringify({ t: 'ping', id: ++pingId, c: now() }));
 }
 
 function lost() {
   open = false;
+  resetControl();
   setTimeout(connect, backoff);
   backoff = Math.min(5000, backoff * 2);
 }
@@ -56,7 +129,20 @@ function onMessage(text: string) {
   } catch {
     return;
   }
-  if (m.t === 'pong') {
+  if (m.t === 'pair' || m.t === 'result') {
+    const v = validateRelayToViewer(text);
+    if (!v) return;
+    if (v.t === 'pair') {
+      const was = pair.state;
+      pair = v;
+      if (v.state !== 'approved') {
+        pending = null;
+        countinId = 0;
+      }
+      if (was === 'approved' && v.state !== 'approved') say('조작 승인이 해제됐어요', true);
+      else if (was !== 'approved' && v.state === 'approved') say('Mac 패널에서 승인했어요 · 이제 조작할 수 있어요', false);
+    } else onResult(v.id, v);
+  } else if (m.t === 'pong') {
     if (!finite(m.c, 0, 1e15) || !finite(m.s, 0, 1e15)) return;
     samples.push(clockSample(m.c, m.s, now()));
     if (samples.length > 15) samples.shift(); // about 30 s: keeps clock drift well under 1 ms
@@ -153,12 +239,44 @@ function where(s: PhoneSong, section: number, bar: number): string {
   return barText ? `${name} · ${barText}` : name;
 }
 
+const REJECTED_TEXT = 'Mac 패널에서 이 휴대폰의 조작을 거절했어요 · 다시 요청하려면 페이지를 새로 고쳐 주세요';
+
+/** Pairing code, the two buttons and the last outcome. */
+function drawControl(t: number, ready: boolean) {
+  if (pending && t - pending.at > COMMAND_WAIT_MS) {
+    pending = null;
+    say('Mac에서 답이 없어요 · 다시 눌러 주세요', true);
+  }
+  const p = pair;
+  const waitingCode = open && (p.state === 'pending' || p.state === 'rejected');
+  $('pair').hidden = !waitingCode;
+  if (waitingCode) {
+    setText('pair-code', p.state === 'pending' ? p.code : '');
+    setText('pair-text', p.state === 'pending' ? '조작하려면 Mac 패널 › 휴대폰에서 조작 허용에서 이 번호를 승인해 주세요' : REJECTED_TEXT);
+  }
+  const controls = open && p.state === 'approved' && ready;
+  $('ctl').hidden = !controls;
+  if (controls) {
+    const busy = !!pending;
+    const toggle = $('ctl-toggle') as HTMLButtonElement;
+    const restart = $('ctl-restart') as HTMLButtonElement;
+    if (toggle.disabled !== busy) toggle.disabled = busy;
+    if (restart.disabled !== busy) restart.disabled = busy;
+    const playing = !!anchor && !anchor.paused && !anchor.ad;
+    setText('ctl-toggle', busy ? '보내는 중…' : countinId ? '멈추기' : playing ? '일시정지' : '재생');
+  }
+  if (message.text && t > message.until) message = { text: '', alert: false, until: 0 };
+  setText('ctl-msg', message.text);
+  setClass($('ctl-msg'), 'alert', message.alert);
+}
+
 function frame() {
   const t = now();
   const app = $('app');
   const fresh = !!anchor && t - anchorRx <= ANCHOR_TTL_MS;
   const ready = open && publisherConnected && !!song && song.events.length > 0;
   setClass(app, 'waiting', !ready);
+  drawControl(t, ready);
   let status: string;
   let alert = false;
   if (!open) status = 'Mac과 연결이 끊겼어요 · 다시 연결하는 중';
@@ -246,6 +364,8 @@ setInterval(() => {
   watchdog();
   ping();
 }, 2000);
+$('ctl-toggle').addEventListener('click', () => sendCommand('toggle'));
+$('ctl-restart').addEventListener('click', () => sendCommand('restart'));
 lockNotice();
 connect();
 requestAnimationFrame(frame);
