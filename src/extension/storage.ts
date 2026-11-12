@@ -4,6 +4,7 @@ import { chartStorageKey, type Chart, type RecordingSource } from '../chart/type
 import { mergeAutoCharts } from '../chart/merge';
 import { validateChart } from '../chart/validate';
 import { CorrectionConflict, correctChordEvent, type EventRef } from '../editor/correct';
+import type { AccuracyPair } from '../eval/overview';
 import type { ChartWriteMessage, ChartWriteResult } from './messages';
 
 export interface Settings {
@@ -113,6 +114,43 @@ function autoLookupKeys(source: RecordingSource, id: string): string[] {
 
 export async function loadAutoChart(source: RecordingSource, id: string): Promise<Chart | null> {
   return readChart(chromeArea(), autoLookupKeys(source, id));
+}
+
+const SOURCES: readonly RecordingSource[] = ['youtube', 'ytmusic', 'applemusic'];
+
+/** A usable reference: a valid hand-made or hand-edited chart, not a bundled example with fake timings. */
+function asReference(v: unknown): Chart | null {
+  if (!v || !validateChart(v).ok) return null;
+  const c = v as Chart;
+  return c.provenance.createdBy !== 'recognizer' && !c.provenance.example ? c : null;
+}
+
+/**
+ * Recordings that have both an auto chart (autochart:<source>:<id>) and a reference: the
+ * chart in use (chart:<source>:<id>) when it is manual or edited, else the hand-made chart
+ * kept when the auto chart was adopted (chartbackup:<source>:<id>). Keys match exactly
+ * (no YouTube / YouTube Music fallback). Read-only.
+ */
+export function findAccuracyPairs(all: Record<string, unknown>): AccuracyPair[] {
+  const out: AccuracyPair[] = [];
+  for (const key of Object.keys(all).sort()) {
+    const m = /^autochart:([^:]+):(.+)$/.exec(key);
+    if (!m || !SOURCES.includes(m[1] as RecordingSource)) continue;
+    const auto = all[key];
+    if (!auto || !validateChart(auto).ok) continue;
+    const source = m[1] as RecordingSource;
+    const id = m[2];
+    const main = asReference(all[chartStorageKey(source, id)]);
+    const backup = main ? null : asReference(all[`chartbackup:${source}:${id}`]);
+    const reference = main ?? backup;
+    if (reference) out.push({ source, id, referenceFrom: main ? 'main' : 'backup', reference, auto: auto as Chart });
+  }
+  return out;
+}
+
+/** Side panel: the accuracy overview's chart pairs, read from chrome.storage.local. */
+export async function loadAccuracyPairs(area: StorageArea = chromeArea()): Promise<AccuracyPair[]> {
+  return findAccuracyPairs(await area.get(null));
 }
 
 function checked(chart: Chart): Chart {

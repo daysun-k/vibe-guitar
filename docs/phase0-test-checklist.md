@@ -83,13 +83,21 @@ Use songs with no chart first. Note Chrome version and the 캡처 tab "실행 �
 - [ ] Press "들은 구간으로 자동 코드표 만들기" after half a song: the play view shows chords only for the heard
       range and "—" after it.
 - [ ] On a song with a hand-made chart: let it build an auto chart. Your chart must stay in use; the card shows
-      "직접 만든 코드표와의 일치율 …". Record the numbers (this is the user-chart vs auto-chart evaluation).
-      Try "자동 코드표로 바꾸기" → confirm dialog; cancel keeps your chart.
+      "직접 만든 코드표와의 일치율 …". Try "자동 코드표로 바꾸기" → confirm dialog; cancel keeps your chart.
+- [ ] 듣기·캡처 tab → open "정확도 모아 보기". With no comparable song it shows one sentence on how results
+      appear. After the step above, that song is listed as 직접 만든 코드표 with overlap, 장·단 / 근음 / 7th
+      포함 %, and "코드 바뀌는 시점 …ms" (same % as the card). A song whose auto chart you fixed with 코드
+      고치기 is listed as 고친 코드표(직접 고친 코드 n/m개) and totalled separately, without timing. After
+      adopting an auto chart, the song still appears (reference = the kept hand-made chart, pill "자동으로
+      바꾸기 전 코드표").
+- [ ] Export the overview ("결과 내보내기"): one `vibe-guitar-accuracy-<date>.json` with rows and totals and no
+      chords or lyrics. This file is the user-chart vs auto-chart evaluation record (instead of copying numbers).
 - [ ] Open the bench page (캡처 tab link), run WASM with 6 clips and WebGPU with 6 clips; record the latency
       lines and the summary.
 - [ ] Watch CPU in Chrome's task manager (offscreen document) during listening; record the % and whether the
       tab audio ever stutters.
-- [ ] Sync check: do auto-chart chord changes land on the audible change? Note the offset (ms) if any.
+- [ ] Sync check: do auto-chart chord changes land on the audible change? Compare with the overview's suggested
+      싱크 오프셋 (shown after at least 5 matched changes); try that value in 설정 → 싱크 보정 while playing an auto chart.
 
 ### D2. Fixing one wrong chord (코드 고치기) — run in real Chrome
 

@@ -66,5 +66,7 @@ about 0.6 points over frame argmax; using beats instead of fixed units adds abou
 - CQT features are a TypeScript re-implementation; against librosa 0.10.2 (`scripts/verify-features.py`) the
   mean |Δ log| is 0.089 with no per-octave bias, larger only in near-silent bins. BTC was trained with older
   librosa.
-- The capture-to-timeline latency is a fixed 50 ms guess; tab capture itself was not exercised headless.
+- The capture-to-timeline latency is a fixed 50 ms guess; tab capture itself was not exercised headless. The
+  side panel's 정확도 모아 보기 estimates the remaining offset from real songs (median chord-change offset of auto
+  charts against hand-made charts); the constant is not changed automatically.
 - Timings come from one machine and one run; the browser numbers are a headless shell.

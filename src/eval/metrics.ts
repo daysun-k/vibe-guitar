@@ -185,3 +185,53 @@ export function compareCharts(reference: Chart, estimate: Chart): ChartCompariso
   }
   return result;
 }
+
+/** Times where the chord changes (an event whose chord differs from the previous event's). */
+function changeTimes(events: { startSec: number; chord: string }[], ranges: CoverageRange[]): number[] {
+  const sorted = [...events].sort((a, b) => a.startSec - b.startSec);
+  const out: number[] = [];
+  for (let i = 1; i < sorted.length; i++) {
+    const t = sorted[i].startSec;
+    if (sorted[i].chord !== sorted[i - 1].chord && ranges.some((r) => t > r.fromSec && t < r.toSec)) out.push(t);
+  }
+  return out;
+}
+
+export interface ChangeOffset {
+  /** Median signed offset of matched changes, estimate minus reference, in ms (NaN if none matched). */
+  medianMs: number;
+  /** Reference changes with an estimate change within the window. */
+  matched: number;
+  /** Reference changes with no estimate change within the window. */
+  unmatched: number;
+  /** Every matched offset in ms (estimate minus reference), in reference order. */
+  offsetsMs: number[];
+}
+
+export function median(xs: number[]): number {
+  if (!xs.length) return NaN;
+  const s = [...xs].sort((a, b) => a - b);
+  const m = s.length >> 1;
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+
+/**
+ * Chord-change timing of an estimate chart against a reference chart: for each reference
+ * chord change strictly inside the time both charts cover, the nearest estimate change
+ * within ±windowSec (not one-to-one). A positive median means the estimate changes later.
+ */
+export function chordChangeOffset(reference: Chart, estimate: Chart, windowSec = 1): ChangeOffset {
+  const refCov = effectiveCoverage(reference);
+  const estCov = effectiveCoverage(estimate);
+  const refChanges = changeTimes(reference.events, intersect(refCov, estCov));
+  const estChanges = changeTimes(estimate.events, normalizeCoverage(estCov));
+  const offsetsMs: number[] = [];
+  let unmatched = 0;
+  for (const t of refChanges) {
+    let best: number | null = null;
+    for (const e of estChanges) if (Math.abs(e - t) <= windowSec + 1e-9 && (best === null || Math.abs(e - t) < Math.abs(best))) best = e - t;
+    if (best === null) unmatched++;
+    else offsetsMs.push(best * 1000);
+  }
+  return { medianMs: median(offsetsMs), matched: offsetsMs.length, unmatched, offsetsMs };
+}
