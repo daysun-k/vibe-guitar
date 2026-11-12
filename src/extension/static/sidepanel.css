@@ -42,7 +42,6 @@ button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:poin
 .cn{font-family:var(--f-chord);font-weight:800;letter-spacing:-.035em;line-height:.9;white-space:nowrap;font-feature-settings:"tnum"}
 .cn .acc{font-size:.62em;vertical-align:.42em;margin-left:.02em;letter-spacing:0;font-weight:700}
 .cn .q{font-size:.56em;font-weight:700;letter-spacing:-.01em;margin-left:.03em}
-.cn .h7{font:700 .3em/1 var(--f-ui);vertical-align:1.5em;margin-left:.12em;color:var(--ink-3);letter-spacing:0}
 html:not(.show-snd) .snd{display:none!important}
 
 /* ---------- header ---------- */
