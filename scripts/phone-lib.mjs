@@ -3,6 +3,7 @@
 import * as esbuild from 'esbuild';
 import { readFile, realpath } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+import net from 'node:net';
 import path from 'node:path';
 
 export const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -60,6 +61,24 @@ export async function distPath() {
   }
 }
 
+/** Default idle auto-stop: stop when no side panel has been connected for this many minutes. */
+export const DEFAULT_IDLE_MINUTES = 10;
+
+/** True when something already accepts TCP connections on host:port (e.g. a relay started earlier). */
+export function portInUse(host, port, timeoutMs = 800) {
+  return new Promise((resolve) => {
+    const s = net.connect({ host, port });
+    const done = (used) => {
+      clearTimeout(timer);
+      s.destroy();
+      resolve(used);
+    };
+    const timer = setTimeout(() => done(false), timeoutMs);
+    s.once('connect', () => done(true));
+    s.once('error', () => done(false));
+  });
+}
+
 export function parseArgs(argv) {
   const opts = {};
   const num = (v, name) => {
@@ -80,6 +99,11 @@ export function parseArgs(argv) {
     else if (a === '--extension-id') {
       if (!/^[a-p]{32}$/.test(v ?? '')) throw new Error('--extension-id needs the 32-letter id shown in chrome://extensions');
       opts.extensionId = v;
+      i++;
+    } else if (a === '--idle-minutes') {
+      const n = Number(v);
+      if (v === undefined || v.trim() === '' || !Number.isFinite(n) || n < 1) throw new Error('--idle-minutes needs a number of minutes, 1 or more (default 10)');
+      opts.idleMinutes = n;
       i++;
     } else if (a === '--any-extension') opts.anyExtension = true;
     else if (a === '--help' || a === '-h') opts.help = true;

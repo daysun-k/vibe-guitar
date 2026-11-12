@@ -42,6 +42,13 @@ export interface RelayOptions {
   /** When set, only this extension id may publish (otherwise any Chrome extension on this Mac). */
   extensionId?: string;
   maxViewers?: number;
+  /**
+   * Idle auto-stop: when no publisher (side panel) has been connected for this long, the relay closes
+   * both listeners by itself. Viewers alone do not keep it running. Off when omitted.
+   */
+  idleStopMs?: number;
+  /** Called once after an idle auto-stop has closed both listeners. */
+  onIdleStop?: () => void;
   viewerHtml: string;
   viewerJs: string;
   log?: (line: string) => void;
@@ -52,6 +59,7 @@ export interface Relay {
   lanHost: string;
   viewerUrl: string;
   publisherUrl: string;
+  /** Stops the relay; safe to call more than once. */
   close(): Promise<void>;
 }
 
@@ -244,6 +252,26 @@ export async function startRelay(opts: RelayOptions): Promise<Relay> {
   const song = new SongAssembler();
   let lastAnchor: AnchorMessage | null = null;
 
+  // Idle auto-stop timer: runs only while no publisher is connected.
+  let idleStopTimer: ReturnType<typeof setTimeout> | null = null;
+  let closing: Promise<void> | null = null;
+  // Set synchronously when close() starts, before any connection is closed: from then on no new request,
+  // upgrade or idle timer is accepted (closing a publisher would otherwise re-arm the timer).
+  let stopping = false;
+  const disarmIdleStop = () => {
+    if (idleStopTimer) clearTimeout(idleStopTimer);
+    idleStopTimer = null;
+  };
+  const armIdleStop = () => {
+    if (!opts.idleStopMs || idleStopTimer || stopping) return;
+    idleStopTimer = setTimeout(() => {
+      idleStopTimer = null;
+      if (publisher || stopping) return;
+      log(`no side panel connected for ${Math.round(opts.idleStopMs! / 1000)} s: stopping the relay`);
+      void close().then(() => opts.onIdleStop?.());
+    }, opts.idleStopMs);
+  };
+
   const toViewers = (text: string) => viewers.forEach((v) => v.send(text));
   const tellPublisherCount = () => publisher?.send(JSON.stringify({ t: 'viewers', n: viewers.size }));
 
@@ -258,6 +286,7 @@ export async function startRelay(opts: RelayOptions): Promise<Relay> {
       res.writeHead(status, { 'Content-Type': 'text/plain; charset=utf-8', ...securityHeaders });
       res.end(text);
     };
+    if (stopping) return deny(503, 'relay stopping');
     if (!viewerHostAllowed({ host: req.headers.host, origin: undefined }, lanHost)) return deny(421, 'wrong host');
     if (req.method !== 'GET') return deny(405, 'method not allowed');
     const url = parseRequestUrl(req.url, `http://${lanHost}`);
@@ -283,6 +312,8 @@ export async function startRelay(opts: RelayOptions): Promise<Relay> {
   const guarded = (fn: UpgradeHandler): UpgradeHandler => (req, socket, head) => {
     // Before any check: a client may reset right after a rejected (or accepted) upgrade.
     ignoreSocketErrors(socket);
+    // A connection opened before close() started may still send an upgrade: never accept it while stopping.
+    if (stopping) return reject(socket, 503, 'Service Unavailable');
     try {
       fn(req, socket, head);
     } catch (e) {
@@ -363,9 +394,11 @@ export async function startRelay(opts: RelayOptions): Promise<Relay> {
         lastAnchor = null;
         log('publisher left');
         toViewers(JSON.stringify({ t: 'publisher', connected: false }));
+        armIdleStop();
       },
     );
     publisher = conn;
+    disarmIdleStop();
     log(`publisher connected (${info.origin})`);
     toViewers(JSON.stringify({ t: 'publisher', connected: true }));
     tellPublisherCount();
@@ -388,20 +421,33 @@ export async function startRelay(opts: RelayOptions): Promise<Relay> {
   }, 5000);
   idle.unref();
 
+  function close(): Promise<void> {
+    if (closing) return closing;
+    stopping = true;
+    disarmIdleStop();
+    clearInterval(idle);
+    // Stop listening first; the callbacks fire once every connection is gone (upgraded sockets included).
+    const serversClosed = Promise.all([new Promise((r) => viewerServer.close(r)), new Promise((r) => pubServer.close(r))]);
+    const live = () => [...viewers, ...(publisher ? [publisher] : [])];
+    closing = (async () => {
+      const first = live();
+      for (const c of first) c.close(1001, 'relay stopping');
+      await new Promise((r) => setTimeout(r, 150));
+      for (const c of new Set([...first, ...live()])) c.destroy();
+      viewerServer.closeAllConnections();
+      pubServer.closeAllConnections();
+      await serversClosed;
+    })();
+    return closing;
+  }
+  // A panel may already be connected (it connects as soon as the publisher port is open).
+  if (!publisher) armIdleStop();
+
   return {
     token,
     lanHost,
     viewerUrl: `http://${lanHost}/?t=${token}`,
     publisherUrl: `ws://127.0.0.1:${pubPort}/publish`,
-    async close() {
-      clearInterval(idle);
-      const all = [...viewers, ...(publisher ? [publisher] : [])];
-      for (const c of all) c.close(1001, 'relay stopping');
-      await new Promise((r) => setTimeout(r, 150));
-      for (const c of all) c.destroy();
-      viewerServer.closeAllConnections();
-      pubServer.closeAllConnections();
-      await Promise.all([new Promise((r) => viewerServer.close(r)), new Promise((r) => pubServer.close(r))]);
-    },
+    close,
   };
 }
