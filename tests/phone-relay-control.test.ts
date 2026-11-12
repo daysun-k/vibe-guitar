@@ -105,7 +105,7 @@ async function approvedSetup() {
   h.pub.send({ t: 'control', on: true });
   const code = await h.code(ph);
   const id = await h.idOf(code);
-  h.pub.send({ t: 'approve', id, code });
+  h.pub.send({ t: 'approve', id, code, grant: 5 });
   await ph.next((m) => m.t === 'pair' && m.state === 'approved');
   return { ...h, ph, id, codeText: code };
 }
@@ -132,12 +132,12 @@ describe('relay: pairing', () => {
     expect(ca).not.toBe(cb);
     const ida = await h.idOf(ca);
     const idb = await h.idOf(cb);
-    h.pub.send({ t: 'approve', id: ida, code: cb }); // wrong code for that connection
+    h.pub.send({ t: 'approve', id: ida, code: cb, grant: 1 }); // wrong code for that connection
     await h.sleep(100);
     expect(a.msgs.some((m) => m.state === 'approved')).toBe(false);
-    h.pub.send({ t: 'approve', id: ida, code: ca });
+    h.pub.send({ t: 'approve', id: ida, code: ca, grant: 2 });
     await a.next((m) => m.state === 'approved');
-    h.pub.send({ t: 'approve', id: idb, code: cb });
+    h.pub.send({ t: 'approve', id: idb, code: cb, grant: 3 });
     await b.next((m) => m.state === 'approved');
     await h.sleep(100);
     expect(a.msgs.filter((m) => m.t === 'pair').at(-1)).toEqual({ t: 'pair', state: 'pending', code: ca });
@@ -162,7 +162,8 @@ describe('relay: commands', () => {
     const other = await h.phone();
     h.cmd(h.ph, 1);
     const fwd = await h.pub.next((m) => m.t === 'cmd');
-    expect(fwd).toEqual({ t: 'cmd', id: 1, epoch: EPOCH, rev: 1, cmd: 'toggle', from: h.id });
+    // Stamped with the grant the panel approved this phone under.
+    expect(fwd).toEqual({ t: 'cmd', id: 1, epoch: EPOCH, rev: 1, cmd: 'toggle', from: h.id, grant: 5 });
     h.pub.send({ t: 'result', to: h.id, id: 1, ok: true, state: 'playing' });
     expect(await h.resultFor(h.ph, 1)).toEqual({ t: 'result', id: 1, ok: true, state: 'playing' });
     await h.sleep(100);

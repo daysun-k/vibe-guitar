@@ -291,12 +291,14 @@ check('control on: the phone shows a 4-digit pairing code', /^\d{4}$/.test(pairM
 viewer.send(cmdText(2));
 check('unapproved phone command rejected; nothing reaches the panel', (await firstMsg(viewer, (m) => m.t === 'result' && m.id === 2))?.code === 'not-approved' && !panelGot(2));
 const listed = (await firstMsg(pub, (m) => m.t === 'phones' && m.list.some((e) => e.code === pairMsg?.code)))?.list.find((e) => e.code === pairMsg?.code);
-pub.send(JSON.stringify({ t: 'approve', id: listed?.id, code: listed?.code }));
+pub.send(JSON.stringify({ t: 'approve', id: listed?.id, code: listed?.code, grant: 7 }));
 check('panel approves the listed code', !!(await firstMsg(viewer, (m) => m.t === 'pair' && m.state === 'approved')));
+const heldGrant = (await firstMsg(pub, (m) => m.t === 'phones' && m.list.some((e) => e.state === 'approved')))?.list.find((e) => e.state === 'approved')?.grant;
+check("the relay's list shows the panel's grant for the approved phone", heldGrant === 7, `grant ${heldGrant}`);
 await sleep(300); // rate limit refills
 viewer.send(cmdText(3));
 const fwd = await firstMsg(pub, (m) => m.t === 'cmd' && m.id === 3);
-check('approved phone command reaches the fake panel', fwd?.from === listed?.id && fwd?.cmd === 'toggle' && Object.keys(fwd).sort().join() === 'cmd,epoch,from,id,rev,t');
+check('approved phone command reaches the fake panel, stamped with its grant', fwd?.from === listed?.id && fwd?.cmd === 'toggle' && fwd?.grant === 7 && Object.keys(fwd).sort().join() === 'cmd,epoch,from,grant,id,rev,t');
 pub.send(JSON.stringify({ t: 'result', to: listed?.id, id: 3, ok: true, state: 'playing' }));
 const okResult = await firstMsg(viewer, (m) => m.t === 'result' && m.id === 3);
 check('panel result goes back to the phone', okResult?.ok === true && okResult.state === 'playing');

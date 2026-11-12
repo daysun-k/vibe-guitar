@@ -213,9 +213,14 @@ const STATES: readonly CommandState[] = ['playing', 'paused', 'countin'];
 
 export type CommandOutcome = { ok: true; state: CommandState } | { ok: false; code: CommandFailure };
 
-/** Relay -> panel: a command the relay accepted from the approved viewer `from`. */
+/**
+ * Relay -> panel: a command the relay accepted from the approved viewer `from`, stamped with the grant
+ * the panel sent when it approved that viewer. The panel carries it out only when `from` and `grant`
+ * match its own current grant.
+ */
 export interface ForwardedCommand extends CommandMessage {
   from: string;
+  grant: number;
 }
 
 /** Relay -> viewer: the outcome of request `id`. */
@@ -229,6 +234,8 @@ export interface PhoneEntry {
   id: string;
   code: string;
   state: PairState;
+  /** Relay -> panel, approved entries only: the panel's grant the relay holds for it. */
+  grant?: number;
 }
 
 /** Relay -> panel: the connected phones and their codes (empty while control is off). */
@@ -240,19 +247,20 @@ export interface PhonesMessage {
 /** Panel -> relay messages besides the song view and anchors. */
 export type PanelMessage =
   | { t: 'control'; on: boolean }
-  | { t: 'approve'; id: string; code: string }
+  /** `grant`: the panel's number for this approval (increasing within a panel session). */
+  | { t: 'approve'; id: string; code: string; grant: number }
   | { t: 'reject'; id: string; code: string }
   | { t: 'revoke' }
   | ({ t: 'result'; to: string; id: number } & CommandOutcome);
 
 function validCommand(v: Record<string, unknown>, forwarded: boolean): CommandMessage | ForwardedCommand | null {
-  if (!onlyKeys(v, forwarded ? ['t', 'id', 'epoch', 'rev', 'cmd', 'from'] : ['t', 'id', 'epoch', 'rev', 'cmd'])) return null;
+  if (!onlyKeys(v, forwarded ? ['t', 'id', 'epoch', 'rev', 'cmd', 'from', 'grant'] : ['t', 'id', 'epoch', 'rev', 'cmd'])) return null;
   if (!int(v.id, 1, Number.MAX_SAFE_INTEGER) || !int(v.rev, 1, Number.MAX_SAFE_INTEGER)) return null;
   if (typeof v.epoch !== 'string' || !EPOCH_RE.test(v.epoch) || (v.cmd !== 'toggle' && v.cmd !== 'restart')) return null;
   const m: CommandMessage = { t: 'cmd', id: v.id, epoch: v.epoch, rev: v.rev, cmd: v.cmd };
   if (!forwarded) return m;
-  if (typeof v.from !== 'string' || !CONN_ID_RE.test(v.from)) return null;
-  return { ...m, from: v.from };
+  if (typeof v.from !== 'string' || !CONN_ID_RE.test(v.from) || !int(v.grant, 1, Number.MAX_SAFE_INTEGER)) return null;
+  return { ...m, from: v.from, grant: v.grant };
 }
 
 /** Validates the outcome fields of a result; `extra` are the keys allowed besides them. */
@@ -266,10 +274,11 @@ function validOutcome(v: Record<string, unknown>, extra: string[]): CommandOutco
 }
 
 function validEntry(v: unknown): PhoneEntry | null {
-  if (!isObj(v) || !onlyKeys(v, ['id', 'code', 'state'])) return null;
+  if (!isObj(v) || !onlyKeys(v, v.state === 'approved' ? ['id', 'code', 'state', 'grant'] : ['id', 'code', 'state'])) return null;
   if (typeof v.id !== 'string' || !CONN_ID_RE.test(v.id) || typeof v.code !== 'string' || !PAIR_CODE_RE.test(v.code)) return null;
   if (v.state !== 'pending' && v.state !== 'approved' && v.state !== 'rejected') return null;
-  return { id: v.id, code: v.code, state: v.state };
+  if (v.grant === undefined) return { id: v.id, code: v.code, state: v.state };
+  return int(v.grant, 1, Number.MAX_SAFE_INTEGER) ? { id: v.id, code: v.code, state: v.state, grant: v.grant } : null;
 }
 
 /** Panel messages for the relay (pairing decisions, the control switch, command results), or null. */
@@ -281,9 +290,10 @@ export function validatePanelMessage(text: string): PanelMessage | null {
       return onlyKeys(v, ['t', 'on']) && typeof v.on === 'boolean' ? { t: 'control', on: v.on } : null;
     case 'approve':
     case 'reject': {
-      if (!onlyKeys(v, ['t', 'id', 'code']) || typeof v.id !== 'string' || !CONN_ID_RE.test(v.id)) return null;
-      if (typeof v.code !== 'string' || !PAIR_CODE_RE.test(v.code)) return null;
-      return { t: v.t, id: v.id, code: v.code };
+      if (!onlyKeys(v, v.t === 'approve' ? ['t', 'id', 'code', 'grant'] : ['t', 'id', 'code'])) return null;
+      if (typeof v.id !== 'string' || !CONN_ID_RE.test(v.id) || typeof v.code !== 'string' || !PAIR_CODE_RE.test(v.code)) return null;
+      if (v.t === 'reject') return { t: 'reject', id: v.id, code: v.code };
+      return int(v.grant, 1, Number.MAX_SAFE_INTEGER) ? { t: 'approve', id: v.id, code: v.code, grant: v.grant } : null;
     }
     case 'revoke':
       return onlyKeys(v, ['t']) ? { t: 'revoke' } : null;

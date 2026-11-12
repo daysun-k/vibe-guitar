@@ -6,8 +6,15 @@
  *
  * VGT-16: with control allowed (setControl), it tells the relay, mirrors the relay's list of phones
  * and their pairing codes, sends the panel's 승인 / 거절 / 승인 해제, and checks every forwarded
- * command again (switch, approved connection, song revision, duplicate id, rate, one at a time)
- * before handing it to `onCommand`. The outcome goes back only over the same socket.
+ * command again (switch, grant, song revision, duplicate id, rate, one at a time) before handing it
+ * to `onCommand`. The outcome goes back only over the same socket.
+ *
+ * The panel alone decides who may control: it holds one grant {connection, number}, set only by its
+ * own 승인 (with a new number) and cleared at once by every way control ends. The relay stamps each
+ * forwarded command with the number it was given at approval; a command runs only when its sender and
+ * number match the current grant. The relay's phone list is for display and never grants anything; it
+ * can only end the grant, once a list has shown the relay holding it and a later one no longer does
+ * (the phone disconnected). Lists from before the relay saw the approval are ignored for this.
  */
 import {
   DEFAULT_PUBLISHER_PORT,
@@ -116,24 +123,20 @@ export class PhoneLink {
   private parts: SongPartMessage[] = [];
   private lastAnchor: AnchorMessage | null = null;
   private control = false;
-  /** The phone list as the panel treats it: the relay's list with withdrawn approvals shown as pending. */
+  /** The phone list shown: the relay's, with 'approved' only for the phone holding the grant. */
   private phones: PhoneEntry[] = [];
   /** The relay's last phone list. */
   private relayPhones: PhoneEntry[] = [];
-  /**
-   * Connections whose control the panel itself withdrew (승인 해제, 거절, switch off, another phone
-   * approved). They count as not approved from that moment, before the relay's update arrives, so a
-   * command the relay forwarded before it saw the request is rejected here. Only approving that phone
-   * again (or a new relay session, which starts without approval) lifts this: the relay approves a
-   * phone only when the panel asks it to.
-   */
-  private readonly withdrawn = new Set<string>();
+  /** The only permission to control (see the file comment). */
+  private grant: { id: string; seq: number; confirmed: boolean } | null = null;
+  /** Last grant number given out (never reused within this panel session). */
+  private grantSeq = 0;
   /** Highest command id handled per phone connection. */
   private readonly seen = new Map<string, number>();
   private bucket: TokenBucket;
   private busy = false;
   /** Commands still running, by the phone connection they came from: aborted when it loses control. */
-  private readonly running = new Set<{ from: string; ctl: AbortController }>();
+  private readonly running = new Set<{ grant: number; ctl: AbortController }>();
   private readonly o: Required<Omit<PhoneLinkOptions, 'port'>> & { url: string };
 
   constructor(opts: PhoneLinkOptions) {
@@ -185,57 +188,43 @@ export class PhoneLink {
     if (on === this.control) return;
     this.control = on;
     this.seen.clear();
-    if (!on) {
-      this.withdraw(this.approvedId());
-      this.setPhones([]);
-      this.abortRunning();
-    }
+    // The relay revokes on any change of the switch.
+    this.setGrant(null);
+    if (!on) this.setPhones([]);
     if (this.isOpen()) this.send({ t: 'control', on });
   }
 
+  /** 승인: this phone gets a new grant (replacing any other) before the relay hears of it. */
   approve(id: string): void {
     const p = this.phones.find((x) => x.id === id);
-    if (!this.control || !p || p.state === 'approved') return;
-    // The relay moves the approval: the phone approved until now loses control at once.
-    const before = this.approvedId();
-    if (before !== id) this.withdraw(before);
-    this.withdrawn.delete(id);
-    this.setPhones(this.relayPhones);
-    this.send({ t: 'approve', id, code: p.code });
+    if (!this.control || !p || this.grant?.id === id) return;
+    const seq = ++this.grantSeq;
+    this.setGrant({ id, seq, confirmed: false });
+    this.send({ t: 'approve', id, code: p.code, grant: seq });
   }
 
   reject(id: string): void {
     const p = this.phones.find((x) => x.id === id);
     if (!this.control || !p || p.state === 'rejected') return;
-    this.withdraw(id);
+    if (this.grant?.id === id) this.setGrant(null);
     this.send({ t: 'reject', id, code: p.code });
   }
 
-  /** 승인 해제: local first, then the relay. */
+  /** 승인 해제: the grant ends here first, then the relay is told. */
   revoke(): void {
-    this.withdraw(this.approvedId());
+    this.setGrant(null);
     if (this.control) this.send({ t: 'revoke' });
-    this.abortRunning();
   }
 
-  private approvedId(): string | null {
-    return this.phones.find((p) => p.state === 'approved')?.id ?? null;
-  }
-
-  /** Marks `id` as no longer allowed to control (see `withdrawn`) and aborts its running command. */
-  private withdraw(id: string | null): void {
-    if (id === null) return;
-    this.withdrawn.add(id);
-    this.setPhones(this.relayPhones);
-  }
-
-  /** Aborts running commands (all, or those not from `keep`). */
-  private abortRunning(keep: string | null = null): void {
+  /** Replaces the grant; commands running under any other grant are aborted at once. */
+  private setGrant(g: { id: string; seq: number; confirmed: boolean } | null): void {
+    this.grant = g;
     for (const r of [...this.running]) {
-      if (r.from === keep) continue;
+      if (g && r.grant === g.seq) continue;
       this.running.delete(r);
       r.ctl.abort();
     }
+    this.setPhones(this.relayPhones);
   }
 
   /** Reconnect now instead of waiting for the backoff (sheet opened, window focused). */
@@ -327,7 +316,7 @@ export class PhoneLink {
       this.setStatus({ kind: 'connected', viewers: 0 });
       // A new relay session: nothing from an earlier one is replayed, and nothing is approved yet.
       this.seen.clear();
-      this.withdrawn.clear();
+      this.setGrant(null);
       if (this.control) this.send({ t: 'control', on: true });
       if (!this.parts.length) this.publishSong(this.songJson ? (JSON.parse(this.songJson) as SongView) : EMPTY_SONG);
       else for (const p of this.parts) this.send(p);
@@ -346,7 +335,7 @@ export class PhoneLink {
       const m = validateRelayToPanel(String(ev.data));
       if (!m) return; // ignore anything else
       if (m.t === 'viewers') this.setStatus({ kind: 'connected', viewers: m.n });
-      else if (m.t === 'phones') this.setPhones(this.control ? m.list : []);
+      else if (m.t === 'phones') this.relayList(this.control ? m.list : []);
       else this.onCommand(m, ws);
     };
     ws.onclose = (ev) => {
@@ -354,7 +343,8 @@ export class PhoneLink {
       this.ws = null;
       this.o.clearTimer(this.heartbeat);
       this.heartbeat = null;
-      this.setPhones([]);
+      this.relayPhones = [];
+      this.setGrant(null);
       if (!this.enabled) return;
       if (ev?.code === REPLACED) return this.setStatus({ kind: 'replaced' });
       this.setStatus({ kind: 'disconnected' });
@@ -379,7 +369,8 @@ export class PhoneLink {
     }
     const ws = this.ws;
     this.ws = null;
-    this.setPhones([]);
+    this.relayPhones = [];
+    this.setGrant(null);
     if (ws) {
       ws.onopen = ws.onmessage = ws.onclose = null;
       try {
@@ -390,11 +381,22 @@ export class PhoneLink {
     }
   }
 
+  /**
+   * A phone list from the relay: display only. It never grants; it ends the grant only after an earlier
+   * list showed the relay holding exactly this grant and this one no longer does (lists are in order).
+   */
+  private relayList(list: PhoneEntry[]): void {
+    const g = this.grant;
+    const holds = !!g && list.some((p) => p.id === g.id && p.state === 'approved' && p.grant === g.seq);
+    if (g && holds) g.confirmed = true;
+    if (g && g.confirmed && !holds) this.setGrant(null);
+    this.setPhones(list);
+  }
+
   private setPhones(relayList: PhoneEntry[]): void {
     this.relayPhones = relayList;
-    const list = relayList.map((p) => (p.state === 'approved' && this.withdrawn.has(p.id) ? { ...p, state: 'pending' as const } : p));
-    // Only the approved phone's commands may keep running (revoked, disconnected or list cleared: abort).
-    this.abortRunning(this.control ? (list.find((p) => p.state === 'approved')?.id ?? null) : null);
+    const g = this.grant;
+    const list = relayList.map(({ id, code, state }): PhoneEntry => ({ id, code, state: state === 'approved' && id !== g?.id ? 'pending' : state }));
     if (JSON.stringify(list) === JSON.stringify(this.phones)) return;
     this.phones = list;
     this.o.onPhones(list);
@@ -408,7 +410,8 @@ export class PhoneLink {
     };
     const fail = (code: CommandFailure) => reply({ ok: false, code });
     if (!this.control) return fail('off');
-    if (this.phones.find((p) => p.state === 'approved')?.id !== m.from) return fail('not-approved');
+    const g = this.grant;
+    if (!g || g.id !== m.from || g.seq !== m.grant) return fail('not-approved');
     if (m.id <= (this.seen.get(m.from) ?? 0)) return fail('duplicate');
     this.seen.set(m.from, m.id);
     if (!this.bucket.take()) return fail('rate');
@@ -421,7 +424,7 @@ export class PhoneLink {
       if (!released) this.busy = false;
       released = true;
     };
-    const run = { from: m.from, ctl: new AbortController() };
+    const run = { grant: g.seq, ctl: new AbortController() };
     this.running.add(run);
     this.o
       .onCommand(

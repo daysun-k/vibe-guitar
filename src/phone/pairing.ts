@@ -8,6 +8,10 @@
  * is replaced (the relay calls setControl(false)), on 승인 해제, and with the relay process itself.
  * Nothing is stored. Codes are unique among the connected phones and not reused for the next
  * RECENT_CODES joins, so a code on the panel always names exactly one connection.
+ *
+ * The panel decides: each approval carries the panel's grant number, kept with the approved
+ * connection, stamped on its forwarded commands and shown in the panel's list. The panel runs a
+ * command only when the number matches its own current grant.
  */
 import type { PairMessage, PairState, PhoneEntry } from './protocol';
 
@@ -15,7 +19,8 @@ const RECENT_CODES = 64;
 
 export class Pairing {
   private on = false;
-  private readonly phones = new Map<string, { code: string; state: PairState }>();
+  /** `grant`: the panel's number for the current approval (only while approved). */
+  private readonly phones = new Map<string, { code: string; state: PairState; grant?: number }>();
   private readonly recent: string[] = [];
 
   /** `randomInt(n)` returns a uniform integer in [0, n) (crypto.randomInt in the relay). */
@@ -44,23 +49,27 @@ export class Pairing {
   setControl(on: boolean): boolean {
     if (on === this.on) return false;
     this.on = on;
-    for (const p of this.phones.values()) p.state = 'pending';
+    for (const p of this.phones.values()) this.unapprove(p, 'pending');
     return true;
   }
 
-  /** Approves the connection `id` showing `code`; another approved phone goes back to pending. */
-  approve(id: string, code: string): boolean {
+  /**
+   * Approves the connection `id` showing `code` under the panel's `grant`; another approved phone goes
+   * back to pending. Approving the approved phone again with a new grant replaces its grant.
+   */
+  approve(id: string, code: string, grant: number): boolean {
     const p = this.phones.get(id);
-    if (!this.on || !p || p.code !== code || p.state === 'approved') return false;
-    for (const q of this.phones.values()) if (q.state === 'approved') q.state = 'pending';
+    if (!this.on || !p || p.code !== code || (p.state === 'approved' && p.grant === grant)) return false;
+    for (const q of this.phones.values()) if (q.state === 'approved') this.unapprove(q, 'pending');
     p.state = 'approved';
+    p.grant = grant;
     return true;
   }
 
   reject(id: string, code: string): boolean {
     const p = this.phones.get(id);
     if (!this.on || !p || p.code !== code || p.state === 'rejected') return false;
-    p.state = 'rejected';
+    this.unapprove(p, 'rejected');
     return true;
   }
 
@@ -69,10 +78,21 @@ export class Pairing {
     let changed = false;
     for (const p of this.phones.values()) {
       if (p.state !== 'approved') continue;
-      p.state = 'pending';
+      this.unapprove(p, 'pending');
       changed = true;
     }
     return changed;
+  }
+
+  /** The grant the approved connection `id` was approved under (null: not approved). */
+  grantOf(id: string): number | null {
+    const p = this.phones.get(id);
+    return this.on && p?.state === 'approved' && p.grant !== undefined ? p.grant : null;
+  }
+
+  private unapprove(p: { state: PairState; grant?: number }, state: PairState): void {
+    p.state = state;
+    delete p.grant;
   }
 
   isApproved(id: string): boolean {
@@ -89,7 +109,7 @@ export class Pairing {
   /** What the panel lists (nothing while control is off). */
   list(): PhoneEntry[] {
     if (!this.on) return [];
-    return [...this.phones].map(([id, p]) => ({ id, code: p.code, state: p.state }));
+    return [...this.phones].map(([id, p]) => (p.state === 'approved' && p.grant !== undefined ? { id, code: p.code, state: p.state, grant: p.grant } : { id, code: p.code, state: p.state }));
   }
 
   private newCode(): string {

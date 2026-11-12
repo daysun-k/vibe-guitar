@@ -51,15 +51,20 @@ describe('protocol: control messages', () => {
       expect(validateViewerMessage(JSON.stringify(bad)), JSON.stringify(bad)).toBeNull();
   });
 
-  it('panel messages: control, approve/reject with id and code, revoke, results', () => {
+  it('panel messages: control, approve with id, code and grant, reject, revoke, results', () => {
     expect(validatePanelMessage('{"t":"control","on":true}')).toEqual({ t: 'control', on: true });
-    expect(validatePanelMessage(JSON.stringify({ t: 'approve', id: ID_A, code: '0042' }))).toEqual({ t: 'approve', id: ID_A, code: '0042' });
+    expect(validatePanelMessage(JSON.stringify({ t: 'approve', id: ID_A, code: '0042', grant: 3 }))).toEqual({ t: 'approve', id: ID_A, code: '0042', grant: 3 });
+    expect(validatePanelMessage(JSON.stringify({ t: 'reject', id: ID_A, code: '0042' }))).toEqual({ t: 'reject', id: ID_A, code: '0042' });
     expect(validatePanelMessage('{"t":"revoke"}')).toEqual({ t: 'revoke' });
     expect(validatePanelMessage(JSON.stringify({ t: 'result', to: ID_A, id: 2, ok: false, code: 'autoplay' }))).toEqual({ t: 'result', to: ID_A, id: 2, ok: false, code: 'autoplay' });
     for (const bad of [
       { t: 'control', on: 1 },
-      { t: 'approve', id: ID_A, code: '12345' },
-      { t: 'approve', id: 'short', code: '1234' },
+      { t: 'approve', id: ID_A, code: '12345', grant: 1 },
+      { t: 'approve', id: 'short', code: '1234', grant: 1 },
+      { t: 'approve', id: ID_A, code: '1234' }, // no grant
+      { t: 'approve', id: ID_A, code: '1234', grant: 0 },
+      { t: 'approve', id: ID_A, code: '1234', grant: 1.5 },
+      { t: 'reject', id: ID_A, code: '1234', grant: 1 },
       { t: 'revoke', id: ID_A },
       { t: 'result', to: ID_A, id: 2, ok: true, state: 'seeking' },
       { t: 'result', to: ID_A, id: 2, ok: false, code: 'whatever' },
@@ -69,9 +74,13 @@ describe('protocol: control messages', () => {
   });
 
   it('relay -> panel and relay -> viewer messages are validated field by field', () => {
-    expect(validateRelayToPanel(JSON.stringify({ ...cmd, from: ID_A }))).toEqual({ ...cmd, from: ID_A });
+    expect(validateRelayToPanel(JSON.stringify({ ...cmd, from: ID_A, grant: 2 }))).toEqual({ ...cmd, from: ID_A, grant: 2 });
+    expect(validateRelayToPanel(JSON.stringify({ ...cmd, from: ID_A }))).toBeNull(); // no grant
     expect(validateRelayToPanel(JSON.stringify({ t: 'phones', list: [{ id: ID_A, code: '1234', state: 'pending' }] }))?.t).toBe('phones');
     expect(validateRelayToPanel(JSON.stringify({ t: 'phones', list: [{ id: ID_A, code: '1234', state: 'pending', ip: '1.2.3.4' }] }))).toBeNull();
+    expect(validateRelayToPanel(JSON.stringify({ t: 'phones', list: [{ id: ID_A, code: '1234', state: 'approved', grant: 3 }] }))?.t).toBe('phones');
+    expect(validateRelayToPanel(JSON.stringify({ t: 'phones', list: [{ id: ID_A, code: '1234', state: 'pending', grant: 3 }] }))).toBeNull();
+    expect(validateRelayToPanel(JSON.stringify({ t: 'phones', list: [{ id: ID_A, code: '1234', state: 'approved', grant: 0 }] }))).toBeNull();
     expect(validateRelayToPanel(JSON.stringify({ ...cmd }))).toBeNull(); // no `from`
     expect(validateRelayToViewer(JSON.stringify({ t: 'pair', state: 'pending', code: '0007' }))).toEqual({ t: 'pair', state: 'pending', code: '0007' });
     expect(validateRelayToViewer('{"t":"pair","state":"off"}')).toEqual({ t: 'pair', state: 'off' });
@@ -104,7 +113,7 @@ describe('Pairing', () => {
     expect(p.join(ID_B)).toBe('1234');
     expect(p.list()).toEqual([]);
     expect(p.stateFor(ID_A)).toEqual({ t: 'pair', state: 'off' });
-    expect(p.approve(ID_A, '0042')).toBe(false);
+    expect(p.approve(ID_A, '0042', 1)).toBe(false);
     p.setControl(true);
     expect(p.stateFor(ID_A)).toEqual({ t: 'pair', state: 'pending', code: '0042' });
     expect(p.list().map((e) => e.code)).toEqual(['0042', '1234']);
@@ -123,13 +132,36 @@ describe('Pairing', () => {
     p.join(ID_A);
     p.join(ID_B);
     p.setControl(true);
-    expect(p.approve(ID_A, '2222')).toBe(false);
-    expect(p.approve(ID_A, '1111')).toBe(true);
+    expect(p.approve(ID_A, '2222', 1)).toBe(false);
+    expect(p.approve(ID_A, '1111', 1)).toBe(true);
     expect(p.isApproved(ID_A)).toBe(true);
-    expect(p.approve(ID_B, '2222')).toBe(true);
+    expect(p.grantOf(ID_A)).toBe(1);
+    expect(p.approve(ID_B, '2222', 2)).toBe(true);
     expect(p.isApproved(ID_A)).toBe(false);
-    expect(p.isApproved(ID_B)).toBe(true);
+    expect(p.grantOf(ID_A)).toBeNull();
+    expect(p.grantOf(ID_B)).toBe(2);
     expect(p.list().filter((e) => e.state === 'approved')).toHaveLength(1);
+    // The panel sees which of its grants the relay holds; only approved entries carry one.
+    expect(p.list()).toEqual([{ id: ID_A, code: '1111', state: 'pending' }, { id: ID_B, code: '2222', state: 'approved', grant: 2 }]);
+  });
+
+  it("keeps the panel's grant with the approval and replaces it on a new approval of the same phone", () => {
+    const p = new Pairing(seq(1111));
+    p.join(ID_A);
+    p.setControl(true);
+    expect(p.approve(ID_A, '1111', 4)).toBe(true);
+    expect(p.approve(ID_A, '1111', 4)).toBe(false);
+    expect(p.approve(ID_A, '1111', 7)).toBe(true);
+    expect(p.grantOf(ID_A)).toBe(7);
+    p.revoke();
+    expect(p.grantOf(ID_A)).toBeNull();
+    p.approve(ID_A, '1111', 8);
+    p.reject(ID_A, '1111');
+    expect(p.grantOf(ID_A)).toBeNull();
+    p.approve(ID_A, '1111', 9);
+    p.setControl(false);
+    p.setControl(true);
+    expect(p.grantOf(ID_A)).toBeNull();
   });
 
   it('reject marks the phone, which cannot control', () => {
@@ -146,7 +178,7 @@ describe('Pairing', () => {
     p.join(ID_A);
     p.join(ID_B);
     p.setControl(true);
-    p.approve(ID_A, '1111');
+    p.approve(ID_A, '1111', 1);
     return p;
   };
 
@@ -505,9 +537,16 @@ function linkHarness() {
     },
     epoch: song.epoch as string,
     rev: song.rev as number,
-    cmd: (id: number, from = ID_A, extra: Record<string, unknown> = {}) => ws.rx({ t: 'cmd', id, epoch: h.epoch, rev: h.rev, cmd: 'toggle', from, ...extra }),
+    /** The grant of the panel's last 승인 (what the relay stamps on that phone's commands). */
+    grant: () => (sockets.flatMap((s) => s.json()).filter((m) => m.t === 'approve').at(-1)?.grant as number | undefined) ?? 1,
+    cmd: (id: number, from = ID_A, extra: Record<string, unknown> = {}) => ws.rx({ t: 'cmd', id, epoch: h.epoch, rev: h.rev, cmd: 'toggle', from, grant: h.grant(), ...extra }),
     results: () => ws.json().filter((m) => m.t === 'result'),
-    approve: (id = ID_A) => ws.rx({ t: 'phones', list: [{ id, code: '1234', state: 'approved' }] }),
+    /** The phone is listed, the panel approves it, and the relay's list shows it approved. */
+    approve: (id = ID_A) => {
+      ws.rx({ t: 'phones', list: [{ id, code: '1234', state: 'pending' }] });
+      link.approve(id);
+      ws.rx({ t: 'phones', list: [{ id, code: '1234', state: 'approved', grant: h.grant() }] });
+    },
   };
   return h;
 }
@@ -700,7 +739,7 @@ describe('PhoneLink: the panel checks every forwarded command again', () => {
     };
     h.cmd(1);
     await flush();
-    h.ws.rx({ t: 'phones', list: [{ id: ID_A, code: '1234', state: 'approved' }, { id: ID_B, code: '5678', state: 'pending' }] });
+    h.ws.rx({ t: 'phones', list: [{ id: ID_A, code: '1234', state: 'approved', grant: h.grant() }, { id: ID_B, code: '5678', state: 'pending' }] });
     expect(signal!.aborted).toBe(false);
   });
 
@@ -713,7 +752,7 @@ describe('PhoneLink: the panel checks every forwarded command again', () => {
     h.link.revoke();
     h.link.approve(ID_B); // not listed: nothing sent
     expect(h.ws.json().filter((m) => ['approve', 'reject', 'revoke'].includes(m.t as string))).toEqual([
-      { t: 'approve', id: ID_A, code: '1234' },
+      { t: 'approve', id: ID_A, code: '1234', grant: 1 },
       { t: 'reject', id: ID_A, code: '1234' },
       { t: 'revoke' },
     ]);
@@ -797,8 +836,12 @@ const REVOKE_TRIGGERS: [string, (h: ReturnType<typeof linkHarness>) => void][] =
   ['switch off', (h) => h.link.setControl(false)],
   ['승인 해제', (h) => h.link.revoke()],
   ['phone disconnected', (h) => h.ws.rx({ t: 'phones', list: [] })],
-  ['phone rejected', (h) => h.ws.rx({ t: 'phones', list: [{ id: ID_A, code: '1234', state: 'rejected' }] })],
-  ['approval moved to another phone', (h) => h.ws.rx({ t: 'phones', list: [{ id: ID_B, code: '5678', state: 'approved' }] })],
+  // The relay rejects or moves an approval only when the panel asks; its list alone grants or ends nothing.
+  ['거절', (h) => h.link.reject(ID_A)],
+  ['approving another phone', (h) => {
+    h.ws.rx({ t: 'phones', list: [{ id: ID_A, code: '1234', state: 'approved', grant: h.grant() }, { id: ID_B, code: '5678', state: 'pending' }] });
+    h.link.approve(ID_B);
+  }],
   ['relay disconnected', (h) => h.ws.drop()],
   ['panel replaced', (h) => {
     h.ws.readyState = 3;
@@ -894,7 +937,7 @@ describe('S6-R2-01: once the phone loses control, a phone command sends nothing 
     h.approve();
     const p = gatePanel({ countIn: false, dropSeek: true });
     h.answer = (c, progress, signal) => runPhoneCommand(c, p.player, p.transport, { progress, signal });
-    h.ws.rx({ t: 'cmd', id: 1, epoch: h.epoch, rev: h.rev, cmd: 'restart', from: ID_A });
+    h.ws.rx({ t: 'cmd', id: 1, epoch: h.epoch, rev: h.rev, cmd: 'restart', from: ID_A, grant: h.grant() });
     await settle();
     h.link.revoke();
     for (let i = 0; i < 10; i++) {
@@ -906,8 +949,191 @@ describe('S6-R2-01: once the phone loses control, a phone command sends nothing 
   });
 });
 
-// ---------- S6-R3-01: a local revoke rejects the phone at once, before the relay's update ----------
-describe('S6-R3-01: the panel withdraws control locally before the relay confirms', () => {
+// ---------- S6-R3/R4-01: the panel's grant is the only permission, in every message order ----------
+/**
+ * The real PhoneLink, runPhoneCommand and playToggle against a relay made of the real Pairing. Both
+ * directions are FIFO, as on one WebSocket. A scenario is a list of panel actions plus a number of
+ * commands phone A sends; `explore` replays every interleaving of: the next panel action, the relay
+ * handling the next panel message, phone A sending a command (checked by the relay at that moment and
+ * stamped with its grant), and the next relay message reaching the panel. At every player command the
+ * panel sends, the panel's latest decision must be "A may control".
+ */
+/** `intent`: who may control after the user's action (approving needs the phone in the panel's list). */
+type Action = { name: string; run: (link: PhoneLink) => void; intent: (prev: string | null, link: PhoneLink) => string | null };
+const shown = (l: PhoneLink, id: string) => l.phoneList.some((x) => x.id === id);
+const act = {
+  approveA: { name: 'approve A', run: (l: PhoneLink) => l.approve(ID_A), intent: (p: string | null, l: PhoneLink) => (shown(l, ID_A) ? ID_A : p) },
+  approveB: { name: 'approve B', run: (l: PhoneLink) => l.approve(ID_B), intent: (p: string | null, l: PhoneLink) => (shown(l, ID_B) ? ID_B : p) },
+  revoke: { name: '승인 해제', run: (l: PhoneLink) => l.revoke(), intent: () => null },
+  rejectA: { name: 'reject A', run: (l: PhoneLink) => l.reject(ID_A), intent: (p: string | null) => (p === ID_A ? null : p) },
+  controlOff: { name: 'control OFF', run: (l: PhoneLink) => l.setControl(false), intent: () => null },
+  controlOn: { name: 'control ON', run: (l: PhoneLink) => l.setControl(true), intent: () => null },
+  standOff: { name: '악보대 OFF', run: (l: PhoneLink) => l.setEnabled(false), intent: () => null },
+} satisfies Record<string, Action>;
+
+type Ev = 'act' | 'relay' | 'cmd' | 'deliver';
+interface Scenario {
+  name: string;
+  /** Done before exploring: delivered and settled (e.g. A already approved). */
+  setup: Action[];
+  actions: Action[];
+  cmds: number;
+  /** Count-in off; with a loop start the command is seek then play, without one a single play. */
+  loopStart: number | null;
+}
+
+async function replayRace(sc: Scenario, events: Ev[]) {
+  let now = 1_000_000;
+  const sockets: FakeSocket[] = [];
+  const pairing = new Pairing(((xs: number[]) => () => xs.shift() ?? 0)([1111, 2222]));
+  const toPanel: string[] = [];
+  const toRelay: Record<string, unknown>[] = [];
+  let sentToRelay = 0;
+  /** The panel closed its socket (악보대 OFF): the relay hears it after what was sent before. */
+  let closed = false;
+  let intent: string | null = null;
+  const violations: string[] = [];
+  const p = gatePanel({ countIn: false, loopStart: sc.loopStart });
+  const realSend = p.env.send;
+  p.env.send = (msg) => {
+    if (intent !== ID_A) violations.push(`${msg.action} sent while the panel's decision was ${intent ?? 'nobody'}`);
+    return realSend(msg);
+  };
+  const link = new PhoneLink({
+    onStatus: () => {},
+    sample: () => ({ position: 1, rate: 1, paused: true, ad: false, loop: null }),
+    onCommand: (cmd, progress, signal) => runPhoneCommand(cmd, p.player, p.transport, { progress, signal }),
+    makeSocket: () => {
+      const s = new FakeSocket();
+      sockets.push(s);
+      return s;
+    },
+    now: () => now,
+    setTimer: () => 0,
+    clearTimer: () => {},
+  });
+  link.setEnabled(true);
+  const ws = sockets[0]!;
+  ws.open();
+  const song = ws.json().find((m) => m.t === 'song')!;
+  pairing.join(ID_A);
+  pairing.join(ID_B);
+  /** Panel -> relay messages not yet seen by the relay (FIFO). */
+  const collect = () => {
+    for (const m of ws.json().slice(sentToRelay)) if (['control', 'approve', 'reject', 'revoke'].includes(m.t as string)) toRelay.push(m);
+    sentToRelay = ws.json().length;
+    if (!link.isEnabled && !closed) {
+      closed = true;
+      toRelay.push({ t: 'closed' });
+    }
+  };
+  const tellPanel = () => toPanel.push(JSON.stringify({ t: 'phones', list: pairing.list() }));
+  const relayStep = () => {
+    const m = toRelay.shift()!;
+    let changed = false;
+    if (m.t === 'control') changed = pairing.setControl(m.on as boolean);
+    if (m.t === 'closed') changed = pairing.setControl(false); // the relay when its panel leaves
+    if (m.t === 'approve') changed = pairing.approve(m.id as string, m.code as string, m.grant as number);
+    if (m.t === 'reject') changed = pairing.reject(m.id as string, m.code as string);
+    if (m.t === 'revoke') changed = pairing.revoke();
+    if (changed) tellPanel();
+  };
+  let cmdId = 0;
+  const phoneCmd = () => {
+    cmdId++;
+    const grant = pairing.grantOf(ID_A);
+    if (grant !== null) toPanel.push(JSON.stringify({ t: 'cmd', id: cmdId, epoch: song.epoch, rev: song.rev, cmd: 'toggle', from: ID_A, grant }));
+  };
+  const deliver = () => {
+    const text = toPanel.shift()!;
+    if (ws.readyState === 1) ws.onmessage?.({ data: text } as MessageEvent);
+  };
+  // Count-in off: every step runs on promise jobs, so draining them (and answering the player) settles it.
+  const settleAll = async () => {
+    for (let i = 0; i < 12; i++) {
+      while (p.pending.length) p.reply();
+      await Promise.resolve();
+    }
+  };
+  const drainAll = async () => {
+    for (;;) {
+      collect();
+      if (toRelay.length) relayStep();
+      else if (toPanel.length) deliver();
+      else break;
+      await settleAll();
+    }
+  };
+  // Setup: control on, the list, then the setup actions, all delivered.
+  link.setControl(true);
+  for (const a of sc.setup) {
+    await drainAll();
+    intent = a.intent(intent, link);
+    a.run(link);
+  }
+  await drainAll();
+  now += 10_000; // the rate limit refills
+  let nextAction = 0;
+  let cmdsLeft = sc.cmds;
+  const possible = (): Ev[] => {
+    collect();
+    const out: Ev[] = [];
+    if (nextAction < sc.actions.length) out.push('act');
+    if (toRelay.length) out.push('relay');
+    if (cmdsLeft > 0) out.push('cmd');
+    if (toPanel.length) out.push('deliver');
+    return out;
+  };
+  for (const e of events) {
+    if (!possible().includes(e)) throw new Error(`impossible event ${e}`);
+    if (e === 'act') {
+      const a = sc.actions[nextAction++]!;
+      intent = a.intent(intent, link);
+      a.run(link);
+    } else if (e === 'relay') relayStep();
+    else if (e === 'cmd') {
+      cmdsLeft--;
+      now += 1000;
+      phoneCmd();
+    } else deliver();
+    await settleAll();
+  }
+  const next = possible();
+  const finish = async () => {
+    await drainAll();
+    await vi.advanceTimersByTimeAsync(10_000);
+    // After everything settled: does a fresh command from A play exactly when the panel granted A?
+    const before = p.sent.length;
+    p.st.playing = false;
+    now += 10_000;
+    phoneCmd();
+    await drainAll();
+    return { granted: intent === ID_A, playedAfter: p.sent.length > before };
+  };
+  return { next, violations, finish };
+}
+
+/** Every interleaving: depth-first over event prefixes, each replayed from scratch. */
+async function explore(sc: Scenario) {
+  const violations = new Map<string, string[]>();
+  let leaves = 0;
+  const liveness: string[] = [];
+  const walk = async (prefix: Ev[]) => {
+    const r = await replayRace(sc, prefix);
+    if (r.violations.length) violations.set(prefix.join(' '), r.violations);
+    if (r.next.length === 0) {
+      leaves++;
+      const f = await r.finish();
+      if (f.granted !== f.playedAfter) liveness.push(`${prefix.join(' ')}: granted=${f.granted} played=${f.playedAfter}`);
+      return;
+    }
+    for (const e of r.next) await walk([...prefix, e]);
+  };
+  await walk([]);
+  return { violations, leaves, liveness };
+}
+
+describe('S6-R4-01: only the panel grants control; late lists and late commands never play', () => {
   beforeEach(() => {
     vi.useFakeTimers();
   });
@@ -915,54 +1141,55 @@ describe('S6-R3-01: the panel withdraws control locally before the relay confirm
     vi.useRealTimers();
   });
 
-  const BOTH: PhoneEntry[] = [
-    { id: ID_A, code: '1234', state: 'approved' },
-    { id: ID_B, code: '5678', state: 'pending' },
-  ];
-  const LOCAL_TRIGGERS: [string, (h: ReturnType<typeof linkHarness>) => void, PhoneEntry[]][] = [
-    ['승인 해제', (h) => h.link.revoke(), [{ ...BOTH[0]!, state: 'pending' }, BOTH[1]!]],
-    ['reject', (h) => h.link.reject(ID_A), [{ ...BOTH[0]!, state: 'rejected' }, BOTH[1]!]],
-    ['switch off', (h) => h.link.setControl(false), []],
-    ['악보대 OFF', (h) => h.link.setEnabled(false), []],
-    ['approving another phone', (h) => h.link.approve(ID_B), [{ ...BOTH[0]!, state: 'pending' }, { ...BOTH[1]!, state: 'approved' }]],
+  const scenarios: Scenario[] = [
+    // The reviewer's two sequences (approval still in flight).
+    { name: 'approve A -> approve B (A still in flight)', setup: [], actions: [act.approveA, act.approveB], cmds: 2, loopStart: null },
+    { name: 'approve A -> control OFF -> control ON (A still in flight)', setup: [], actions: [act.approveA, act.controlOff, act.controlOn], cmds: 2, loopStart: null },
+    // A already approved, then each way the panel ends it (count-in off, with and without a loop).
+    ...[act.revoke, act.rejectA, act.controlOff, act.approveB, act.standOff].flatMap((a) =>
+      [null, 5].map((loopStart) => ({ name: `A approved -> ${a.name}${loopStart === null ? '' : ' (loop: seek, play)'}`, setup: [act.approveA], actions: [a], cmds: 1, loopStart })),
+    ),
+    // Re-approval after ending it, also while the end is still in flight.
+    { name: 'A approved -> 승인 해제 -> approve A again', setup: [act.approveA], actions: [act.revoke, act.approveA], cmds: 2, loopStart: null },
+    { name: 'A approved -> reject A -> approve A again', setup: [act.approveA], actions: [act.rejectA, act.approveA], cmds: 2, loopStart: null },
+    { name: 'A approved -> approve B -> approve A again', setup: [act.approveA], actions: [act.approveB, act.approveA], cmds: 2, loopStart: null },
+    { name: 'A approved -> control OFF -> ON -> approve A again', setup: [act.approveA], actions: [act.controlOff, act.controlOn, act.approveA], cmds: 1, loopStart: null },
   ];
 
-  for (const stale of [false, true]) {
-    it(`trigger -> command from the old phone${stale ? ' -> (an older list still showing it approved)' : ''} -> relay update: nothing is played`, async () => {
-      for (const [name, trigger, after] of LOCAL_TRIGGERS) {
-        const h = linkHarness();
-        h.link.setControl(true);
-        h.ws.rx({ t: 'phones', list: BOTH });
-        // Count-in off, no loop: the command is a single play.
-        const p = gatePanel({ countIn: false, loopStart: null });
-        h.answer = (c, progress, signal) => runPhoneCommand(c, p.player, p.transport, { progress, signal });
-        trigger(h);
-        if (stale) h.ws.rx({ t: 'phones', list: BOTH }); // sent by the relay before it saw the request
-        h.cmd(1);
-        h.ws.rx({ t: 'phones', list: after });
-        for (let i = 0; i < 10; i++) {
-          while (p.pending.length) p.reply();
-          await vi.advanceTimersByTimeAsync(500);
-        }
-        expect(p.sent, name).toEqual([]);
-        expect(h.commands, name).toEqual([]);
-        expect(p.st.playing, name).toBe(false);
-        const r = h.results().filter((x) => x.id === 1);
-        if (r.length) expect(['not-approved', 'off'], name).toContain(r[0]!.code);
-      }
-    });
+  for (const sc of scenarios) {
+    it(`${sc.name}: no player command without the panel's grant, in every order`, async () => {
+      const r = await explore(sc);
+      expect(r.leaves).toBeGreaterThan(1);
+      expect([...r.violations].slice(0, 3), `${r.violations.size} of ${r.leaves} orders`).toEqual([]);
+      // A re-approval works, and nothing else lets A play once everything settled.
+      expect(r.liveness.slice(0, 3)).toEqual([]);
+    }, 60_000);
   }
 
-  it('approving the same phone again lifts the local withdrawal', async () => {
+  it('a list from the relay never grants: an approved entry the panel did not approve shows as pending and cannot play', async () => {
     const h = linkHarness();
     h.link.setControl(true);
-    h.ws.rx({ t: 'phones', list: BOTH });
+    h.ws.rx({ t: 'phones', list: [{ id: ID_A, code: '1234', state: 'approved' }] });
+    expect(h.link.phoneList).toEqual([{ id: ID_A, code: '1234', state: 'pending' }]);
+    h.cmd(1, ID_A, { grant: 1 });
+    await settle();
+    expect(h.commands).toEqual([]);
+    expect(h.results()[0]).toMatchObject({ code: 'not-approved' });
+  });
+
+  it('a command stamped with an older grant of the same phone is rejected', async () => {
+    const h = linkHarness();
+    h.link.setControl(true);
+    h.approve();
+    const old = h.grant();
     h.link.revoke();
-    expect(h.link.phoneList.find((x) => x.id === ID_A)?.state).toBe('pending');
-    h.ws.rx({ t: 'phones', list: [{ ...BOTH[0]!, state: 'pending' }, BOTH[1]!] });
-    h.link.approve(ID_A);
-    h.ws.rx({ t: 'phones', list: BOTH });
-    h.cmd(1);
+    h.approve();
+    expect(h.grant()).toBeGreaterThan(old);
+    h.cmd(1, ID_A, { grant: old });
+    await settle();
+    expect(h.commands).toEqual([]);
+    h.advance(1000);
+    h.cmd(2);
     await settle();
     expect(h.commands).toEqual(['toggle']);
   });

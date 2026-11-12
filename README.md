@@ -246,10 +246,11 @@ song the panel currently shows, with an increasing request id and at most about 
 rejected, never queued); the panel checks all of that again and refuses during ads or without a controllable
 player. A command runs through the panel's own play button and bar-click seek (count-in, loop start and
 "pause cancels the count-in" included), and the phone hears the outcome only after the panel saw the player
-change (up to 3 s); 처음부터 counts only once the observed position is at the target. The panel stops
-accepting the phone's commands the moment you press 승인 해제 or 거절, approve another phone or switch control
-off, without waiting for the relay. When the phone loses control while one of its commands is still running,
-the panel sends nothing further for it: no next seek or play, and a count-in it started stops before playing;
+change (up to 3 s); 처음부터 counts only once the observed position is at the target. Only the panel
+grants control: pressing 승인 gives that phone a new grant number, the relay stamps it on the phone's commands,
+and the panel runs a command only if it carries the panel's current number; 승인 해제, 거절, approving another
+phone or switching control off ends the grant on the panel at once, without waiting for the relay.
+When the phone loses control while one of its commands is still running, the panel sends nothing further for it: no next seek or play, and a count-in it started stops before playing;
 the phone, if still connected, then hears "조작 권한이 바뀌어서 취소했어요". A pause, seek or play already sent
 before that may still take effect, and the phone is then told what the player actually did.
 A tap on the phone does not count as a click on the Mac's page, so Chrome may block a

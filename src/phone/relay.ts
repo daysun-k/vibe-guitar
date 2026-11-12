@@ -309,14 +309,15 @@ export async function startRelay(opts: RelayOptions): Promise<Relay> {
     const fail = (code: CommandFailure) => conn.send(JSON.stringify({ t: 'result', id: m.id, ok: false, code }));
     if (!publisher) return fail('no-panel');
     if (!pairing.controlOn) return fail('off');
-    if (!pairing.isApproved(info.id)) return fail('not-approved');
+    const grant = pairing.grantOf(info.id);
+    if (grant === null) return fail('not-approved');
     if (m.id <= info.lastCmd) return fail('duplicate');
     info.lastCmd = m.id;
     if (!info.bucket.take()) return fail('rate');
     const cur = song.current;
     if (!cur || cur.epoch !== m.epoch || cur.rev !== m.rev) return fail('stale');
     log(`phone command ${m.cmd} forwarded`);
-    publisher.send(JSON.stringify({ ...m, from: info.id }));
+    publisher.send(JSON.stringify({ ...m, from: info.id, grant }));
   };
 
   /** Pairing decisions, the control switch and command results from the publisher. */
@@ -329,7 +330,7 @@ export async function startRelay(opts: RelayOptions): Promise<Relay> {
         }
         return;
       case 'approve':
-        if (pairing.approve(m.id, m.code)) {
+        if (pairing.approve(m.id, m.code, m.grant)) {
           log(`phone ${m.code} approved`);
           tellPairing();
         }
