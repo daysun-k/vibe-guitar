@@ -15,7 +15,7 @@ import {
 } from '../src/phone/protocol';
 import { Pairing } from '../src/phone/pairing';
 import { PhoneLink, type SocketLike } from '../src/extension/sidepanel/phone-link';
-import { ShownModel, modelSongId, playerTargetKey, songIdOf, songViewReady, restartTargetSec, barStepTargetSec, type TargetParts, runPhoneCommand, type CommandContext, type ObservedPlayer, type PanelTransport, type TransportResult } from '../src/extension/sidepanel/phone-control';
+import { ShownModel, modelSongId, playerTargetKey, songIdOf, songViewReady, restartTargetSec, restartSeekTarget, barStep, barIndexAt, barStepTargetSec, type TargetParts, runPhoneCommand, type CommandContext, type ObservedPlayer, type PanelTransport, type TransportResult } from '../src/extension/sidepanel/phone-control';
 import { playToggle, type PlayToggleEnv } from '../src/extension/sidepanel/play-toggle';
 import type { PlayerControlMessage, PlayerControlResult } from '../src/extension/messages';
 import { DEFAULT_SETTINGS, chartSongKey, normalizeSettings } from '../src/extension/storage';
@@ -273,6 +273,12 @@ describe('bar step target (이전 마디 / 다음 마디)', () => {
     expect(barStepTargetSec(-1, bars, 10.5, loop)).toBe(8.01); // after B: back to B
     expect(barStepTargetSec(1, bars, 10.5, loop)).toBe(8.01);
   });
+  it('the step target carries its bar, judged by the same barIndexAt as the lookup', () => {
+    expect(barStep(1, bars, 3)).toEqual({ sec: 4.01, bar: { bars, index: 1 } });
+    expect(barIndexAt(bars, 3.9)).toBe(1); // 0.1 s before bar 2's start
+    expect(barIndexAt(bars, 3.89)).toBe(0);
+    expect(barIndexAt(bars, 1)).toBe(-1);
+  });
   it('null without bars', () => {
     expect(barStepTargetSec(1, [], 3)).toBeNull();
     expect(barStepTargetSec(-1, [], 3)).toBeNull();
@@ -282,7 +288,7 @@ describe('bar step target (이전 마디 / 다음 마디)', () => {
 const FAKE_BARS = Array.from({ length: 10 }, (_, i) => ({ startSec: i * 2 }));
 
 /** A fake panel: the player reacts after `lagMs` (or never, like an autoplay block). */
-function fakePanel(o: { playing?: boolean; countIn?: boolean; countingIn?: boolean; heldCountIn?: boolean; ad?: boolean; target?: boolean; lagMs?: number; blockPlay?: boolean; position?: number; rate?: number; noSeek?: boolean; target10?: boolean; loopBars?: [number, number] } = {}) {
+function fakePanel(o: { playing?: boolean; countIn?: boolean; countingIn?: boolean; heldCountIn?: boolean; ad?: boolean; target?: boolean; lagMs?: number; blockPlay?: boolean; position?: number; rate?: number; noSeek?: boolean; target10?: boolean; loopBars?: [number, number]; landAt?: number; loopA?: boolean } = {}) {
   let t = 0;
   const st = { playing: o.playing ?? false, countingIn: o.countingIn ?? false, position: o.position ?? 10, ad: o.ad ?? false };
   let countInDone: ((r: TransportResult) => void) | null = null;
@@ -335,12 +341,13 @@ function fakePanel(o: { playing?: boolean; countIn?: boolean; countingIn?: boole
     },
     seek: async (sec) => {
       calls.push(`seek ${sec}`);
-      if (!o.noSeek) later(() => (st.position = sec));
+      if (!o.noSeek) later(() => (st.position = o.landAt ?? sec));
       return { ok: true };
     },
-    restartTarget: () => (o.target10 ? 10 : 4),
+    // With loopA: 처음부터 to a loop whose A is bar 3 (4 s), as sidepanel.ts builds it.
+    restartTarget: () => (o.loopA ? restartSeekTarget(4.01, FAKE_BARS, 2) : { sec: o.target10 ? 10 : 4 }),
     // Bars every 2 s from 0 to 18 s.
-    barTarget: (step) => barStepTargetSec(step, FAKE_BARS, st.position, o.loopBars ?? null),
+    barTarget: (step) => barStep(step, FAKE_BARS, st.position, o.loopBars ?? null),
     cancelCountIn: () => {
       calls.push('cancelCountIn');
       if (!st.countingIn) return;
@@ -527,6 +534,47 @@ describe('runPhoneCommand: the outcome follows the observed player state', () =>
       expect(await gone.run(cmd, undefined, ctl.signal)).toEqual({ ok: false, code: 'cancelled' });
     }
     expect([...ad.calls, ...none.calls, ...gone.calls]).toEqual([]);
+  });
+
+  it('S6-R12-01: 다음 마디 accepted but not applied while paused in the bar before is not success', async () => {
+    // Bars every 2 s; paused at 3.7 s (bar 2). 3.7 is inside the generic seek window of 4.01 but not in bar 3.
+    const f = fakePanel({ position: 3.7, noSeek: true });
+    expect(await f.run('next-bar')).toEqual({ ok: false, code: 'timeout' });
+    expect(f.calls).toEqual(['seek 4.01']);
+  });
+
+  it('S6-R12-01: a dropped 다음 마디 at 0.5x is never success while the position is still in the bar before', async () => {
+    const f = fakePanel({ playing: true, rate: 0.5, position: 3.7, noSeek: true });
+    const r = await f.run('next-bar');
+    // Not at 50 ms (3.725 s): only once the position is in bar 3 by the bar lookup's rule.
+    if (r.ok) {
+      expect(f.time()).toBeGreaterThanOrEqual(400);
+      expect(barIndexAt(FAKE_BARS, f.st.position)).toBe(2);
+    } else expect(r).toEqual({ ok: false, code: 'timeout' });
+    expect(f.st.position).toBeGreaterThanOrEqual(3.9);
+  });
+
+  it('S6-R12-01: a step observed 0.26 s early is not success; one in the target bar is, and the next step counts from it', async () => {
+    const early = fakePanel({ position: 9, landAt: 9.75 }); // 다음 마디 to 10.01 shows up at 9.75 (still bar 5)
+    expect(await early.run('next-bar')).toEqual({ ok: false, code: 'timeout' });
+    const landed = fakePanel({ position: 9, landAt: 9.95 }); // within BAR_EARLY_SEC of bar 6: bar 6 by the lookup
+    expect(await landed.run('next-bar')).toEqual({ ok: true, state: 'paused' });
+    expect(barIndexAt(FAKE_BARS, landed.st.position)).toBe(5);
+    // An immediate 이전 마디 goes to bar 5 (8.01), not two bars back.
+    expect(await landed.run('prev-bar')).toEqual({ ok: false, code: 'timeout' }); // lands at 9.95 again (fake)
+    expect(landed.calls).toEqual(['seek 10.01', 'seek 8.01']);
+  });
+
+  it('S6-R12-01: 처음부터 to loop A counts only in the A bar; to the song start the time window stays', async () => {
+    const dropped = fakePanel({ position: 3.7, noSeek: true, loopA: true }); // in the window of 4.01, but bar 2
+    expect(await dropped.run('restart')).toEqual({ ok: false, code: 'timeout' });
+    const ok = fakePanel({ position: 9, loopA: true });
+    expect(await ok.run('restart')).toEqual({ ok: true, state: 'paused' });
+    expect(ok.calls).toEqual(['seek 4.01']);
+    expect(restartSeekTarget(null, FAKE_BARS)).toEqual({ sec: 0 });
+    expect(restartSeekTarget(4.01, FAKE_BARS, 2)).toEqual({ sec: 4.01, bar: { bars: FAKE_BARS, index: 2 } });
+    expect(restartSeekTarget(4.01, FAKE_BARS, null)).toEqual({ sec: 4.01 });
+    expect(restartSeekTarget(null, [])).toBeNull();
   });
 
   it('a bar step that was accepted but never applied is not success (observed position only)', async () => {
@@ -913,8 +961,8 @@ function gatePanel(o: { countIn: boolean; loopStart?: number | null; dropSeek?: 
       env.stopCountIn();
       return env.send({ type: 'player-control', action: 'seek', time: sec });
     },
-    restartTarget: () => 4,
-    barTarget: (step) => (step < 0 ? 2 : 6),
+    restartTarget: () => ({ sec: 4 }),
+    barTarget: (step) => ({ sec: step < 0 ? 2 : 6 }),
   };
   /** Answers the oldest player command still waiting for its reply. */
   const reply = () => pending.shift()?.();
@@ -1651,8 +1699,8 @@ function modelPanel(marked: boolean) {
   p.player.target = () =>
     playerTargetKey({ modelVersion: m.model ? shown.version : null, modelFor: shown.builtFor, songId: REC_A, demo: null, chartLoaded: true, tab: 101, recordingKey: 'youtube:A', chartKey: 'youtube:A' });
   p.st.target = 'unused';
-  p.transport.restartTarget = () => (m.model ? restartTargetSec(null, m.model.bars) : null);
-  p.transport.barTarget = (step) => (m.model ? barStepTargetSec(step, m.model.bars, p.st.position) : null);
+  p.transport.restartTarget = () => (m.model ? restartSeekTarget(null, m.model.bars) : null);
+  p.transport.barTarget = (step) => (m.model ? barStep(step, m.model.bars, p.st.position) : null);
   // sentTo records the panel's real target.
   const send = p.env.send;
   p.env.send = (msg) => {
@@ -1771,8 +1819,8 @@ function demoExitPanel() {
   });
   s.model = shown.replace(MODEL_9, DEMO_B);
   p.player.target = () => playerTargetKey(parts());
-  p.transport.restartTarget = () => (s.model ? restartTargetSec(null, s.model.bars) : null);
-  p.transport.barTarget = (step) => (s.model ? barStepTargetSec(step, s.model.bars, p.st.position) : null);
+  p.transport.restartTarget = () => (s.model ? restartSeekTarget(null, s.model.bars) : null);
+  p.transport.barTarget = (step) => (s.model ? barStep(step, s.model.bars, p.st.position) : null);
   const send = p.env.send;
   p.env.send = (msg) => {
     p.st.target = p.player.target();
@@ -1884,8 +1932,8 @@ describe('S6-R9-01: the shown model is labelled with the recording of the chart 
     /** recompute() as sidepanel.ts labels it, from the chart's own recording. */
     const recompute = (chartRecording: string, m: Bars) => (s.model = shown.replace(m, modelSongId(null, chartRecording, cur.chartFor)));
     p.player.target = () => playerTargetKey(parts());
-    p.transport.restartTarget = () => (s.model ? restartTargetSec(null, s.model.bars) : null);
-    p.transport.barTarget = (step) => (s.model ? barStepTargetSec(step, s.model.bars, p.st.position) : null);
+    p.transport.restartTarget = () => (s.model ? restartSeekTarget(null, s.model.bars) : null);
+    p.transport.barTarget = (step) => (s.model ? barStep(step, s.model.bars, p.st.position) : null);
     const MODEL_6: Bars = { bars: [{ startSec: 0 }, { startSec: 6 }] };
     recompute('youtube:B', MODEL_6);
     const h = wiredHarness(p);
@@ -1961,8 +2009,8 @@ describe('S6-R10-01: the shown model belongs to the current song as the chart lo
     });
     s.model = shown.replace(MODEL_8, modelSongId(null, key(chartRecording), key(player)));
     p.player.target = () => playerTargetKey(parts());
-    p.transport.restartTarget = () => (s.model ? restartTargetSec(null, s.model.bars) : null);
-    p.transport.barTarget = (step) => (s.model ? barStepTargetSec(step, s.model.bars, p.st.position) : null);
+    p.transport.restartTarget = () => (s.model ? restartSeekTarget(null, s.model.bars) : null);
+    p.transport.barTarget = (step) => (s.model ? barStep(step, s.model.bars, p.st.position) : null);
     return { p, s, parts };
   }
 

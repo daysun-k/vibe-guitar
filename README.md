@@ -250,7 +250,10 @@ song the panel currently shows, with an increasing request id and at most about 
 rejected, never queued); the panel checks all of that again and refuses during ads or without a controllable
 player. A command runs through the panel's own play button and bar-click seek (count-in, loop start and
 "pause cancels the count-in" included), and the phone hears the outcome only after the panel saw the player
-change (up to 3 s); 처음부터, 이전 마디 and 다음 마디 count only once the observed position is at the target. Only the panel
+change (up to 3 s); 처음부터, 이전 마디 and 다음 마디 count only once the observed position is at the target
+(for 이전 마디, 다음 마디 and 처음부터 to loop A: in the target bar by the same rule that picks the bar, a
+position up to 0.1 s before a bar's start counting as that bar, so the next step always counts from the
+bar that was reported). Only the panel
 grants control: pressing 승인 gives that phone a new grant number, the relay stamps it on the phone's commands,
 and the panel runs a command only if it carries the panel's current number; 승인 해제, 거절, approving another
 phone or switching control off ends the grant on the panel at once, without waiting for the relay.

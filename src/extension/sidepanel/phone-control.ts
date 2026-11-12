@@ -56,18 +56,30 @@ export interface PanelTransport {
   toggle(onCountIn: () => void, allowed: () => boolean): Promise<TransportResult>;
   /** The bar-click seek (cancels a count-in). Sends synchronously: the caller checks the gate first. */
   seek(sec: number): Promise<PlayerControlResult>;
-  /** Where 처음부터 goes, or null when there is nowhere to go. */
-  restartTarget(): number | null;
+  /** Where 처음부터 goes (see restartSeekTarget), or null when there is nowhere to go. */
+  restartTarget(): SeekTarget | null;
   /**
-   * Where 이전 마디 (-1) / 다음 마디 (+1) goes from the position now (see barStepTargetSec): a time,
-   * `last` when 다음 마디 is already in the last bar (of the loop, when one is set), or null without bars.
+   * Where 이전 마디 (-1) / 다음 마디 (+1) goes from the position now (see barStep): the target, `last`
+   * when 다음 마디 is already in the last bar (of the loop, when one is set), or null without bars.
    */
-  barTarget(step: -1 | 1): number | 'last' | null;
+  barTarget(step: -1 | 1): SeekTarget | 'last' | null;
   /** Cancels the count-in this command started (never one started from the panel), so it never plays. */
   cancelCountIn(): void;
 }
 
 /** What PhoneLink knows about a command it hands over: its grant and the song revision it was sent for. */
+/** Where a seek command goes, and when an observed position counts as being there (see landedAt). */
+export interface SeekTarget {
+  sec: number;
+  /**
+   * A bar target (이전 마디, 다음 마디, 처음부터 to loop A): the observed position must also be in bar
+   * `index` of `bars` by the rule the bar lookup uses (barIndexAt), so a command that reported success
+   * is where the next 이전 마디 / 다음 마디 counts from. Absent (처음부터 to the song's start): the time
+   * window alone.
+   */
+  bar?: { bars: readonly { startSec: number }[]; index: number };
+}
+
 export interface CommandContext {
   /** `cancelled` once the grant the command came with ended, `stale` once its revision is no longer the one published; else null. */
   check(): CommandFailure | null;
@@ -177,34 +189,59 @@ export function restartTargetSec(loopStartSec: number | null, bars: readonly { s
   return bars.length ? 0 : null;
 }
 
+/**
+ * 처음부터 as a seek target: to loop A (bar `loopABar` of `bars`), it counts only once the observed
+ * position is in that bar by the bar lookup's rule; to the song's start, by the time window alone.
+ */
+export function restartSeekTarget(loopStartSec: number | null, bars: readonly { startSec: number }[], loopABar: number | null = null): SeekTarget | null {
+  const sec = restartTargetSec(loopStartSec, bars);
+  if (sec === null) return null;
+  return loopStartSec !== null && loopABar !== null && loopABar >= 0 && loopABar < bars.length ? { sec, bar: { bars, index: loopABar } } : { sec };
+}
+
 /** A bar step seeks just inside the bar, like a bar click (so the bar under the playhead is that bar). */
 const BAR_SEEK_INSIDE_SEC = 0.01;
 /**
  * A position this little before a bar's start counts as that bar: a step that landed a frame early (players
- * round to frames) must not make the next 이전 마디 skip a bar.
+ * round to frames) must not make the next 이전 마디 skip a bar. The same rule decides when a bar step
+ * counts as done (landedAt), so a reported success is always in the target bar for the next step.
  */
 export const BAR_EARLY_SEC = 0.1;
 
 /**
+ * The bar under `position`: the last bar starting at or before `position + BAR_EARLY_SEC`, -1 before
+ * the first bar. The one rule for both choosing a bar step's target and confirming it landed.
+ */
+export function barIndexAt(bars: readonly { startSec: number }[], position: number): number {
+  let at = -1;
+  for (let i = 0; i < bars.length; i++) if (bars[i]!.startSec <= position + BAR_EARLY_SEC) at = i;
+  return at;
+}
+
+/**
  * Where 이전 마디 (`step` -1) / 다음 마디 (+1) goes from `position`: the start of the bar before / after
- * the bar under `position` (before the first bar: bar 1 counts as the current bar's successor; up to
- * BAR_EARLY_SEC before a bar's start counts as that bar).
+ * the bar under `position` (barIndexAt; before the first bar, bar 1 counts as the current bar's successor).
  * 이전 마디 always goes to the previous bar, never back to the start of the current one, and stays at
  * the first bar's start there. 다음 마디 in the last bar is `last` (nothing to do). With a loop
  * (`loopBars`: indexes of its A and B bars), the steps stay inside its bars: 이전 마디 at A stays at A,
  * 다음 마디 at B is `last`, and from outside the loop a step lands on the nearest loop bar.
  * Null without bars.
  */
-export function barStepTargetSec(step: -1 | 1, bars: readonly { startSec: number }[], position: number, loopBars: readonly [number, number] | null = null): number | 'last' | null {
+export function barStep(step: -1 | 1, bars: readonly { startSec: number }[], position: number, loopBars: readonly [number, number] | null = null): SeekTarget | 'last' | null {
   if (!bars.length) return null;
   const lo = loopBars ? Math.max(0, Math.min(loopBars[0], bars.length - 1)) : 0;
   const hi = loopBars ? Math.max(lo, Math.min(loopBars[1], bars.length - 1)) : bars.length - 1;
-  let at = -1;
-  for (let i = 0; i < bars.length; i++) if (bars[i]!.startSec <= position + BAR_EARLY_SEC) at = i;
+  const at = barIndexAt(bars, position);
   // In the last bar (of the loop): 다음 마디 has nothing to do.
   if (step > 0 && at === hi) return 'last';
   const to = Math.max(lo, Math.min(hi, at + step));
-  return Math.max(0, bars[to]!.startSec) + BAR_SEEK_INSIDE_SEC;
+  return { sec: Math.max(0, bars[to]!.startSec) + BAR_SEEK_INSIDE_SEC, bar: { bars, index: to } };
+}
+
+/** barStep's target time (or `last` / null). */
+export function barStepTargetSec(step: -1 | 1, bars: readonly { startSec: number }[], position: number, loopBars: readonly [number, number] | null = null): number | 'last' | null {
+  const t = barStep(step, bars, position, loopBars);
+  return t === null || t === 'last' ? t : t.sec;
 }
 
 export async function runPhoneCommand(cmd: PhoneCommand, player: ObservedPlayer, transport: PanelTransport, o: RunOptions = {}): Promise<CommandOutcome> {
@@ -253,7 +290,7 @@ export async function runPhoneCommand(cmd: PhoneCommand, player: ObservedPlayer,
   if (target === 'last') return fail('last-bar');
   // seek() sends synchronously, so this is the check immediately before the seek goes out.
   if (!allowed()) return g.refused();
-  const r = await transport.seek(target);
+  const r = await transport.seek(target.sec);
   if (!r.ok) return fail('failed');
   const landed = landedAt(target, player);
   if (await waitUntil(() => g.observed() !== null || landed(), observeMs, pollMs, now, sleep)) return outcome(g, { ok: true, state: player.playing() ? 'playing' : 'paused' });
@@ -261,13 +298,16 @@ export async function runPhoneCommand(cmd: PhoneCommand, player: ObservedPlayer,
 }
 
 /**
- * A seek command (처음부터, 이전 마디, 다음 마디) counts as done only once the observed position is inside [target - SEEK_EARLY_SEC,
- * target + SEEK_LATE_SEC] in LANDED_SAMPLES consecutive observations. Nothing is extrapolated from
- * the rate or the elapsed time, so a seek that was accepted but never applied (the old position keeps
- * moving away from the target) never counts. A rate change between observations starts the count
- * over from fresh observations.
+ * A seek command (처음부터, 이전 마디, 다음 마디) counts as done only once the observed position is inside
+ * [target - SEEK_EARLY_SEC, target + SEEK_LATE_SEC] and, for a bar target, in the target bar by the bar
+ * lookup's rule (barIndexAt, so it is never before the bar's start minus BAR_EARLY_SEC and before the
+ * next bar), in LANDED_SAMPLES consecutive observations. Nothing is extrapolated from the rate or the
+ * elapsed time, so a seek that was accepted but never applied (the old position keeps moving away from
+ * the target, or is still in the bar before it) never counts. A rate change between observations
+ * starts the count over from fresh observations.
  */
-export function landedAt(target: number, player: Pick<ObservedPlayer, 'position' | 'rate'>): () => boolean {
+export function landedAt(target: number | SeekTarget, player: Pick<ObservedPlayer, 'position' | 'rate'>): () => boolean {
+  const t: SeekTarget = typeof target === 'number' ? { sec: target } : target;
   let streak = 0;
   let rate = player.rate();
   return () => {
@@ -278,7 +318,9 @@ export function landedAt(target: number, player: Pick<ObservedPlayer, 'position'
       return false;
     }
     const p = player.position();
-    streak = p >= target - SEEK_EARLY_SEC && p <= target + SEEK_LATE_SEC ? streak + 1 : 0;
+    const inWindow = p >= t.sec - SEEK_EARLY_SEC && p <= t.sec + SEEK_LATE_SEC;
+    const inBar = !t.bar || barIndexAt(t.bar.bars, p) === t.bar.index;
+    streak = inWindow && inBar ? streak + 1 : 0;
     return streak >= LANDED_SAMPLES;
   };
 }
