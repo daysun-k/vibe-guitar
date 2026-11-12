@@ -58,6 +58,8 @@ function wsConnect(host, port, path, headers) {
         onText: (fn) => listeners.push(fn),
         send: (text) => socket.write(R.encodeFrame(R.OP_TEXT, new TextEncoder().encode(text), randomBytes(4))),
         close: () => socket.destroy(),
+        /** Closes like a browser does (close frame 1000), as when the panel switches 휴대폰 악보대 off. */
+        bye: () => socket.end(R.encodeFrame(R.OP_CLOSE, new Uint8Array([0x03, 0xe8]), randomBytes(4))),
       };
       const feed = (chunk) => {
         const merged = new Uint8Array(buf.length + chunk.length);
@@ -293,6 +295,36 @@ await relay.close();
 const after = await get(lanIp, lanPort, `/${tokenQ}`);
 const afterPub = await wsConnect('127.0.0.1', pubPort, '/publish', pubHeaders);
 check('both ports closed after stop', after.status === 'ECONNREFUSED' && afterPub.status === 'ECONNREFUSED', `${after.status}, ${afterPub.status}`);
+// ---------- idle auto-stop (short timer; npm run phone uses --idle-minutes, default 10) ----------
+const IDLE_MS = 1500;
+let idleStoppedAt = null;
+const r2 = await R.startRelay({
+  host: opts.host,
+  port: 0,
+  pubPort: 0,
+  extensionId: EXT_ID,
+  viewerHtml: '',
+  viewerJs: '',
+  idleStopMs: IDLE_MS,
+  onIdleStop: () => (idleStoppedAt = Date.now()),
+  log: () => {},
+});
+const [ip2, port2] = r2.lanHost.split(':');
+const pub2Port = Number(new URL(r2.publisherUrl).port);
+const pub2Headers = { Host: `127.0.0.1:${pub2Port}`, Origin: EXT_ORIGIN };
+const v2 = await wsConnect(ip2, port2, `/viewer?t=${r2.token}`, { Host: r2.lanHost, Origin: `http://${r2.lanHost}` });
+const panel2 = await wsConnect('127.0.0.1', pub2Port, '/publish', pub2Headers);
+await sleep(IDLE_MS * 2);
+check('idle stop: relay stays up while a panel is connected', idleStoppedAt === null && !v2.closed && !panel2.closed);
+const leftAt = Date.now();
+panel2.bye();
+await sleep(IDLE_MS + 700);
+check('idle stop: stops after the idle time once the panel left, although a phone is still connected', idleStoppedAt !== null && v2.closed, idleStoppedAt ? `stopped ${idleStoppedAt - leftAt} ms after the panel left` : 'still running');
+const after2 = await get(ip2, port2, `/?t=${r2.token}`);
+const after2Pub = await wsConnect('127.0.0.1', pub2Port, '/publish', pub2Headers);
+check('idle stop: both ports closed', after2.status === 'ECONNREFUSED' && after2Pub.status === 'ECONNREFUSED', `${after2.status}, ${after2Pub.status}`);
+await r2.close();
+
 const failed = results.filter((ok) => !ok).length;
 console.log(failed ? `${failed} check(s) FAILED` : `all ${results.length} checks passed`);
 process.exit(failed ? 1 : 0);

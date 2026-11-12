@@ -42,6 +42,13 @@ export interface RelayOptions {
   /** When set, only this extension id may publish (otherwise any Chrome extension on this Mac). */
   extensionId?: string;
   maxViewers?: number;
+  /**
+   * Idle auto-stop: when no publisher (side panel) has been connected for this long, the relay closes
+   * both listeners by itself. Viewers alone do not keep it running. Off when omitted.
+   */
+  idleStopMs?: number;
+  /** Called once after an idle auto-stop has closed both listeners. */
+  onIdleStop?: () => void;
   viewerHtml: string;
   viewerJs: string;
   log?: (line: string) => void;
@@ -52,6 +59,7 @@ export interface Relay {
   lanHost: string;
   viewerUrl: string;
   publisherUrl: string;
+  /** Stops the relay; safe to call more than once. */
   close(): Promise<void>;
 }
 
@@ -244,6 +252,23 @@ export async function startRelay(opts: RelayOptions): Promise<Relay> {
   const song = new SongAssembler();
   let lastAnchor: AnchorMessage | null = null;
 
+  // Idle auto-stop timer: runs only while no publisher is connected.
+  let idleStopTimer: ReturnType<typeof setTimeout> | null = null;
+  let closing: Promise<void> | null = null;
+  const disarmIdleStop = () => {
+    if (idleStopTimer) clearTimeout(idleStopTimer);
+    idleStopTimer = null;
+  };
+  const armIdleStop = () => {
+    if (!opts.idleStopMs || idleStopTimer || closing) return;
+    idleStopTimer = setTimeout(() => {
+      idleStopTimer = null;
+      if (publisher || closing) return;
+      log(`no side panel connected for ${Math.round(opts.idleStopMs! / 1000)} s: stopping the relay`);
+      void close().then(() => opts.onIdleStop?.());
+    }, opts.idleStopMs);
+  };
+
   const toViewers = (text: string) => viewers.forEach((v) => v.send(text));
   const tellPublisherCount = () => publisher?.send(JSON.stringify({ t: 'viewers', n: viewers.size }));
 
@@ -363,9 +388,11 @@ export async function startRelay(opts: RelayOptions): Promise<Relay> {
         lastAnchor = null;
         log('publisher left');
         toViewers(JSON.stringify({ t: 'publisher', connected: false }));
+        armIdleStop();
       },
     );
     publisher = conn;
+    disarmIdleStop();
     log(`publisher connected (${info.origin})`);
     toViewers(JSON.stringify({ t: 'publisher', connected: true }));
     tellPublisherCount();
@@ -388,12 +415,9 @@ export async function startRelay(opts: RelayOptions): Promise<Relay> {
   }, 5000);
   idle.unref();
 
-  return {
-    token,
-    lanHost,
-    viewerUrl: `http://${lanHost}/?t=${token}`,
-    publisherUrl: `ws://127.0.0.1:${pubPort}/publish`,
-    async close() {
+  function close(): Promise<void> {
+    closing ??= (async () => {
+      disarmIdleStop();
       clearInterval(idle);
       const all = [...viewers, ...(publisher ? [publisher] : [])];
       for (const c of all) c.close(1001, 'relay stopping');
@@ -402,6 +426,17 @@ export async function startRelay(opts: RelayOptions): Promise<Relay> {
       viewerServer.closeAllConnections();
       pubServer.closeAllConnections();
       await Promise.all([new Promise((r) => viewerServer.close(r)), new Promise((r) => pubServer.close(r))]);
-    },
+    })();
+    return closing;
+  }
+  // A panel may already be connected (it connects as soon as the publisher port is open).
+  if (!publisher) armIdleStop();
+
+  return {
+    token,
+    lanHost,
+    viewerUrl: `http://${lanHost}/?t=${token}`,
+    publisherUrl: `ws://127.0.0.1:${pubPort}/publish`,
+    close,
   };
 }
