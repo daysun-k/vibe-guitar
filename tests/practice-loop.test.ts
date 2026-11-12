@@ -268,9 +268,11 @@ describe('count-in only on an explicit start', () => {
 
   it('the panel uses runCountIn for its count-in and plays only through it', () => {
     const src = readFileSync(new URL('../src/extension/sidepanel/sidepanel.ts', import.meta.url), 'utf8');
-    const toggle = src.slice(src.indexOf('async function togglePlay(): Promise<void> {'), src.indexOf('// ---------- practice: speed'));
+    // The play button's steps live in play-toggle.ts; togglePlay only hands them the panel.
+    const toggle = readFileSync(new URL('../src/extension/sidepanel/play-toggle.ts', import.meta.url), 'utf8');
+    expect(src).toMatch(/async function togglePlay\([\s\S]{0,120}?\): Promise<TransportResult> \{\s*return playToggle\(playToggleEnv,/);
     expect(toggle).toContain('await runCountIn({');
-    expect(toggle).toMatch(/done\.kind === 'rate-changed'\) \{\s*stopCountIn\(\);\s*return setText\('countin-status', RATE_CANCELS_COUNTIN\)/);
+    expect(toggle).toMatch(/done\.kind === 'rate-changed'\) \{\s*env\.stopCountIn\(\);\s*env\.status\(RATE_CANCELS_COUNTIN\);\s*return CANCELLED;/);
     const setRate = src.slice(src.indexOf('async function setRate('), src.indexOf('function resetRateForNewRecording'));
     expect(setRate).toMatch(/if \(countingIn\) \{\s*stopCountIn\(\);/);
   });

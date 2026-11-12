@@ -280,6 +280,9 @@
       <button class="switch" id="lyrics-sw" role="switch" aria-checked="true" aria-label="가사 가져오기"><i></i></button></div>
     <div class="field"><span>휴대폰 악보대<small>같은 Wi-Fi 휴대폰에 지금·다음 코드를 보여 줘요</small></span>
       <button class="switch" id="phone-sw" role="switch" aria-checked="false" aria-label="휴대폰 악보대"><i></i></button></div>
+    <div class="field" id="phone-ctl-field" hidden><span>휴대폰에서 조작 허용<small>승인한 휴대폰 한 대만 재생·일시정지, 처음부터, 이전·다음 마디를 눌러요</small></span>
+      <button class="switch" id="phone-ctl-sw" role="switch" aria-checked="false" aria-label="휴대폰에서 조작 허용"><i></i></button></div>
+    <div class="phone-pair" id="phone-pair" hidden><p class="small" id="phone-pair-note">휴대폰에서 악보대 페이지를 열면 화면의 숫자 네 자리가 여기에 나와요. 내 휴대폰의 숫자와 같을 때만 승인해 주세요.</p><ul id="phone-pair-list" aria-live="polite"></ul></div>
     <p class="phone-status" id="phone-status" hidden><b id="phone-state" aria-live="polite">연결 안 됨</b>Mac 터미널에서 <code>npm run phone</code>을 실행하고, 나온 QR 코드를 휴대폰 카메라로 열어요. 코드와 재생 위치만 이 Mac의 중계를 거쳐 보내고, 소리와 가사는 보내지 않아요.</p>
     <div class="field"><span>추천 반주<small id="strum"></small></span></div>
     <div class="field"><span>데모 재생<small>재생기 없이 저장된 코드표를 가상 시계로 틀어 봐요</small></span>

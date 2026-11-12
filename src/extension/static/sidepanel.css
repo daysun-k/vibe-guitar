@@ -224,6 +224,13 @@ button.link{color:var(--accent);text-decoration:underline;font-weight:600}
 .phone-status{margin:0 0 10px;font-size:12.5px;color:var(--ink-2)}
 .phone-status b{display:block;font-size:13.5px;color:var(--ink);margin-bottom:2px}
 .phone-status code{font-size:12px}
+.phone-pair{margin:0 0 10px}
+.phone-pair .small{margin:0 0 6px}
+.phone-pair ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.phone-pair li{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-2)}
+.phone-pair li b{font-size:17px;letter-spacing:.12em;color:var(--ink);font-variant-numeric:tabular-nums}
+.phone-pair li span{flex:1}
+.phone-pair li.approved b{color:var(--accent)}
 .sheet-done{margin-top:12px;width:100%;height:42px;border-radius:12px;background:var(--ink);color:var(--bg);font-weight:600}
 
 /* ---------- count-in ---------- */

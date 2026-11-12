@@ -274,6 +274,53 @@ console.log(`phone change vs panel change (n=${s.n} of ${panelChanges.length}): 
 check('panel and viewer stayed connected through playback', !viewer.closed && viewer.closeCode === null && !pub.closed && pub.closeCode === null);
 check('extrapolated chord changes within 100 ms of the panel (scripted, same Mac)', s.n >= 10 && s.n >= panelChanges.length - 1 && s.worstAbs <= 100, `n=${s.n}`);
 
+// ---------- VGT-16 phone control: pairing and command gating ----------
+const firstMsg = async (c, pred, ms = 1500) => {
+  for (const end = Date.now() + ms; ; await sleep(20)) {
+    const m = c.messages.map((t) => JSON.parse(t)).find(pred);
+    if (m || Date.now() > end) return m ?? null;
+  }
+};
+const cmdText = (id, extra = {}) => JSON.stringify({ t: 'cmd', id, epoch, rev, cmd: 'toggle', ...extra });
+const panelGot = (id) => pub.messages.some((t) => JSON.parse(t).t === 'cmd' && JSON.parse(t).id === id);
+viewer.send(cmdText(1));
+check('control off: phone command rejected by the relay', (await firstMsg(viewer, (m) => m.t === 'result' && m.id === 1))?.code === 'off' && !panelGot(1));
+pub.send(JSON.stringify({ t: 'control', on: true }));
+const pairMsg = await firstMsg(viewer, (m) => m.t === 'pair' && m.state === 'pending');
+check('control on: the phone shows a 4-digit pairing code', /^\d{4}$/.test(pairMsg?.code ?? ''), pairMsg?.code);
+viewer.send(cmdText(2));
+check('unapproved phone command rejected; nothing reaches the panel', (await firstMsg(viewer, (m) => m.t === 'result' && m.id === 2))?.code === 'not-approved' && !panelGot(2));
+viewer.send(cmdText(3, { cmd: 'prev-bar' }));
+viewer.send(cmdText(4, { cmd: 'next-bar' }));
+const unapprovedBars = [await firstMsg(viewer, (m) => m.t === 'result' && m.id === 3), await firstMsg(viewer, (m) => m.t === 'result' && m.id === 4)];
+check('unapproved 이전 마디 / 다음 마디 rejected; nothing reaches the panel', unapprovedBars.every((r) => r?.code === 'not-approved') && !panelGot(3) && !panelGot(4));
+const listed = (await firstMsg(pub, (m) => m.t === 'phones' && m.list.some((e) => e.code === pairMsg?.code)))?.list.find((e) => e.code === pairMsg?.code);
+pub.send(JSON.stringify({ t: 'approve', id: listed?.id, code: listed?.code, grant: 7 }));
+check('panel approves the listed code', !!(await firstMsg(viewer, (m) => m.t === 'pair' && m.state === 'approved')));
+const heldGrant = (await firstMsg(pub, (m) => m.t === 'phones' && m.list.some((e) => e.state === 'approved')))?.list.find((e) => e.state === 'approved')?.grant;
+check("the relay's list shows the panel's grant for the approved phone", heldGrant === 7, `grant ${heldGrant}`);
+await sleep(300); // rate limit refills
+viewer.send(cmdText(5));
+const fwd = await firstMsg(pub, (m) => m.t === 'cmd' && m.id === 5);
+check('approved phone command reaches the fake panel, stamped with its grant', fwd?.from === listed?.id && fwd?.cmd === 'toggle' && fwd?.grant === 7 && Object.keys(fwd).sort().join() === 'cmd,epoch,from,grant,id,rev,t');
+pub.send(JSON.stringify({ t: 'result', to: listed?.id, id: 5, ok: true, state: 'playing' }));
+const okResult = await firstMsg(viewer, (m) => m.t === 'result' && m.id === 5);
+check('panel result goes back to the phone', okResult?.ok === true && okResult.state === 'playing');
+await sleep(300); // rate limit refills
+viewer.send(cmdText(6, { cmd: 'prev-bar' }));
+const fwdPrev = await firstMsg(pub, (m) => m.t === 'cmd' && m.id === 6);
+await sleep(300);
+viewer.send(cmdText(7, { cmd: 'next-bar' }));
+const fwdNext = await firstMsg(pub, (m) => m.t === 'cmd' && m.id === 7);
+check('approved 이전 마디 / 다음 마디 reach the fake panel once each, stamped with its grant', fwdPrev?.cmd === 'prev-bar' && fwdNext?.cmd === 'next-bar' && [fwdPrev, fwdNext].every((f) => f?.from === listed?.id && f?.grant === 7) && pub.messages.filter((t) => [6, 7].includes(JSON.parse(t).id) && JSON.parse(t).t === 'cmd').length === 2);
+pub.send(JSON.stringify({ t: 'result', to: listed?.id, id: 7, ok: false, code: 'last-bar' }));
+check('다음 마디 in the last bar: the panel\'s last-bar result goes back to the phone', (await firstMsg(viewer, (m) => m.t === 'result' && m.id === 7))?.code === 'last-bar');
+pub.send(JSON.stringify({ t: 'control', on: false }));
+check('switch off: the phone is told control is off', !!(await firstMsg(viewer, (m) => m.t === 'pair' && m.state === 'off')));
+await sleep(300);
+viewer.send(cmdText(8, { cmd: 'next-bar' }));
+check('switch off: approval revoked, command rejected', (await firstMsg(viewer, (m) => m.t === 'result' && m.id === 8))?.code === 'off' && !panelGot(8));
+
 // ---------- message validation ----------
 pub.send(JSON.stringify({ t: 'anchor', epoch, seq: ++seq, ...anchor, rate: 9 }));
 await sleep(150);
@@ -288,7 +335,7 @@ await sleep(150);
 check('oversized message is closed (1009)', pub3.closeCode === 1009, `close ${pub3.closeCode}`);
 viewer.send(JSON.stringify({ t: 'anchor', epoch, seq: 999, ...anchor }));
 await sleep(150);
-check('viewer sending anything but ping is closed (1008)', viewer.closeCode === 1008, `close ${viewer.closeCode}`);
+check('viewer sending anything but ping or a command is closed (1008)', viewer.closeCode === 1008, `close ${viewer.closeCode}`);
 
 // ---------- stop ----------
 await relay.close();

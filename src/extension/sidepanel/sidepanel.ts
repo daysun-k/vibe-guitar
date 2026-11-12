@@ -56,15 +56,17 @@ import type {
   PlayerStateMessage,
 } from '../messages';
 import { estimatePosition, type PlayerSnapshot } from '../playview';
-import { adoptAutoChart, correctChartEvent, listCharts, loadAccuracyPairs, loadAutoChart, loadChart, loadSettings, normalizeSettings, saveChart, saveSettings, undoChartCorrection, type Settings } from '../storage';
+import { adoptAutoChart, chartSongKey, correctChartEvent, listCharts, loadAccuracyPairs, loadAutoChart, loadChart, loadSettings, normalizeSettings, saveChart, saveSettings, undoChartCorrection, type Settings } from '../storage';
 import { escapeHtml, renderShapeDiagram } from './diagram';
 import { LyricsAsker, lyricsOutcome, lyricsLookupReady } from './lyrics-asker';
 import { controlTabId, keepPlayerAfterDemo } from './player-target';
-import { prepareCountIn, runCountIn } from './countin-prep';
+import { playToggle, RATE_CANCELS_COUNTIN, type PlayToggleEnv, type TransportResult } from './play-toggle';
 import { ChordFixer } from './fix';
 import { OVERVIEW_EMPTY, renderOverviewHtml } from './overview';
 import { capoReason, unplayableLine, PlayScreen, formatTime, type LoopMarks } from './play';
 import { PhoneLink, phoneStatusText, type PhoneStatus, type PlaybackSample } from './phone-link';
+import { ShownModel, modelSongId, playerTargetKey, songIdOf, songViewReady, type TargetParts, restartTargetSec, barStepTargetSec, runPhoneCommand, type CommandContext, type ObservedPlayer, type PanelTransport } from './phone-control';
+import type { CommandOutcome, PhoneCommand, PhoneEntry } from '../../phone/protocol';
 import { buildSongView } from '../../phone/song-view';
 
 // ---------- DOM helpers ----------
@@ -97,7 +99,11 @@ let activeTabId: number | null = null;
 let myWindowId: number | null = null;
 let chart: Chart | null = null;
 let chartKey = '';
+/** The recording key `chart` was loaded for: while it differs from chartKey, the chart shown is the previous song's. */
+let chartFor = '';
 let model: PlayModel | null = null;
+/** Every replacement of `model` goes through here (see ShownModel). */
+const shownModel = new ShownModel<PlayModel>(() => phoneSongChanging());
 let screen: PlayScreen;
 let editor: StampState = { chords: [], stamps: [] };
 let taps: number[] = [];
@@ -117,7 +123,9 @@ let lyrics: Lyrics | null = null;
 let lyricsNote = '';
 const lyricsAsker = new LyricsAsker();
 /** Demo playback: a simulated clock replaying a stored or synthetic chart. */
-let demo: { clock: DemoClock; chart: Chart; lyrics: Lyrics | null; key: string } | null = null;
+/** `run` tells one demo playback from the next (a phone command never follows into another one). */
+let demo: { clock: DemoClock; chart: Chart; lyrics: Lyrics | null; key: string; run: number } | null = null;
+let demoRuns = 0;
 /** Count-in in progress (cancelled by pressing play again or seeking). */
 let countInRun = 0;
 let countingIn = false;
@@ -135,7 +143,7 @@ const jumper = new LoopJumper();
 let practiceRate: { key: string; tabId: number | null; rate: number } | null = null;
 /** 휴대폰 악보대 (VGT-13): publisher to the local relay, and what its song view was built from. */
 let phone: PhoneLink;
-let phoneSongFrom: { model: PlayModel | null; snd: boolean; title: string; artist: string } | null = null;
+let phoneSongFrom: { model: PlayModel | null; snd: boolean; title: string; artist: string; target: string | null } | null = null;
 let phoneSongPos = 0;
 
 // ---------- player sync ----------
@@ -153,6 +161,11 @@ function recordingKey(r: Recording | null): string {
   return r ? `${r.source}:${r.id}` : '';
 }
 
+/** The song a recording is as loadChart sees it (a YouTube Music recording may show its YouTube chart). */
+function songKey(r: Recording | null): string {
+  return r ? chartSongKey(r.source, r.id) : '';
+}
+
 async function onPlayerState(msg: PlayerStateMessage, sender: chrome.runtime.MessageSender): Promise<void> {
   const tab = sender.tab;
   if (!tab || tab.id === undefined) return;
@@ -160,11 +173,13 @@ async function onPlayerState(msg: PlayerStateMessage, sender: chrome.runtime.Mes
   if (!tab.active) return;
   activeTabId = tab.id;
   if (demo) return;
+  const key = recordingKey(msg.recording);
+  // Before anything else: no phone command may reach this player with the previous song's revision.
+  if (key !== chartKey || tab.id !== playerTabId) phoneSongChanging();
   const durationBefore = player?.duration ?? 0;
   player = msg;
   playerTabId = tab.id;
   if (msg.adapter === 'applemusic') renderAppleMusicStatus(msg);
-  const key = recordingKey(msg.recording);
   resetRateForNewRecording(msg, key, tab.id);
   if (key !== chartKey) {
     stopCountIn();
@@ -189,10 +204,12 @@ function forgetPlayer(): void {
   stopCountIn(); // the count-in loop must not outlive the model it counts against
   clearLoop();
   if (player === null && playerTabId === null) return;
+  phoneSongChanging();
   switchDraft(null);
   player = null;
   playerTabId = null;
   chartKey = '';
+  chartFor = '';
   chart = null;
   lyrics = null;
   lyricsNote = '';
@@ -214,7 +231,9 @@ async function refreshActiveTab(): Promise<void> {
 async function reloadChart(): Promise<void> {
   if (demo) return;
   const r = player?.recording;
+  const key = recordingKey(r ?? null);
   chart = r && hasChrome ? await loadChart(r.source, r.id) : null;
+  chartFor = key;
   recompute();
   await refreshPendingAuto();
 }
@@ -350,18 +369,21 @@ function recompute(): void {
     allowRootChange: settings.allowRootChange,
     durationSec: demo ? demo.clock.durationSec : player?.duration,
   };
+  let next: PlayModel | null;
   try {
-    model = c ? buildPlayModel(c, opts, ly) : null;
+    next = c ? buildPlayModel(c, opts, ly) : null;
   } catch (e) {
     console.error(e);
     // Lyrics are optional: if they break the model, keep the chord view without them.
     try {
-      model = c && ly ? buildPlayModel(c, opts, null) : null;
+      next = c && ly ? buildPlayModel(c, opts, null) : null;
     } catch (e2) {
       console.error(e2);
-      model = null;
+      next = null;
     }
   }
+  // The only place the model is replaced: phone commands for the previous model stop first (VGT-16).
+  model = shownModel.replace(next, modelSongId(demo, c ? songKey(c.recording) : null, songKey(player?.recording ?? null)));
   screen.setModel(model);
   screen.setLook(settings.lookAheadBars);
   if (shownKey() !== fixModelKey) {
@@ -853,8 +875,11 @@ async function doSave(): Promise<void> {
     const stamps = $<HTMLInputElement>('quantize').checked ? quantizeStamps(editor.stamps, timing, 2, keep) : editor.stamps;
     const { chart: built, preservation, changed } = buildChartDetailed({ recording: r, timing, chords: editor.chords, stamps, durationSec: player?.duration || undefined, existing });
     await saveChart(built);
-    chart = built;
-    recompute();
+    // The song may have changed while the save was pending: keep what was saved, show only the current song's.
+    if (!demo && recordingKey(built.recording) === chartKey) {
+      chart = built;
+      recompute();
+    }
     const kept =
       preservation === 'kept'
         ? changed
@@ -925,8 +950,11 @@ async function attachExample(): Promise<void> {
   const ex = EXAMPLE_CHARTS[Number($<HTMLSelectElement>('example-select').value)];
   const c = attachChartToRecording(ex, r);
   await saveChart(c);
-  chart = c;
-  recompute();
+  // The song may have changed while the save was pending: keep what was saved, show only the current song's.
+  if (!demo && recordingKey(c.recording) === chartKey) {
+    chart = c;
+    recompute();
+  }
   setStatus('io-status', '예시 코드표를 현재 곡에 연결했습니다(타이밍은 가짜입니다).', false);
 }
 
@@ -1046,86 +1074,66 @@ function stopCountIn(): void {
   $('countin').classList.remove('on');
 }
 
-async function seekTo(sec: number): Promise<void> {
+async function seekTo(sec: number): Promise<PlayerControlResult> {
   stopCountIn();
   jumper.seeked(Math.max(0, sec), Date.now());
   const r = await sendControl({ type: 'player-control', action: 'seek', time: Math.max(0, sec) });
   if (!r.ok) setText('countin-status', `이동하지 못했어요 (${r.reason ?? '알 수 없음'}).`);
   else setText('countin-status', '');
   lastT = -10;
+  return r;
 }
+
+/** What the play button's steps (play-toggle.ts) use of the panel. */
+const playToggleEnv: PlayToggleEnv = {
+  send: sendControl,
+  isPlaying,
+  countingIn: () => countingIn,
+  stopCountIn,
+  newRun: () => ++countInRun,
+  isRun: (run) => run === countInRun,
+  beginCountIn: () => {
+    countingIn = true;
+    $('countin').classList.add('on');
+  },
+  endCountIn: () => {
+    countingIn = false;
+    $('countin').classList.remove('on');
+  },
+  countInPlan: () => {
+    if (!settings.countInBars || !model) return null;
+    const m = model;
+    const pos = positionNow(false);
+    const f = frameAt(m, pos);
+    const bar = f.bar >= 0 ? m.bars[f.bar] : null;
+    return {
+      target: explicitStartSec(practiceLoop, pos, bar ? bar.startSec : null),
+      beats: settings.countInBars * m.big.bigPerBar,
+      bigPerBar: m.big.bigPerBar,
+      beatSec: screen.bigBeatSec(),
+    };
+  },
+  loopStartOutside: () => (practiceLoop && !insideLoop(practiceLoop, positionNow(false)) ? loopStartTarget(practiceLoop) : null),
+  rate: currentRate,
+  seeked: (sec) => jumper.seeked(sec, Date.now()),
+  status: (text) => setText('countin-status', text),
+  beat: (left, accent) => {
+    $('countin').querySelector('b')!.textContent = String(left);
+    click(accent);
+  },
+};
 
 /**
  * Play / pause from the panel. Starting plays a count-in of big beats from the bar start; with a
  * loop on and the playhead outside it, playback starts from the loop's first bar. Automatic loop
- * repeats never come through here, so they never count in.
+ * repeats never come through here, so they never count in. `allowed` is a phone command's
+ * authorization gate, checked before every player command; the panel's own button passes none.
  */
-async function togglePlay(): Promise<void> {
-  setText('countin-status', '');
-  if (countingIn) return stopCountIn();
-  if (isPlaying()) {
-    const r = await sendControl({ type: 'player-control', action: 'pause' });
-    if (!r.ok) setText('countin-status', `이 플레이어는 패널에서 멈출 수 없어요 (${r.reason ?? '알 수 없음'}).`);
-    return;
-  }
-  if (!settings.countInBars || !model) {
-    const loopStart = practiceLoop && !insideLoop(practiceLoop, positionNow(false)) ? loopStartTarget(practiceLoop) : null;
-    if (loopStart !== null) {
-      jumper.seeked(loopStart, Date.now());
-      const s = await sendControl({ type: 'player-control', action: 'seek', time: loopStart });
-      if (!s.ok) return setText('countin-status', `반복 구간 처음으로 이동하지 못했어요 (${s.reason ?? '알 수 없음'}).`);
-    }
-    const r = await sendControl({ type: 'player-control', action: 'play' });
-    if (!r.ok) setText('countin-status', `이 플레이어는 패널에서 재생할 수 없어요 (${r.reason ?? '알 수 없음'}).`);
-    return;
-  }
-  const run = ++countInRun;
-  const m = model;
-  const pos = positionNow(false);
-  const f = frameAt(m, pos);
-  const bar = f.bar >= 0 ? m.bars[f.bar] : null;
-  const target = explicitStartSec(practiceLoop, pos, bar ? bar.startSec : null);
-  jumper.seeked(target, Date.now());
-  const prep = await prepareCountIn(sendControl, () => run === countInRun, target);
-  if (prep.kind === 'cancelled') return;
-  if (prep.kind === 'failed') {
-    return setText('countin-status', prep.step === 'pause'
-      ? `이 플레이어에서는 카운트인 재생을 지원하지 않아요 (${prep.reason ?? '알 수 없음'}).`
-      : `마디 처음으로 이동하지 못해 카운트인을 취소했어요 (${prep.reason ?? '알 수 없음'}).`);
-  }
-  const rate = currentRate();
-  const n = settings.countInBars * m.big.bigPerBar;
-  const stepMs = (screen.bigBeatSec() * 1000) / rate;
-  const box = $('countin');
-  const num = box.querySelector('b')!;
-  countingIn = true;
-  box.classList.add('on');
-  const done = await runCountIn({
-    beats: n,
-    stepMs,
-    startRate: rate,
-    rate: currentRate,
-    isCurrent: () => run === countInRun,
-    onBeat: (left, k) => {
-      num.textContent = String(left);
-      click(k % m.big.bigPerBar === 0);
-    },
-    play: () => {
-      countingIn = false;
-      box.classList.remove('on');
-      return sendControl({ type: 'player-control', action: 'play' });
-    },
-  });
-  if (done.kind === 'cancelled') return;
-  if (done.kind === 'rate-changed') {
-    stopCountIn();
-    return setText('countin-status', RATE_CANCELS_COUNTIN);
-  }
-  if (!done.result.ok) setText('countin-status', `재생을 다시 시작하지 못했어요 (${done.result.reason ?? '알 수 없음'}).`);
+async function togglePlay(onCountIn?: () => void, allowed?: () => boolean): Promise<TransportResult> {
+  return playToggle(playToggleEnv, { onCountIn, allowed });
 }
 
 // ---------- practice: speed, A/B loop ----------
-const RATE_CANCELS_COUNTIN = '속도가 바뀌어서 카운트인을 멈췄어요. 다시 눌러 주세요.';
 
 function currentRate(): number {
   return (demo ? demo.clock.rate : player?.playbackRate) || 1;
@@ -1249,11 +1257,18 @@ function syncLoop(): void {
   renderLoop();
 }
 
+/** The position observed just before the last loop jump back to A, and when (see ObservedPlayer.wrapSample). */
+let loopWrap: { at: number; position: number } | null = null;
+
 /** Jumps back to A when playback crossed the end of B (decided from the observed position). */
 function checkLoop(): void {
   if (!jumper.active || countingIn) return;
-  const target = jumper.observe({ positionSec: positionNow(false), playing: isPlaying(), isAd: !demo && !!player?.isAd, nowMs: Date.now() });
+  const positionSec = positionNow(false);
+  const nowMs = Date.now();
+  const target = jumper.observe({ positionSec, playing: isPlaying(), isAd: !demo && !!player?.isAd, nowMs });
   if (target === null) return;
+  // A phone seek command still waiting for its outcome may have landed before this jump (S6-R14-02).
+  loopWrap = { at: nowMs, position: positionSec };
   lastT = -10;
   void sendControl({ type: 'player-control', action: 'seek', time: target }).then((r) => {
     if (!r.ok) setText('countin-status', `반복 구간 처음으로 돌아가지 못했어요 (${r.reason ?? '알 수 없음'}).`);
@@ -1302,7 +1317,8 @@ async function startDemo(preferKey?: string): Promise<void> {
   const rate = Number(params.get('rate'));
   if (isPracticeRate(rate)) clock.rate = rate;
   clearLoop(); // a loop belongs to one playback: the real player's or one demo's
-  demo = { clock, chart: pick.chart, lyrics: await demoLyricsFor(pick.chart), key: pick.key };
+  phoneSongChanging();
+  demo = { clock, chart: pick.chart, lyrics: await demoLyricsFor(pick.chart), key: pick.key, run: ++demoRuns };
   $('demo-bar').hidden = false;
   showTab('play');
   closeSheet();
@@ -1314,6 +1330,7 @@ async function startDemo(preferKey?: string): Promise<void> {
 async function exitDemo(): Promise<void> {
   stopCountIn();
   clearLoop();
+  phoneSongChanging();
   demo = null;
   $('demo-bar').hidden = true;
   // Tab switches were not followed during the demo: drop a player that is no longer in the
@@ -1343,12 +1360,99 @@ function phoneSample(): PlaybackSample | null {
 /** Rebuilds the song view when the model, 실제 음 이름 보기 or the title changes (not every frame). */
 function syncPhoneSong(): void {
   if (!phone.isEnabled) return;
+  // The new song's chart is still loading: phones keep the previous view, and commands stay stale.
+  // Also while leaving a demo: until the real song's model is built, phones keep the previous view.
+  if (!songViewReady(phoneTargetParts())) return;
   const r = shownRecording();
-  const from = { model, snd: settings.showSounding, title: r?.title ?? '', artist: r?.artist ?? '' };
+  const from = { model, snd: settings.showSounding, title: r?.title ?? '', artist: r?.artist ?? '', target: phonePlayer.target() };
   const p = phoneSongFrom;
-  if (p && p.model === from.model && p.snd === from.snd && p.title === from.title && p.artist === from.artist) return;
+  if (p && p.model === from.model && p.snd === from.snd && p.title === from.title && p.artist === from.artist && p.target === from.target) return;
   phoneSongFrom = from;
-  phone.setSong(model ? buildSongView(model, { title: from.title, artist: from.artist, showSounding: from.snd }) : null);
+  phone.setSong(model ? buildSongView(model, { title: from.title, artist: from.artist, showSounding: from.snd }) : null, from.target);
+}
+
+/**
+ * The player, recording, chart or demo is about to change (VGT-16): phone commands are refused as
+ * stale from now until syncPhoneSong publishes the new song for the new target.
+ */
+function phoneSongChanging(): void {
+  phoneSongFrom = null;
+  phone?.songChanging();
+}
+
+// ---------- 휴대폰에서 조작 (VGT-16) ----------
+const phonePlayer: ObservedPlayer = {
+  playing: () => isPlaying() && !countingIn,
+  countingIn: () => countingIn,
+  position: () => positionNow(false),
+  rate: currentRate,
+  isAd: () => !demo && !!player?.isAd,
+  target: () => playerTargetKey(phoneTargetParts()),
+  wrapSample: () => loopWrap,
+};
+
+/** What the phone target is made of. The tab is the one sendControl would use, so an unchanged target means the same tab gets the command. */
+function phoneTargetParts(): TargetParts {
+  return {
+    modelVersion: model ? shownModel.version : null,
+    modelFor: shownModel.builtFor,
+    songId: songIdOf(demo, songKey(player?.recording ?? null)),
+    demo,
+    chartLoaded: chartFor === chartKey,
+    tab: player && hasChrome ? controlTabId(playerTabId, activeTabId) : null,
+    recordingKey: recordingKey(player?.recording ?? null),
+    chartKey,
+  };
+}
+
+/** countInRun of the count-in the phone started (cancelCountIn stops only that one). */
+let phoneCountInRun = -1;
+const phoneTransport: PanelTransport = {
+  toggle: (onCountIn, allowed) =>
+    togglePlay(() => {
+      phoneCountInRun = countInRun;
+      onCountIn();
+    }, allowed),
+  cancelCountIn: () => {
+    if (countingIn && countInRun === phoneCountInRun) stopCountIn();
+  },
+  seek: (sec) => seekTo(sec),
+  restartTarget: () => (model ? restartTargetSec(practiceLoop ? loopStartTarget(practiceLoop) : null, model.bars) : null),
+  barTarget: (step) => (model ? barStepTargetSec(step, model.bars, positionNow(false), practiceLoop ? loopBarIndexes(practiceLoop, model.bars) : null) : null),
+};
+
+function onPhoneCommand(cmd: PhoneCommand, progress: (o: CommandOutcome) => void, signal: AbortSignal, context: CommandContext): Promise<CommandOutcome> {
+  return runPhoneCommand(cmd, phonePlayer, phoneTransport, { progress, signal, context });
+}
+
+function renderPhones(list: readonly PhoneEntry[]): void {
+  const ul = $('phone-pair-list');
+  const items = list.map((p) => {
+    const li = document.createElement('li');
+    li.className = p.state;
+    const code = document.createElement('b');
+    code.textContent = p.code;
+    const note = document.createElement('span');
+    note.textContent = p.state === 'approved' ? '조작 가능' : p.state === 'rejected' ? '거절함' : '승인 대기';
+    li.append(code, note);
+    const button = (label: string, act: () => void) => {
+      const b = document.createElement('button');
+      b.className = 'btn';
+      b.type = 'button';
+      b.textContent = label;
+      b.setAttribute('aria-label', `휴대폰 ${p.code} ${label}`);
+      b.onclick = act;
+      li.append(b);
+    };
+    if (p.state === 'approved') button('승인 해제', () => phone.revoke());
+    else {
+      button('승인', () => phone.approve(p.id));
+      if (p.state === 'pending') button('거절', () => phone.reject(p.id));
+    }
+    return li;
+  });
+  ul.replaceChildren(...items);
+  $('phone-pair-note').hidden = list.length > 0;
 }
 
 function renderPhoneStatus(s: PhoneStatus): void {
@@ -1358,7 +1462,12 @@ function renderPhoneStatus(s: PhoneStatus): void {
 
 function syncPhone(): void {
   $('phone-sw').setAttribute('aria-checked', String(settings.phoneStand));
+  $('phone-ctl-sw').setAttribute('aria-checked', String(settings.phoneControl));
+  $('phone-ctl-field').hidden = !settings.phoneStand;
+  $('phone-pair').hidden = !settings.phoneStand || !settings.phoneControl;
   if (settings.phoneStand && !phone.isEnabled) phoneSongFrom = null;
+  // Control off first, so a panel switching both off never leaves an approval behind.
+  phone.setControl(settings.phoneStand && settings.phoneControl);
   phone.setEnabled(settings.phoneStand);
   syncPhoneSong();
 }
@@ -1457,6 +1566,11 @@ function bindSheet(): void {
   };
   $('phone-sw').onclick = () => {
     settings.phoneStand = !settings.phoneStand;
+    syncSheet();
+    persist(false);
+  };
+  $('phone-ctl-sw').onclick = () => {
+    settings.phoneControl = !settings.phoneControl;
     syncSheet();
     persist(false);
   };
@@ -1677,8 +1791,9 @@ async function main(): Promise<void> {
   if (params.has('snd')) settings.showSounding = true;
   if (params.has('root')) settings.allowRootChange = true;
   if (params.has('phone')) settings.phoneStand = true; // screenshots: the switch on (connects to 127.0.0.1 only)
+  if (params.has('phonectl')) settings.phoneControl = true; // screenshots: 휴대폰에서 조작 허용 on
   applyTheme();
-  phone = new PhoneLink({ onStatus: renderPhoneStatus, sample: phoneSample });
+  phone = new PhoneLink({ onStatus: renderPhoneStatus, sample: phoneSample, onPhones: renderPhones, onCommand: onPhoneCommand });
   addEventListener('focus', () => phone.retryNow());
   screen = new PlayScreen({
     seek: (sec) => void seekTo(sec),

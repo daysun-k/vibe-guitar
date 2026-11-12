@@ -7,6 +7,10 @@
  * `position + rate * (macNow - sampledAt)`, where `macNow = phoneNow + offset` and `offset` comes
  * from ping round trips to the relay. The song itself travels as a "song view" (see song-view.ts)
  * split into parts that each fit one frame. No audio, no lyrics, no storage keys.
+ *
+ * VGT-16 adds phone control: with 휴대폰에서 조작 허용 on, each phone connection gets a pairing code;
+ * the panel approves one of them, and only that connection may send the two commands (play/pause
+ * toggle, restart). The QR token stays the viewing credential; the approval is the control one.
  */
 import { validateSongView, type SongView } from './song-view';
 
@@ -64,7 +68,20 @@ export interface PingMessage {
   c: number;
 }
 
-export type ViewerMessage = PingMessage;
+/**
+ * VGT-16: one control request from the approved phone. Exactly the PHONE_COMMANDS exist; the phone never
+ * names a time, rate, tab or URL. `epoch`/`rev` are the song view the phone shows: a request made
+ * against another song (or another panel) is rejected as stale. `id` increases per connection.
+ */
+export interface CommandMessage {
+  t: 'cmd';
+  id: number;
+  epoch: string;
+  rev: number;
+  cmd: PhoneCommand;
+}
+
+export type ViewerMessage = PingMessage | CommandMessage;
 
 export interface PongMessage {
   t: 'pong';
@@ -84,7 +101,7 @@ export interface ViewersMessage {
   n: number;
 }
 
-export type RelayToViewer = SongPartMessage | AnchorMessage | PongMessage | PublisherStatusMessage;
+export type RelayToViewer = SongPartMessage | AnchorMessage | PongMessage | PublisherStatusMessage | PairMessage | ResultMessage;
 
 // ---------- validation ----------
 
@@ -145,9 +162,216 @@ export function validatePublisherMessage(text: string): PublisherMessage | null 
 
 export function validateViewerMessage(text: string): ViewerMessage | null {
   const v = parseJson(text);
-  if (!isObj(v) || v.t !== 'ping' || !onlyKeys(v, ['t', 'id', 'c'])) return null;
+  if (!isObj(v)) return null;
+  if (v.t === 'cmd') return validCommand(v, false) as CommandMessage | null;
+  if (v.t !== 'ping' || !onlyKeys(v, ['t', 'id', 'c'])) return null;
   if (!int(v.id, 0, Number.MAX_SAFE_INTEGER) || !finite(v.c, 0, 1e15)) return null;
   return { t: 'ping', id: v.id, c: v.c };
+}
+
+// ---------- phone control (VGT-16) ----------
+
+/**
+ * 재생/일시정지, 처음부터 (loop A, else the song's start), 이전 마디 and 다음 마디 (bar steps from the
+ * position the panel observes, kept inside the loop's bars when a loop is set).
+ */
+export const PHONE_COMMANDS = ['toggle', 'restart', 'prev-bar', 'next-bar'] as const;
+export type PhoneCommand = (typeof PHONE_COMMANDS)[number];
+/** Commands the approved phone may send per second, and how many may come at once. */
+export const CONTROL_RATE_PER_SEC = 4;
+export const CONTROL_BURST = 2;
+/** The panel reports a command's outcome once the player shows it, or gives up after this long. */
+export const CONTROL_OBSERVE_MS = 3000;
+/** Pairing code shown on the phone and compared on the panel. */
+export const PAIR_CODE_RE = /^\d{4}$/;
+/** Relay-assigned id of one viewer connection (never reused for another connection). */
+export const CONN_ID_RE = /^[a-z0-9]{12}$/;
+
+export type CommandFailure =
+  /** 휴대폰에서 조작 허용 is off. */
+  | 'off'
+  /** This connection is not the approved phone. */
+  | 'not-approved'
+  /**
+   * The song (or the panel) changed since the phone got it, or the song or the player's tab changed
+   * while the command ran (nothing further was sent to the player).
+   */
+  | 'stale'
+  /** Request id already seen on this connection. */
+  | 'duplicate'
+  | 'rate'
+  | 'ad'
+  /** No player (or no song) the panel may control. */
+  | 'no-target'
+  /** The panel is still carrying out the previous command. */
+  | 'busy'
+  /** Play was sent but the player stayed paused (most likely the browser's autoplay rule). */
+  | 'autoplay'
+  | 'timeout'
+  | 'failed'
+  /** The phone lost the right to control while the command ran: nothing further was sent to the player. */
+  | 'cancelled'
+  /** 다음 마디 while already in the last bar (of the loop, when one is set): nothing was sent. */
+  | 'last-bar'
+  /** No side panel is connected to the relay. */
+  | 'no-panel';
+const FAILURES: readonly CommandFailure[] = ['off', 'not-approved', 'stale', 'duplicate', 'rate', 'ad', 'no-target', 'busy', 'autoplay', 'timeout', 'failed', 'cancelled', 'last-bar', 'no-panel'];
+
+/** 'countin': the count-in started; a second result with the same id follows once playback starts (or fails). */
+export type CommandState = 'playing' | 'paused' | 'countin';
+const STATES: readonly CommandState[] = ['playing', 'paused', 'countin'];
+
+export type CommandOutcome = { ok: true; state: CommandState } | { ok: false; code: CommandFailure };
+
+/**
+ * Relay -> panel: a command the relay accepted from the approved viewer `from`, stamped with the grant
+ * the panel sent when it approved that viewer. The panel carries it out only when `from` and `grant`
+ * match its own current grant.
+ */
+export interface ForwardedCommand extends CommandMessage {
+  from: string;
+  grant: number;
+}
+
+/** Relay -> viewer: the outcome of request `id`. */
+export type ResultMessage = { t: 'result'; id: number } & CommandOutcome;
+
+export type PairState = 'pending' | 'approved' | 'rejected';
+/** Relay -> viewer: this connection's pairing state ('off': control is not allowed on the panel). */
+export type PairMessage = { t: 'pair'; state: 'off' } | { t: 'pair'; state: PairState; code: string };
+
+export interface PhoneEntry {
+  id: string;
+  code: string;
+  state: PairState;
+  /** Relay -> panel, approved entries only: the panel's grant the relay holds for it. */
+  grant?: number;
+}
+
+/** Relay -> panel: the connected phones and their codes (empty while control is off). */
+export interface PhonesMessage {
+  t: 'phones';
+  list: PhoneEntry[];
+}
+
+/** Panel -> relay messages besides the song view and anchors. */
+export type PanelMessage =
+  | { t: 'control'; on: boolean }
+  /** `grant`: the panel's number for this approval (increasing within a panel session). */
+  | { t: 'approve'; id: string; code: string; grant: number }
+  | { t: 'reject'; id: string; code: string }
+  | { t: 'revoke' }
+  | ({ t: 'result'; to: string; id: number } & CommandOutcome);
+
+function validCommand(v: Record<string, unknown>, forwarded: boolean): CommandMessage | ForwardedCommand | null {
+  if (!onlyKeys(v, forwarded ? ['t', 'id', 'epoch', 'rev', 'cmd', 'from', 'grant'] : ['t', 'id', 'epoch', 'rev', 'cmd'])) return null;
+  if (!int(v.id, 1, Number.MAX_SAFE_INTEGER) || !int(v.rev, 1, Number.MAX_SAFE_INTEGER)) return null;
+  if (typeof v.epoch !== 'string' || !EPOCH_RE.test(v.epoch) || !PHONE_COMMANDS.includes(v.cmd as PhoneCommand)) return null;
+  const m: CommandMessage = { t: 'cmd', id: v.id, epoch: v.epoch, rev: v.rev, cmd: v.cmd as PhoneCommand };
+  if (!forwarded) return m;
+  if (typeof v.from !== 'string' || !CONN_ID_RE.test(v.from) || !int(v.grant, 1, Number.MAX_SAFE_INTEGER)) return null;
+  return { ...m, from: v.from, grant: v.grant };
+}
+
+/** Validates the outcome fields of a result; `extra` are the keys allowed besides them. */
+function validOutcome(v: Record<string, unknown>, extra: string[]): CommandOutcome | null {
+  if (v.ok === true) {
+    if (!onlyKeys(v, [...extra, 'ok', 'state']) || !STATES.includes(v.state as CommandState)) return null;
+    return { ok: true, state: v.state as CommandState };
+  }
+  if (v.ok !== false || !onlyKeys(v, [...extra, 'ok', 'code']) || !FAILURES.includes(v.code as CommandFailure)) return null;
+  return { ok: false, code: v.code as CommandFailure };
+}
+
+function validEntry(v: unknown): PhoneEntry | null {
+  if (!isObj(v) || !onlyKeys(v, v.state === 'approved' ? ['id', 'code', 'state', 'grant'] : ['id', 'code', 'state'])) return null;
+  if (typeof v.id !== 'string' || !CONN_ID_RE.test(v.id) || typeof v.code !== 'string' || !PAIR_CODE_RE.test(v.code)) return null;
+  if (v.state !== 'pending' && v.state !== 'approved' && v.state !== 'rejected') return null;
+  if (v.grant === undefined) return { id: v.id, code: v.code, state: v.state };
+  return int(v.grant, 1, Number.MAX_SAFE_INTEGER) ? { id: v.id, code: v.code, state: v.state, grant: v.grant } : null;
+}
+
+/** Panel messages for the relay (pairing decisions, the control switch, command results), or null. */
+export function validatePanelMessage(text: string): PanelMessage | null {
+  const v = parseJson(text);
+  if (!isObj(v)) return null;
+  switch (v.t) {
+    case 'control':
+      return onlyKeys(v, ['t', 'on']) && typeof v.on === 'boolean' ? { t: 'control', on: v.on } : null;
+    case 'approve':
+    case 'reject': {
+      if (!onlyKeys(v, v.t === 'approve' ? ['t', 'id', 'code', 'grant'] : ['t', 'id', 'code'])) return null;
+      if (typeof v.id !== 'string' || !CONN_ID_RE.test(v.id) || typeof v.code !== 'string' || !PAIR_CODE_RE.test(v.code)) return null;
+      if (v.t === 'reject') return { t: 'reject', id: v.id, code: v.code };
+      return int(v.grant, 1, Number.MAX_SAFE_INTEGER) ? { t: 'approve', id: v.id, code: v.code, grant: v.grant } : null;
+    }
+    case 'revoke':
+      return onlyKeys(v, ['t']) ? { t: 'revoke' } : null;
+    case 'result': {
+      if (typeof v.to !== 'string' || !CONN_ID_RE.test(v.to) || !int(v.id, 1, Number.MAX_SAFE_INTEGER)) return null;
+      const o = validOutcome(v, ['t', 'to', 'id']);
+      return o ? { t: 'result', to: v.to, id: v.id, ...o } : null;
+    }
+    default:
+      return null;
+  }
+}
+
+/** Relay -> panel messages the panel acts on, or null (the panel ignores anything else). */
+export function validateRelayToPanel(text: string): { t: 'viewers'; n: number } | PhonesMessage | ForwardedCommand | null {
+  const v = parseJson(text);
+  if (!isObj(v)) return null;
+  if (v.t === 'viewers') return onlyKeys(v, ['t', 'n']) && int(v.n, 0, 1000) ? { t: 'viewers', n: v.n } : null;
+  if (v.t === 'cmd') return validCommand(v, true) as ForwardedCommand | null;
+  if (v.t !== 'phones' || !onlyKeys(v, ['t', 'list']) || !Array.isArray(v.list) || v.list.length > 16) return null;
+  const list: PhoneEntry[] = [];
+  for (const e of v.list) {
+    const ok = validEntry(e);
+    if (!ok) return null;
+    list.push(ok);
+  }
+  return { t: 'phones', list };
+}
+
+/** Relay -> viewer pairing and result messages, or null. */
+export function validateRelayToViewer(text: string): PairMessage | ResultMessage | null {
+  const v = parseJson(text);
+  if (!isObj(v)) return null;
+  if (v.t === 'pair') {
+    if (v.state === 'off') return onlyKeys(v, ['t', 'state']) ? { t: 'pair', state: 'off' } : null;
+    if (!onlyKeys(v, ['t', 'state', 'code']) || typeof v.code !== 'string' || !PAIR_CODE_RE.test(v.code)) return null;
+    if (v.state !== 'pending' && v.state !== 'approved' && v.state !== 'rejected') return null;
+    return { t: 'pair', state: v.state, code: v.code };
+  }
+  if (v.t !== 'result' || !int(v.id, 1, Number.MAX_SAFE_INTEGER)) return null;
+  const o = validOutcome(v, ['t', 'id']);
+  return o ? { t: 'result', id: v.id, ...o } : null;
+}
+
+/**
+ * Token bucket: `burst` commands at once, refilled at `perSec`. Excess is rejected, never queued.
+ */
+export class TokenBucket {
+  private tokens: number;
+  private at: number;
+
+  constructor(
+    private readonly perSec = CONTROL_RATE_PER_SEC,
+    private readonly burst = CONTROL_BURST,
+    private readonly now: () => number = Date.now,
+  ) {
+    this.tokens = burst;
+    this.at = now();
+  }
+
+  take(): boolean {
+    const t = this.now();
+    this.tokens = Math.min(this.burst, this.tokens + (Math.max(0, t - this.at) * this.perSec) / 1000);
+    this.at = t;
+    if (this.tokens < 1) return false;
+    this.tokens -= 1;
+    return true;
+  }
 }
 
 /** True when a message is newer than what is held (new epoch, or a higher number in the same one). */

@@ -34,11 +34,16 @@ describe('connector review: count-in never outlives its model', () => {
     expect(onState).toContain('stopCountIn()');
   });
 
-  it('togglePlay uses a local copy of the model after its first await', () => {
-    const t = body('togglePlay');
-    const afterCopy = t.slice(t.indexOf('const m = model;'));
-    expect(t).toContain('const m = model;');
+  it('togglePlay reads the model only before its first await (into the count-in plan)', () => {
+    // The steps (play-toggle.ts) never see the model; the plan is computed before any await.
+    const steps = readFileSync(new URL('../src/extension/sidepanel/play-toggle.ts', import.meta.url), 'utf8');
+    expect(steps).not.toMatch(/\bmodel\b/);
+    const plan = src.slice(src.indexOf('countInPlan: () => {'), src.indexOf('loopStartOutside:'));
+    const afterCopy = plan.slice(plan.indexOf('const m = model;'));
+    expect(plan).toContain('const m = model;');
     expect(afterCopy).not.toMatch(/\bmodel\./);
+    // Read once, before the count-in's first await (the pause path returns before it).
+    expect(steps.indexOf('env.countInPlan()')).toBeLessThan(steps.indexOf('await prepareCountIn('));
   });
 });
 
@@ -86,10 +91,10 @@ describe('delta review: a cancelled count-in stops after each pending reply', ()
   });
 
   it('togglePlay sets the count-in overlay only after preparation reports ready', () => {
-    const src = readFileSync(new URL('../src/extension/sidepanel/sidepanel.ts', import.meta.url), 'utf8');
-    const t = src.slice(src.indexOf('async function togglePlay('));
+    const t = readFileSync(new URL('../src/extension/sidepanel/play-toggle.ts', import.meta.url), 'utf8');
     expect(t.indexOf('prepareCountIn(')).toBeGreaterThan(0);
-    expect(t.indexOf("if (prep.kind === 'cancelled') return;")).toBeLessThan(t.indexOf('countingIn = true'));
+    expect(t.indexOf("if (prep.kind === 'cancelled') return CANCELLED;")).toBeGreaterThan(t.indexOf('prepareCountIn('));
+    expect(t.indexOf("if (prep.kind === 'cancelled') return CANCELLED;")).toBeLessThan(t.indexOf('env.beginCountIn()'));
   });
 });
 
