@@ -164,6 +164,51 @@ describe('relay idle auto-stop', () => {
   });
 });
 
+describe('relay shutdown races (review s5-r1)', () => {
+  /** Sends an upgrade on an already-open TCP connection; resolves with the first response bytes ('' when closed). */
+  function upgradeOn(s: net.Socket, port: number): Promise<string> {
+    return new Promise((resolve) => {
+      s.once('data', (b: Buffer) => resolve(b.toString('latin1')));
+      s.once('close', () => resolve(''));
+      s.write(`GET /publish HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\nOrigin: ${EXT_ORIGIN}\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: ${randomBytes(16).toString('base64')}\r\n\r\n`);
+    });
+  }
+
+  it('R1: a panel upgrading while the idle stop is closing is refused, and the stop completes', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    h = await start(100);
+    // TCP connection opened before the stop; its upgrade request arrives during the 150 ms close grace.
+    const early = await new Promise<net.Socket>((resolve) => {
+      const s = net.connect({ host: '127.0.0.1', port: h!.pubPort }, () => resolve(s));
+      s.on('error', () => {});
+    });
+    const stopping = h.nextLog(/stopping the relay/);
+    await vi.advanceTimersByTimeAsync(100);
+    await stopping;
+    // Wait (real I/O, fake clock still inside the grace) until the relay answered the upgrade.
+    const response = await upgradeOn(early, h.pubPort);
+    expect(response).not.toMatch(/^HTTP\/1\.1 101/);
+    await vi.advanceTimersByTimeAsync(1000);
+    await h.stoppedPromise;
+    expect(await refused(h.pubPort)).toBe(true);
+    expect(await refused(h.viewerPort)).toBe(true);
+  });
+
+  it('R2: close() with a panel connected leaves no idle timer behind', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    h = await start(10 * MIN);
+    const p = await panel(h);
+    expect(vi.getTimerCount()).toBe(0); // panel connected: countdown off
+    const closed = h.relay.close();
+    await vi.advanceTimersByTimeAsync(1000); // close grace + the sockets' destroy fallbacks
+    await closed;
+    expect(vi.getTimerCount()).toBe(0);
+    await vi.advanceTimersByTimeAsync(20 * MIN);
+    expect(h.stopped()).toBe(false); // onIdleStop is only for idle stops
+    p.destroy();
+  });
+});
+
 describe('npm run phone -- --idle-minutes', () => {
   const run = (args: string[]) =>
     new Promise<{ code: number | null; err: string }>((resolve) => {
