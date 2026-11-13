@@ -204,13 +204,18 @@ describe('alignment', () => {
     expect(a.warnings.join(' ')).toMatch(/nearest 0/);
   });
 
-  it('keeps a candidate near 0 and only warns when bar phase disagrees', () => {
-    // True offset 0.38 s at 120 bpm: -0.12 is within 0.2 s, so it is kept (same-master prior).
+  it('does not determine a near-0 candidate that bar phase clearly contradicts (VGT-7 rule 4)', () => {
+    // True offset 0.38 s at 120 bpm: the alias -0.12 s is within 0.2 s and stands apart. Until rule 4
+    // it was kept with a warning (a wrong pick: the truth is 0.38 s); now the clues disagree and the
+    // song is excluded as ambiguous, with the near-0 offset left in place (bar phase does not win).
     const ann = est.map((b) => b - 0.38);
     const a = alignAnnotation(alignInput(est, ann));
     expect(a.offsetSec).toBeCloseTo(-0.12, 2);
-    expect(a.ambiguous).toBe(false);
-    expect(a.warnings.join(' ')).toMatch(/bar phase prefers offset 0\.38/);
+    expect(a.ambiguous).toBe(true);
+    expect(a.barConflict).toBe(true);
+    expect(a.excluded?.code).toBe('ambiguous');
+    expect(a.excluded?.reason).toMatch(/bar phase clearly prefers another/);
+    expect(a.warnings.join(' ')).toMatch(/bar phase contradicts the candidate near 0: offset 0\.38/);
   });
 
   it('fits a linear 0.1% speed difference instead of excluding it as drift (VGT-7)', () => {
@@ -497,7 +502,14 @@ describe('alignment: bounded rate and offset choice (VGT-7)', () => {
     const changesAbove = grid(1, 185, 8 * 0.42).map((t) => t - 0.57);
     const b = alignAnnotation(alignInput(above, changesAbove, { method: 'chord-boundaries', downbeatLandmarks: changesAbove, estimateBeatsPerBar: 8 }));
     expect(b.offsetSec).toBeCloseTo(0.15, 2);
-    expect(b.warnings.join(' ')).toMatch(/kept the one near 0/);
+    // The near-0 rule applies (0.15 s stands apart), but bar phase clearly prefers the true 0.57 s:
+    // since rule 4 (VGT-7) the offset is not determined instead of keeping the wrong alias.
+    expect(b.barConflict).toBe(true);
+    expect(b.excluded?.code).toBe('ambiguous');
+    // Without bar phase the near-0 rule alone decides, as before.
+    const c = alignAnnotation(alignInput(above, changesAbove, { method: 'chord-boundaries', downbeatLandmarks: changesAbove, estimateBeatsPerBar: 8, estimateFirstDownbeatSec: null }));
+    expect(c.offsetSec).toBeCloseTo(0.15, 2);
+    expect(c.excluded).toBeNull();
   });
 
   it('lets bar phase override a near-0 candidate on doubled estimate beats', () => {
@@ -526,6 +538,114 @@ describe('alignment: bounded rate and offset choice (VGT-7)', () => {
     expect(a.ambiguous).toBe(true);
     expect(a.excluded?.code).toBe('ambiguous');
     expect(a.candidates.length).toBeGreaterThan(1);
+  });
+});
+
+describe('alignment: near-0 candidate against bar phase (VGT-7 rule 4)', () => {
+  // 95 bpm (beat 0.632 s): beat-phase candidates are 0.632 s apart, so the near-0 rule applies
+  // whenever some alias falls within 0.2 s of 0. Annotation landmarks = estimate beats shifted by the
+  // true offset (media = offset + annotation time); annotation downbeats every 4 beats.
+  const beat = 0.632;
+  const est = grid(1, 190, beat, 0.005);
+  const shifted = (offset: number) => est.map((b) => b - offset);
+  const bars = (offset: number) => grid(1, 185, 4 * beat).map((t) => t - offset);
+
+  it('T1: true offset -0.665 s puts an alias at -0.033 s; bar phase points at the truth, so the song is not determined', () => {
+    for (const method of ['beats', 'chord-boundaries'] as const) {
+      const ann = method === 'beats' ? shifted(-0.665) : bars(-0.665);
+      const a = alignAnnotation(alignInput(est, ann, method === 'beats' ? { method } : { method, downbeatLandmarks: ann }));
+      expect(a.candidates.some((c) => Math.abs(c.offsetSec + 0.665) < 0.02), method).toBe(true);
+      // The near-0 alias is still the reported offset (bar phase does not win) ...
+      expect(a.offsetSec, method).toBeCloseTo(-0.033, 2);
+      // ... but it is no longer scored.
+      expect(a.barConflict, method).toBe(true);
+      expect(a.ambiguous, method).toBe(true);
+      expect(a.excluded?.code, method).toBe('ambiguous');
+    }
+  });
+
+  it('T2: true offset near 0 with bar phase agreeing is kept without a bar-phase warning', () => {
+    for (const method of ['beats', 'chord-boundaries'] as const) {
+      const ann = method === 'beats' ? shifted(0.05) : bars(0.05);
+      const a = alignAnnotation(alignInput(est, ann, method === 'beats' ? { method } : { method, downbeatLandmarks: ann }));
+      expect(a.excluded, method).toBeNull();
+      expect(a.offsetSec, method).toBeCloseTo(0.05, 2);
+      expect(a.barConflict, method).toBe(false);
+      expect(a.warnings.join(' '), method).not.toMatch(/bar phase/);
+    }
+  });
+
+  it('T3: a chart first downbeat one beat late makes bar phase contradict a correct near-0 offset; the cost is an exclusion, not a wrong score', () => {
+    const ann = shifted(0.05);
+    const a = alignAnnotation(alignInput(est, ann, { estimateFirstDownbeatSec: est[1] }));
+    expect(a.offsetSec).toBeCloseTo(0.05, 2);
+    expect(a.barConflict).toBe(true);
+    expect(a.excluded?.code).toBe('ambiguous');
+  });
+
+  it('T4: without bar phase the near-0 rule decides as before (no first downbeat, or fewer than 4 downbeat landmarks)', () => {
+    const ann = shifted(-0.665);
+    for (const extra of [{ estimateFirstDownbeatSec: null }, { downbeatLandmarks: ann.slice(0, 3) }]) {
+      const a = alignAnnotation(alignInput(est, ann, extra));
+      expect(a.offsetSec).toBeCloseTo(-0.033, 2);
+      expect(a.barConflict).toBe(false);
+      expect(a.ambiguous).toBe(false);
+      expect(a.excluded).toBeNull();
+    }
+  });
+
+  // Eight downbeat landmarks: `onNear` of them on the true bar phase (offset 0.05 s), the rest one
+  // beat later in the annotation, which puts them on bar phase at the alias 0.05 - 0.632 s.
+  const mixed = (onNear: number) => {
+    const ann = shifted(0.05);
+    return [...Array(8).keys()].map((k) => ann[16 * k + 4 + (k < onNear ? 0 : 1)]);
+  };
+
+  it('T5: a near-0 bar score within the margin of the best is kept', () => {
+    // Bar scores 0.5 (near 0) and 0.5 (alias): no conflict.
+    const a = alignAnnotation(alignInput(est, shifted(0.05), { downbeatLandmarks: mixed(4) }));
+    expect(a.candidates[0].barScore).toBe(0.5);
+    expect(a.excluded).toBeNull();
+    expect(a.barConflict).toBe(false);
+    expect(a.offsetSec).toBeCloseTo(0.05, 2);
+  });
+
+  it('uses the bar-phase eligibility comparison exactly: equality at the margin is a conflict', () => {
+    // Bar scores 0.25 (near 0) and 0.75 (alias -0.582 s): a difference of exactly 0.5.
+    const input = alignInput(est, shifted(0.05), { downbeatLandmarks: mixed(2) });
+    const near = (a: ReturnType<typeof alignAnnotation>) => a.candidates.find((c) => Math.abs(c.offsetSec - 0.05) < 0.02)!;
+    const best = (a: ReturnType<typeof alignAnnotation>) => Math.max(...a.candidates.map((c) => c.barScore!));
+    const dflt = alignAnnotation(input);
+    expect(near(dflt).barScore).toBe(0.25);
+    expect(best(dflt)).toBe(0.75);
+    expect(dflt.barConflict).toBe(true);
+    expect(alignAnnotation(input, { barMargin: 0.49 }).barConflict).toBe(true);
+    expect(alignAnnotation(input, { barMargin: 0.5 }).barConflict).toBe(true);
+    const wider = alignAnnotation(input, { barMargin: 0.51 });
+    expect(wider.barConflict).toBe(false);
+    expect(wider.excluded).toBeNull();
+    expect(wider.offsetSec).toBeCloseTo(0.05, 2);
+  });
+
+  it('keeps structural exclusions first: a conflicting song with a length mismatch or a section offset keeps that code', () => {
+    const ann = shifted(-0.665);
+    const long = alignAnnotation(alignInput(est, ann, { mediaDurationSec: 203 }));
+    expect(long.barConflict).toBe(true);
+    expect(long.excluded?.code).toBe('duration-mismatch');
+    const section = est.map((b) => b + 0.665 - (b > 66 && b < 128 ? 0.15 : 0));
+    const drift = alignAnnotation(alignInput(est, section));
+    expect(drift.barConflict).toBe(true);
+    expect(['landmarks-disagree', 'drift']).toContain(drift.excluded?.code);
+  });
+
+  it('leaves a single candidate alone', () => {
+    // Sparse, irregular chord changes on a slow grid: only one beat phase fits within the search.
+    const slowEst = grid(1, 190, 4.4, 0.005);
+    const ann = slowEst.map((b) => b - 0.05);
+    const a = alignAnnotation(alignInput(slowEst, ann, { method: 'chord-boundaries', downbeatLandmarks: ann }));
+    expect(a.candidates.length).toBe(1);
+    expect(a.barConflict).toBe(false);
+    expect(a.excluded).toBeNull();
   });
 });
 
