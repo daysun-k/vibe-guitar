@@ -323,28 +323,47 @@ export interface AlignSegmentCheck {
   toSec: number;
   landmarks: number;
   matched: number;
-  /** Local offset (global offset + median residual), null when nothing matched. */
+  /** Local offset (the time map's offset in this third + median residual), null when nothing matched. */
   offsetSec: number | null;
 }
 
 export interface AlignCandidate {
+  /** Media − annotation time at annotation time 0 (the lead-in difference). */
   offsetSec: number;
+  /** Media seconds per annotation second; 1 unless a fitted speed difference passed the held-out test. */
+  rate: number;
   matchedFraction: number;
   /** Share of downbeat landmarks on an estimated downbeat; null when not computable. */
   barScore: number | null;
 }
 
-export type ExclusionCode = 'no-estimate-beats' | 'too-few-landmarks' | 'duration-mismatch' | 'landmarks-disagree' | 'drift';
+/** Held-out test of a fitted rate (see alignAnnotation); null when no rate other than 1 was tried. */
+export interface RateFit {
+  /** Best rate fitted on all landmarks for the chosen beat phase. */
+  rate: number;
+  /** Pooled held-out gain over rate 1 (share of landmarks on a beat). */
+  heldOutGain: number;
+  /** Pooled held-out share of landmarks on a beat with the fitted rate. */
+  heldOutMatched: number;
+  /** Held-out gain per temporal third (start, middle, end). */
+  thirdGains: number[];
+  accepted: boolean;
+}
+
+export type ExclusionCode = 'no-estimate-beats' | 'too-few-landmarks' | 'duration-mismatch' | 'landmarks-disagree' | 'drift' | 'ambiguous';
 
 export interface Alignment {
   method: AlignMethod;
   strength: 'strong' | 'weak';
+  /** Time map: media = offsetSec + rate × annotation time. */
   offsetSec: number;
+  rate: number;
+  rateFit: RateFit | null;
   matchedFraction: number;
   landmarks: number;
   /** Near-tie offsets (usually one beat apart); the chosen one is first. */
   candidates: AlignCandidate[];
-  /** True when the candidates could not be told apart and the one nearest 0 was taken. */
+  /** True when more than one candidate survives the near-0 rule and bar phase; such songs are excluded. */
   ambiguous: boolean;
   segments: AlignSegmentCheck[];
   driftSec: number | null;
@@ -423,13 +442,144 @@ export function impliedDownbeats(beats: number[], firstDownbeatSec: number | nul
 }
 
 /**
- * One global offset from landmarks that do not involve chord predictions: annotation beats
- * (or annotation chord changes) against the auto chart's Beat This! beats. Beats repeat,
- * so offsets one beat apart score almost the same; those near-ties are broken by bar phase
- * (annotation downbeats against downbeats implied by the chart's first downbeat and bar
- * length) and otherwise by the offset nearest 0 (same master: little lead-in difference),
- * marked ambiguous. The offset is then checked separately in the first, middle and last
- * third of the song (drift), and the upload length is compared with the annotation's.
+ * Bound on a fitted speed difference between the annotated recording and the upload: a declared
+ * evaluation tolerance for transfer-level differences (0.2% ≈ 3.5 cents). PR #25's 1% case is far
+ * outside it and stays excluded.
+ */
+export const RATE_FIT_MAX = 0.002;
+/** A fitted rate is tested on this many contiguous temporal folds, each held out once. */
+export const RATE_FIT_FOLDS = 5;
+/** Pooled held-out gain (share of landmarks on a beat) a fitted rate needs over rate 1. */
+export const RATE_FIT_MIN_GAIN = 0.05;
+
+/** Media time of annotation time t under a time map given at pivot p: t + c + (r − 1)(t − p). */
+const mapAt = (t: number, c: number, r: number, p: number) => t + c + (r - 1) * (t - p);
+
+function mappedResiduals(landmarks: number[], beats: number[], c: number, r: number, p: number, tol: number): number[] {
+  const out: number[] = [];
+  for (const l of landmarks) {
+    const res = nearestResidual(beats, mapAt(l, c, r, p));
+    if (Math.abs(res) <= tol + 1e-9) out.push(res);
+  }
+  return out;
+}
+
+function countMapped(landmarks: number[], beats: number[], c: number, r: number, p: number, tol: number): number {
+  let n = 0;
+  for (const l of landmarks) if (Math.abs(nearestResidual(beats, mapAt(l, c, r, p))) <= tol + 1e-9) n++;
+  return n;
+}
+
+/**
+ * Rates searched: 1 first, then outward to ±RATE_FIT_MAX (both bounds included), with a step whose
+ * largest movement at either end of the landmark span (half-span from the pivot) is tolSec / 2.
+ */
+export function rateGrid(halfSpanSec: number, tolSec: number): number[] {
+  if (!(halfSpanSec > 0) || !(tolSec > 0)) return [1];
+  const step = tolSec / 2 / halfSpanSec;
+  const k = Math.ceil(RATE_FIT_MAX / step - 1e-9);
+  const out = [1];
+  for (let i = 1; i <= k; i++) {
+    const d = Math.min(RATE_FIT_MAX, i * step);
+    out.push(1 + d, 1 - d);
+  }
+  return out;
+}
+
+interface MapFit {
+  /** Offset at the pivot. */
+  c: number;
+  r: number;
+  hits: number;
+  /** Sum of squared residuals of the landmarks on a beat. */
+  sse: number;
+}
+
+/**
+ * Best (offset at pivot, rate) over the given grids: most landmarks on a beat, then the smallest
+ * sum of squared residuals among them (a tolerance plateau does not decide the map), then the rate
+ * nearest 1 and the offset nearest `center`.
+ */
+function bestFit(landmarks: number[], beats: number[], p: number, tol: number, cs: number[], rates: number[], center: number): MapFit {
+  let best: MapFit = { c: center, r: 1, hits: -1, sse: Infinity };
+  for (const r of rates)
+    for (const c of cs) {
+      let hits = 0;
+      let sse = 0;
+      for (const l of landmarks) {
+        const e = nearestResidual(beats, mapAt(l, c, r, p));
+        if (Math.abs(e) <= tol + 1e-9) {
+          hits++;
+          sse += e * e;
+        }
+      }
+      const better =
+        hits > best.hits ||
+        (hits === best.hits &&
+          (sse < best.sse - 1e-12 ||
+            (Math.abs(sse - best.sse) <= 1e-12 && (Math.abs(r - 1) < Math.abs(best.r - 1) - 1e-12 || (Math.abs(Math.abs(r - 1) - Math.abs(best.r - 1)) <= 1e-12 && Math.abs(c - center) < Math.abs(best.c - center))))));
+      if (better) best = { c, r, hits, sse };
+    }
+  return best;
+}
+
+/**
+ * Out-of-sample test of a fitted rate for one beat-phase candidate: the landmarks are split into
+ * RATE_FIT_FOLDS contiguous temporal folds; for each fold, the best rate-1 map and the best map over
+ * all rates are fitted on the other folds (offsets limited to the candidate's window) and both are
+ * evaluated on the held-out fold. The rate passes only with a pooled held-out gain of at least
+ * RATE_FIT_MIN_GAIN, pooled held-out matching of at least RATE_MIN_FRACTION, and no negative
+ * aggregate gain in any temporal third.
+ */
+function crossValidateRate(landmarks: number[], beats: number[], p: number, tol: number, cs: number[], rates: number[], center: number, rate: number): RateFit {
+  const n = landmarks.length;
+  const first = landmarks[0];
+  const span = landmarks[n - 1] - first;
+  const gains = [0, 0, 0];
+  let heldR = 0;
+  let held1 = 0;
+  for (let f = 0; f < RATE_FIT_FOLDS; f++) {
+    const a = Math.floor((f * n) / RATE_FIT_FOLDS);
+    const b = Math.floor(((f + 1) * n) / RATE_FIT_FOLDS);
+    if (b <= a) continue;
+    const train = [...landmarks.slice(0, a), ...landmarks.slice(b)];
+    const fit1 = bestFit(train, beats, p, tol, cs, [1], center);
+    const fitR = bestFit(train, beats, p, tol, cs, rates, center);
+    for (let i = a; i < b; i++) {
+      const t = landmarks[i];
+      const h1 = Math.abs(nearestResidual(beats, mapAt(t, fit1.c, 1, p))) <= tol + 1e-9 ? 1 : 0;
+      const hR = Math.abs(nearestResidual(beats, mapAt(t, fitR.c, fitR.r, p))) <= tol + 1e-9 ? 1 : 0;
+      held1 += h1;
+      heldR += hR;
+      const third = span > 0 ? Math.min(2, Math.floor(((t - first) / span) * 3)) : 0;
+      gains[third] += hR - h1;
+    }
+  }
+  const heldOutGain = (heldR - held1) / n;
+  const heldOutMatched = heldR / n;
+  const thirdGains = gains.map((g) => g / n);
+  const accepted = heldOutGain >= RATE_FIT_MIN_GAIN - 1e-12 && heldOutMatched >= RATE_MIN_FRACTION - 1e-12 && gains.every((g) => g >= 0);
+  return { rate, heldOutGain, heldOutMatched, thirdGains, accepted };
+}
+
+/**
+ * The time map from landmarks that do not involve chord predictions: annotation beats (or
+ * annotation chord changes) against the auto chart's Beat This! beats. The map is an offset plus a
+ * bounded rate (media = offsetSec + rate × annotation time): the same recording on another transfer
+ * can run slightly faster or slower, which a single offset turns into drift at the song's ends and
+ * into a biased offset search. Offsets are scanned at the middle of the landmark span (so offset and
+ * rate are decorrelated) together with rates up to ±RATE_FIT_MAX; a rate other than 1 is kept only
+ * with at least RATE_MIN_LANDMARKS landmarks and when it passes a held-out test (crossValidateRate).
+ *
+ * Beats repeat, so maps one beat apart score almost the same; each such beat phase is a candidate.
+ * A candidate within nearZeroSec of 0 (same master: little lead-in difference) is taken without
+ * bar phase only when the nearest other candidate is more than 2 × nearZeroSec away; closer
+ * spacing puts some candidate near 0 whatever the true offset. Otherwise bar phase (annotation
+ * downbeats against downbeats implied by the chart's first downbeat and bar length) decides, and
+ * when more than one candidate survives the song is ambiguous and excluded. The map is then
+ * checked separately in the first, middle and last third of the song (residual drift after the
+ * map), PR #25's length-ratio speed test runs unchanged, and the upload length is compared with
+ * the annotation's.
  */
 export function alignAnnotation(input: AlignInput, options?: Partial<AlignOptions>): Alignment {
   const o: AlignOptions = { ...ALIGN_DEFAULTS[input.method], ...options };
@@ -444,6 +594,8 @@ export function alignAnnotation(input: AlignInput, options?: Partial<AlignOption
     method: input.method,
     strength: input.method === 'beats' ? 'strong' : 'weak',
     offsetSec: 0,
+    rate: 1,
+    rateFit: null,
     matchedFraction: 0,
     landmarks: landmarks.length,
     candidates: [],
@@ -458,77 +610,153 @@ export function alignAnnotation(input: AlignInput, options?: Partial<AlignOption
   if (beats.length < 8) return { ...base, excluded: { code: 'no-estimate-beats', reason: 'auto chart has fewer than 8 beat times' } };
   if (landmarks.length < 12) return { ...base, excluded: { code: 'too-few-landmarks', reason: `only ${landmarks.length} landmarks` } };
 
-  // 1. Score every offset; group near-best offsets into runs; refine each run's best.
+  const first = landmarks[0];
+  const last = landmarks[landmarks.length - 1];
+  const pivot = (first + last) / 2;
+  const rates = landmarks.length >= RATE_MIN_LANDMARKS ? rateGrid((last - first) / 2, o.tolSec) : [1];
+
+  // 1. Score every offset at the pivot: rate 1, and the best over all rates (the profile that
+  // finds beat phases). Group near-best offsets into runs (one per beat phase).
   const steps = Math.round(o.maxShiftSec / o.stepSec);
-  const hits: number[] = [];
-  for (let k = -steps; k <= steps; k++) hits.push(matchedResiduals(landmarks, beats, k * o.stepSec, o.tolSec).length);
-  const best = Math.max(...hits);
+  const cOf = (k: number) => (k - steps) * o.stepSec;
+  const hits1: number[] = [];
+  const profile: number[] = [];
+  for (let k = 0; k <= 2 * steps; k++) {
+    const h1 = countMapped(landmarks, beats, cOf(k), 1, pivot, o.tolSec);
+    let hp = h1;
+    for (let q = 1; q < rates.length; q++) hp = Math.max(hp, countMapped(landmarks, beats, cOf(k), rates[q], pivot, o.tolSec));
+    hits1.push(h1);
+    profile.push(hp);
+  }
+  const best = Math.max(...profile);
   const threshold = best * o.tieRatio;
-  const runs: number[] = [];
-  for (let i = 0; i < hits.length; ) {
-    if (hits[i] < threshold) {
+  const runs: [number, number][] = [];
+  for (let i = 0; i < profile.length; ) {
+    if (profile[i] < threshold) {
       i++;
       continue;
     }
     let j = i;
-    while (j + 1 < hits.length && hits[j + 1] >= threshold) j++;
-    let top = i;
-    for (let k = i; k <= j; k++) if (hits[k] > hits[top]) top = k;
-    let topEnd = top;
-    while (topEnd + 1 <= j && hits[topEnd + 1] === hits[top]) topEnd++;
-    runs.push((((top + topEnd) / 2) - steps) * o.stepSec);
+    while (j + 1 < profile.length && profile[j + 1] >= threshold) j++;
+    runs.push([i, j]);
     i = j + 1;
   }
+
+  // 2. One map per run: rate 1 at the top of the run's rate-1 plateau, or a fitted rate when it
+  // passes the held-out test. Then the offset is refined by the median residual.
   const down = impliedDownbeats(beats, input.estimateFirstDownbeatSec, input.estimateBeatsPerBar);
   const downLandmarks = [...input.downbeatLandmarks].sort((a, b) => a - b);
-  const candidates: AlignCandidate[] = runs.map((r) => {
-    const res = matchedResiduals(landmarks, beats, r, o.tolSec);
-    const offsetSec = r + (res.length ? median(res) : 0);
-    const matchedFraction = matchedResiduals(landmarks, beats, offsetSec, o.tolSec).length / landmarks.length;
-    const barScore = down && downLandmarks.length >= 4 ? matchedResiduals(downLandmarks, down, offsetSec, o.tolSec).length / downLandmarks.length : null;
-    return { offsetSec, matchedFraction, barScore };
+  const padSteps = Math.max(1, Math.round(o.tolSec / o.stepSec));
+  type Built = AlignCandidate & { c: number; fit: RateFit | null; hits: number };
+  const built: Built[] = runs.map(([i, j]) => {
+    let top = i;
+    for (let k = i; k <= j; k++) if (hits1[k] > hits1[top]) top = k;
+    let topEnd = top;
+    while (topEnd + 1 <= j && hits1[topEnd + 1] === hits1[top]) topEnd++;
+    let c = cOf((top + topEnd) / 2);
+    let r = 1;
+    let fit: RateFit | null = null;
+    if (rates.length > 1) {
+      const window: number[] = [];
+      for (let k = Math.max(0, i - padSteps); k <= Math.min(2 * steps, j + padSteps); k++) window.push(cOf(k));
+      const full = bestFit(landmarks, beats, pivot, o.tolSec, window, rates, c);
+      if (full.r !== 1) {
+        fit = crossValidateRate(landmarks, beats, pivot, o.tolSec, window, rates, c, full.r);
+        if (fit.accepted) {
+          c = full.c;
+          r = full.r;
+        }
+      }
+    }
+    if (r !== 1) {
+      // Refine an accepted rate off the grid: least squares of the matched residuals on time.
+      const pts = landmarks.map((t) => [t - pivot, nearestResidual(beats, mapAt(t, c, r, pivot))]).filter(([, e]) => Math.abs(e) <= o.tolSec + 1e-9);
+      const n = pts.length;
+      const mx = pts.reduce((s, [x]) => s + x, 0) / n;
+      const my = pts.reduce((s, [, y]) => s + y, 0) / n;
+      const sxx = pts.reduce((s, [x]) => s + (x - mx) ** 2, 0);
+      if (n >= 2 && sxx > 0) {
+        const slope = pts.reduce((s, [x, y]) => s + (x - mx) * (y - my), 0) / sxx;
+        const r2 = Math.min(1 + RATE_FIT_MAX, Math.max(1 - RATE_FIT_MAX, r + slope));
+        const c2 = c + my - slope * mx;
+        if (countMapped(landmarks, beats, c2, r2, pivot, o.tolSec) >= countMapped(landmarks, beats, c, r, pivot, o.tolSec)) {
+          c = c2;
+          r = r2;
+        }
+      }
+    }
+    const res = mappedResiduals(landmarks, beats, c, r, pivot, o.tolSec);
+    if (res.length) c += median(res);
+    const hits = countMapped(landmarks, beats, c, r, pivot, o.tolSec);
+    const offsetSec = c - (r - 1) * pivot;
+    const barScore =
+      down && downLandmarks.length >= 4 ? downLandmarks.filter((l) => Math.abs(nearestResidual(down, offsetSec + r * l)) <= o.tolSec + 1e-9).length / downLandmarks.length : null;
+    return { offsetSec, rate: r, matchedFraction: hits / landmarks.length, barScore, c, fit, hits };
   });
-  // 2. Choose. Same master → small lead-in difference: a candidate within nearZeroSec wins
-  // (bar phase only warns, since a misplaced first downbeat or a meter change shifts the
-  // implied downbeats). Otherwise keep the candidates with the best bar phase (offsets a
-  // whole bar apart tie there too) and take the one nearest 0; ambiguous when bar phase
-  // rules nothing out.
-  candidates.sort((a, b) => Math.abs(a.offsetSec) - Math.abs(b.offsetSec));
+  // A rate-1 refit can fall below the near-best threshold; keep only near-best maps. Runs that
+  // refine to maps within the matching tolerance of each other are one beat phase (landmarks
+  // cannot tell them apart): keep the one with more hits.
+  const bestHits = Math.max(...built.map((b) => b.hits));
+  const kept: Built[] = [];
+  for (const b of [...built].sort((x, y) => y.hits - x.hits))
+    if (b.hits >= bestHits * o.tieRatio && !kept.some((k) => Math.abs(k.c - b.c) <= o.tolSec)) kept.push(b);
+
+  // 3. Choose. The near-0 rule takes a candidate within nearZeroSec only when it stands apart
+  // (nearest other candidate more than 2 × nearZeroSec away); bar phase then only warns, since a
+  // misplaced first downbeat or a meter change shifts the implied downbeats. Otherwise keep the
+  // candidates with the best bar phase; more than one left (bar phase unavailable, or whole bars
+  // apart) is ambiguous.
+  kept.sort((a, b) => Math.abs(a.offsetSec) - Math.abs(b.offsetSec));
   const warnings: string[] = [];
-  let chosen = candidates[0];
+  let chosen = kept[0];
   let ambiguous = false;
-  if (candidates.length > 1) {
-    const bar = candidates.every((c) => c.barScore !== null) ? Math.max(...candidates.map((c) => c.barScore!)) : null;
-    const eligible = bar === null ? candidates : candidates.filter((c) => c.barScore! > bar - o.barMargin);
-    if (Math.abs(chosen.offsetSec) <= o.nearZeroSec) {
+  let survivors = 1;
+  if (kept.length > 1) {
+    const bar = kept.every((k) => k.barScore !== null) ? Math.max(...kept.map((k) => k.barScore!)) : null;
+    const eligible = bar === null ? kept : kept.filter((k) => k.barScore! > bar - o.barMargin);
+    const gap = Math.min(...kept.slice(1).map((k) => Math.abs(k.offsetSec - chosen.offsetSec)));
+    const nearZero = Math.abs(chosen.offsetSec) <= o.nearZeroSec;
+    if (nearZero && gap > 2 * o.nearZeroSec) {
       if (!eligible.includes(chosen)) warnings.push(`bar phase prefers offset ${eligible[0].offsetSec.toFixed(3)} s; kept the one near 0`);
     } else {
+      if (nearZero) warnings.push(`candidates ${gap.toFixed(2)} s apart: a candidate near 0 is expected by chance, so bar phase decides`);
       chosen = eligible[0];
-      ambiguous = eligible.length === candidates.length;
-      if (ambiguous) warnings.push('no candidate near 0 and bar phase cannot decide: offset chosen nearest 0 among candidates one beat apart');
-      else warnings.push('no candidate near 0: offset chosen by bar phase');
+      survivors = eligible.length;
+      ambiguous = survivors > 1;
+      if (ambiguous)
+        warnings.push(
+          bar === null
+            ? `bar phase unavailable: ${eligible.length} candidates one beat apart remain; reported the one nearest 0`
+            : `bar phase cannot decide between ${eligible.length} candidates (${eligible.map((e) => e.offsetSec.toFixed(3)).join(', ')} s); reported the one nearest 0`,
+        );
+      else warnings.push(nearZero ? 'offset chosen by bar phase' : 'no candidate near 0: offset chosen by bar phase');
     }
   }
-  const ordered = [chosen, ...candidates.filter((c) => c !== chosen)];
+  const ordered = [chosen, ...kept.filter((k) => k !== chosen)];
+  const strip = (b: Built): AlignCandidate => ({ offsetSec: b.offsetSec, rate: b.rate, matchedFraction: b.matchedFraction, barScore: b.barScore });
   const offsetSec = chosen.offsetSec;
-  const result: Alignment = { ...base, offsetSec, matchedFraction: chosen.matchedFraction, candidates: ordered, ambiguous, warnings };
+  const rate = chosen.rate;
+  const result: Alignment = { ...base, offsetSec, rate, rateFit: chosen.fit, matchedFraction: chosen.matchedFraction, candidates: ordered.map(strip), ambiguous, warnings };
+  if (chosen.fit?.accepted) warnings.push(`speed difference ${((rate - 1) * 100).toFixed(3)}% fitted (held-out gain ${Math.round(chosen.fit.heldOutGain * 100)} points)`);
 
-  // 3. Start / middle / end checks.
-  const first = landmarks[0];
-  const last = landmarks[landmarks.length - 1];
+  // 4. Start / middle / end checks on the residuals after the map.
   const third = (last - first) / 3;
   const parts: AlignSegmentCheck['part'][] = ['start', 'middle', 'end'];
+  const localResidual: (number | null)[] = [];
   result.segments = parts.map((part, i) => {
     const fromSec = first + i * third;
     const toSec = i === 2 ? last + 1e-9 : first + (i + 1) * third;
     const inPart = landmarks.filter((l) => l >= fromSec && l < toSec + (i === 2 ? 1e-9 : 0));
-    const res = matchedResiduals(inPart, beats, offsetSec, o.tolSec);
-    return { part, fromSec, toSec: Math.min(toSec, last), landmarks: inPart.length, matched: res.length, offsetSec: res.length ? offsetSec + median(res) : null };
+    const res = mappedResiduals(inPart, beats, chosen.c, rate, pivot, o.tolSec);
+    const local = res.length ? median(res) : null;
+    localResidual.push(local);
+    const mid = (fromSec + Math.min(toSec, last)) / 2;
+    return { part, fromSec, toSec: Math.min(toSec, last), landmarks: inPart.length, matched: res.length, offsetSec: local === null ? null : offsetSec + (rate - 1) * mid + local };
   });
-  const locals = result.segments.map((s) => s.offsetSec).filter((x): x is number => x !== null);
+  const locals = localResidual.filter((x): x is number => x !== null);
   result.driftSec = locals.length === 3 ? Math.max(...locals) - Math.min(...locals) : null;
-  // A time scale other than 1 that fits clearly more landmarks means the upload runs at another
-  // speed; its displacement across the landmarks counts as drift.
+  // PR #25, unchanged: a length-ratio time scale that fits clearly more raw landmarks than scale 1
+  // means the upload runs at another speed; its displacement across the landmarks counts as drift.
   let rateNote: string | null = null;
   const scale = input.mediaDurationSec && input.annotationDurationSec > 0 ? input.mediaDurationSec / input.annotationDurationSec : 1;
   const rateDrift = Math.abs(scale - 1) * (last - first);
@@ -539,14 +767,18 @@ export function alignAnnotation(input: AlignInput, options?: Partial<AlignOption
       rateNote = `landmarks fit the length-ratio time scale ${(scale * 100).toFixed(2)}% (${Math.round(rf.matchedFraction * 100)}% on beats vs ${Math.round(rf.matchedAtOne * 100)}% at 100%): the upload runs at another speed, about ${Math.round(rateDrift * 1000)} ms apart by the end`;
     }
   }
-  for (const c of [coarse.startOffsetSec, coarse.endOffsetSec]) {
-    if (c !== null && Math.abs(c - offsetSec) > 2) {
-      result.warnings.push(`coarse check differs from the offset by ${(c - offsetSec).toFixed(1)} s`);
+  const coarseRef = [input.chordSpan?.fromSec ?? 0, input.chordSpan?.toSec ?? 0];
+  const coarseVals = [coarse.startOffsetSec, coarse.endOffsetSec];
+  for (let k = 0; k < 2; k++) {
+    const c = coarseVals[k];
+    const expected = offsetSec + (rate - 1) * coarseRef[k];
+    if (c !== null && Math.abs(c - expected) > 2) {
+      result.warnings.push(`coarse check differs from the offset by ${(c - expected).toFixed(1)} s`);
       break;
     }
   }
 
-  // 4. Exclusions, most structural first.
+  // 5. Exclusions, most structural first; an unresolved offset last.
   if (durationDiffSec !== null && Math.abs(durationDiffSec) > o.durationLimitSec)
     result.excluded = { code: 'duration-mismatch', reason: `upload is ${durationDiffSec > 0 ? 'longer' : 'shorter'} than the annotation by ${Math.abs(durationDiffSec).toFixed(1)} s` };
   else if (chosen.matchedFraction < o.minMatchFraction)
@@ -555,7 +787,9 @@ export function alignAnnotation(input: AlignInput, options?: Partial<AlignOption
     const weak = result.segments.find((s) => s.landmarks === 0 || s.matched / s.landmarks < o.minMatchFraction || s.matched < 4);
     if (weak) result.excluded = { code: 'landmarks-disagree', reason: `${weak.part} third: ${weak.matched}/${weak.landmarks} landmarks on an estimated beat` };
     else if (result.driftSec !== null && result.driftSec > o.driftLimitSec)
-      result.excluded = { code: 'drift', reason: rateNote ?? `local offsets differ by ${Math.round(result.driftSec * 1000)} ms across the song` };
+      result.excluded = { code: 'drift', reason: rateNote ?? `local offsets differ by ${Math.round(result.driftSec * 1000)} ms across the song${rate !== 1 ? ' after the fitted speed difference' : ''}` };
+    else if (ambiguous)
+      result.excluded = { code: 'ambiguous', reason: `offset not determined: ${survivors} candidates remain after the near-0 rule and bar phase` };
   }
   if (durationDiffSec === null) result.warnings.push('upload length unknown; duration check skipped');
   return result;
@@ -587,28 +821,32 @@ export interface SongScore {
   unmapped: { label: string; sec: number }[];
 }
 
-/** Annotation segments → a reference chart in media time (events at segment starts). */
-export function annotationChart(segs: AnnotationSegment[], offsetSec: number, beats: number[] | null, mediaDurationSec: number | null, stripBass = false): Chart {
+/**
+ * Annotation segments → a reference chart in media time (events at segment starts), through the
+ * alignment's time map media = offsetSec + rate × annotation time (rate 1: a plain offset).
+ */
+export function annotationChart(segs: AnnotationSegment[], offsetSec: number, beats: number[] | null, mediaDurationSec: number | null, stripBass = false, rate = 1): Chart {
+  const m = (t: number) => offsetSec + rate * t;
   const span = chordSpan(segs);
   const end = mediaDurationSec ?? Infinity;
-  const from = span ? Math.max(0, span.fromSec + offsetSec) : 0;
+  const from = span ? Math.max(0, m(span.fromSec)) : 0;
   // A negative offset can move the first chords before 0 s, where coverage starts. compareCharts
   // drops events that start before coverage, so the chord still sounding at the coverage start
   // moves to it (earlier ones that ended before it are dropped).
   const shifted = segs.map((s) => {
-    const m = harteToSymbol(s.label);
-    const chord = m.kind === 'chord' ? (stripBass ? withoutBass(m.symbol) : m.symbol) : m.kind === 'N' ? 'N' : 'X';
-    return { startSec: Math.max(from, s.startSec + offsetSec), chord, confidence: 1, source: 'manual' as const };
+    const h = harteToSymbol(s.label);
+    const chord = h.kind === 'chord' ? (stripBass ? withoutBass(h.symbol) : h.symbol) : h.kind === 'N' ? 'N' : 'X';
+    return { startSec: Math.max(from, m(s.startSec)), chord, confidence: 1, source: 'manual' as const };
   });
   const events = shifted.filter((e, i) => !(e.startSec === from && shifted[i + 1]?.startSec === from));
-  const coverage: CoverageRange[] = span ? [{ fromSec: from, toSec: Math.min(end, span.toSec + offsetSec) }] : [];
+  const coverage: CoverageRange[] = span ? [{ fromSec: from, toSec: Math.min(end, m(span.toSec)) }] : [];
   // The last segment ends the coverage; an extra event closes the final chord at its end.
-  const lastEnd = Math.max(...segs.map((s) => s.endSec)) + offsetSec;
+  const lastEnd = m(Math.max(...segs.map((s) => s.endSec)));
   events.push({ startSec: lastEnd, chord: 'N', confidence: 1, source: 'manual' });
   return {
     schemaVersion: 1,
     recording: { source: 'youtube', id: 'annotation', title: 'annotation', artist: '' },
-    timing: { bpm: 120, beatsPerBar: 4, firstDownbeatSec: 0, ...(beats?.length ? { beatTimes: beats.map((b) => b + offsetSec) } : {}) },
+    timing: { bpm: 120, beatsPerBar: 4, firstDownbeatSec: 0, ...(beats?.length ? { beatTimes: beats.map(m) } : {}) },
     events,
     coverage: coverage.filter((r) => r.toSec > r.fromSec),
     provenance: { createdBy: 'manual', createdAt: '1970-01-01T00:00:00.000Z' },
@@ -641,10 +879,12 @@ const sumRanges = (rs: CoverageRange[]) => rs.reduce((s, r) => s + r.toSec - r.f
 /**
  * Scores an auto chart against an aligned annotation with compareCharts (the same code as
  * `npm run bench -- --compare` and the accuracy overview), plus every chord-change residual
- * (auto minus annotation, nearest auto change within ±windowSec, bass ignored).
+ * (auto minus annotation, nearest auto change within ±windowSec, bass ignored). The annotation
+ * goes through the alignment's frozen time map (offsetSec, rate); all reported seconds are media seconds.
  */
-export function scoreSong(segs: AnnotationSegment[], beats: number[] | null, auto: Chart, offsetSec: number, mediaDurationSec: number | null, windowSec = 1): SongScore {
-  const reference = annotationChart(segs, offsetSec, beats, mediaDurationSec);
+export function scoreSong(segs: AnnotationSegment[], beats: number[] | null, auto: Chart, offsetSec: number, mediaDurationSec: number | null, windowSec = 1, rate = 1): SongScore {
+  const m = (t: number) => offsetSec + rate * t;
+  const reference = annotationChart(segs, offsetSec, beats, mediaDurationSec, false, rate);
   const comparison = compareCharts(reference, auto);
   // Same fallback as compareCharts for a chart without coverage.
   const autoCov = auto.coverage.length
@@ -658,14 +898,14 @@ export function scoreSong(segs: AnnotationSegment[], beats: number[] | null, aut
   let unknownSec = 0;
   const unmappedSec = new Map<string, number>();
   for (const s of segs) {
-    const m = harteToSymbol(s.label);
-    if (m.kind !== 'X' && m.kind !== 'unmapped') continue;
-    const inBoth = sumRanges(overlapRanges([{ fromSec: s.startSec + offsetSec, toSec: s.endSec + offsetSec }], both));
+    const h = harteToSymbol(s.label);
+    if (h.kind !== 'X' && h.kind !== 'unmapped') continue;
+    const inBoth = sumRanges(overlapRanges([{ fromSec: m(s.startSec), toSec: m(s.endSec) }], both));
     unknownSec += inBoth;
-    if (m.kind === 'unmapped') unmappedSec.set(s.label, (unmappedSec.get(s.label) ?? 0) + s.endSec - s.startSec);
+    if (h.kind === 'unmapped') unmappedSec.set(s.label, (unmappedSec.get(s.label) ?? 0) + m(s.endSec) - m(s.startSec));
   }
 
-  const timingRef = annotationChart(segs, offsetSec, null, mediaDurationSec, true);
+  const timingRef = annotationChart(segs, offsetSec, null, mediaDurationSec, true, rate);
   const summary = chordChangeOffset(timingRef, auto, windowSec);
   const refChanges = changeTimes(timingRef.events, both);
   const autoChanges = changeTimes(auto.events, normalizeCoverage(autoCov));
@@ -924,9 +1164,9 @@ function evaluateOne(song: SongEntry, list: SongList, upload: UploadEntry | unde
   });
   if (row.mediaDurationSource === 'coverage') alignment.warnings.push('upload length taken from the auto chart coverage end');
   row.alignment = alignment;
-  // The offset is frozen here; scoring never changes it, and excluded songs are not scored.
+  // The time map (offset and rate) is frozen here; scoring never changes it, and excluded songs are not scored.
   if (alignment.excluded) return { ...row, status: 'excluded', reason: alignment.excluded.reason };
-  row.score = scoreSong(segs, beatsAnn?.map((b) => b.sec) ?? null, chart, alignment.offsetSec, mediaDurationSec);
+  row.score = scoreSong(segs, beatsAnn?.map((b) => b.sec) ?? null, chart, alignment.offsetSec, mediaDurationSec, 1, alignment.rate);
   return { ...row, status: 'scored' };
 }
 

@@ -421,10 +421,14 @@ to end at 1x with listening mode on, then save the stored auto chart (`autochart
 npm run eval-annotations -- --annotations <annotations> --charts <charts> [--out <prefix>]
 ```
 
-writes `<charts>/annotation-eval.json` and a self-contained Korean `annotation-eval.html`. One offset
-per song is frozen before scoring, from annotation beats (or annotation chord changes when a dataset has
-no beats, marked weak) against the chart's Beat This! beats; songs whose start / middle / end offsets
-differ by more than 0.1 s, or whose upload length differs by more than 2 s, are excluded with a reason.
+writes `<charts>/annotation-eval.json` and a self-contained Korean `annotation-eval.html`. One time map
+per song (an offset plus a speed difference of at most 0.2%) is frozen before scoring, from annotation
+beats (or annotation chord changes when a dataset has no beats, marked weak) against the chart's Beat
+This! beats. A speed difference is used only with 30+ landmarks and when it fits clearly better on
+held-out parts of the song (5 contiguous folds: +5 points, 80%+ on beats, no third worse). Songs whose
+start / middle / end offsets still differ by more than 0.1 s after the map, whose upload length differs
+by more than 2 s, whose length ratio shows another playback speed, or whose offset bar phase cannot
+single out (candidates one beat or one bar apart) are excluded with a reason.
 Scores use `compareCharts` (majmin / root / sevenths WCSR, as in `npm run bench -- --compare`) from the
 first to the last annotated chord. Harte labels map to chart symbols at concert pitch with sharp
 spelling; inversions score as root position, extensions are ignored by majmin and root, no-third chords
