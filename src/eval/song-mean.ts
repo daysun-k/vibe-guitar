@@ -171,7 +171,8 @@ export interface SongMeanAnalysis {
   tInterval: { lower: number; upper: number; df: number; tCrit: number; sd: number } | null;
   /** Mean over every selected song with unscored songs at 0 (lower) or 1 (upper): bounds, not imputed scores. */
   bounds: { songs: number; lower: number; upper: number };
-  composition: { complexity: Record<string, number>; repeatedArtists: { artist: string; songs: number }[] };
+  /** Over the primary songs; lengthSec is the annotation length (min, median, max). */
+  composition: { complexity: Record<string, number>; lengthSec: { min: number; median: number; max: number }; repeatedArtists: { artist: string; songs: number }[] };
   sufficiency: ReturnType<typeof precisionCheck>;
 }
 
@@ -198,6 +199,7 @@ export function songMeanAnalysis(rows: SongResult[]): SongMeanAnalysis {
     complexity[r.complexity] = (complexity[r.complexity] ?? 0) + 1;
     artists.set(r.artist, (artists.get(r.artist) ?? 0) + 1);
   }
+  const lengths = primary.map((r) => r.annotationDurationSec).filter((x): x is number => typeof x === 'number' && Number.isFinite(x));
   return {
     population: 'eval songs of the group with status scored, a finite majmin score and majmin evaluated seconds > 0',
     counts: {
@@ -221,6 +223,7 @@ export function songMeanAnalysis(rows: SongResult[]): SongMeanAnalysis {
     bounds: { songs: rows.length, lower: rows.length ? sum / rows.length : NaN, upper: rows.length ? (sum + others) / rows.length : NaN },
     composition: {
       complexity,
+      lengthSec: { min: lengths.length ? Math.min(...lengths) : NaN, median: quantile(lengths, 0.5), max: lengths.length ? Math.max(...lengths) : NaN },
       repeatedArtists: [...artists].filter(([, n]) => n > 1).map(([artist, songs]) => ({ artist, songs })).sort((a, b) => b.songs - a.songs || (a.artist < b.artist ? -1 : 1)),
     },
     sufficiency: precisionCheck(primary.length, ci.lower, ci.upper),

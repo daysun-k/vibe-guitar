@@ -87,6 +87,16 @@ describe('song-mean analysis (VGT-7, PR #31)', () => {
     expect(a.bounds.upper).toBeCloseTo(7.2 / 8, 12);
   });
 
+  it('reports composition by complexity, annotation length and repeated artists over the primary songs', () => {
+    const a = songMeanAnalysis([
+      row('a', { complexity: 'simple', artist: 'X', annotationDurationSec: 200 }),
+      row('b', { complexity: 'complex', artist: 'X', annotationDurationSec: 180 }),
+      row('c', { complexity: 'complex', artist: 'Y', annotationDurationSec: 240 }),
+      row('m', { status: 'missing', score: undefined, artist: 'Y', annotationDurationSec: 999 }),
+    ]);
+    expect(a.composition).toEqual({ complexity: { simple: 1, complex: 2 }, lengthSec: { min: 180, median: 200, max: 240 }, repeatedArtists: [{ artist: 'X', songs: 2 }] });
+  });
+
   it('weighs every song the same, whatever its evaluated duration', () => {
     const a = songMeanAnalysis([scored('long', 0.9, 1000), scored('short', 0.3, 10)]);
     expect(a.mean).toBeCloseTo(0.6, 12);

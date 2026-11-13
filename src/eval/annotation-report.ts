@@ -50,6 +50,8 @@ function analysisSection(a: SongMeanAnalysis): string {
     .map(([k, n]) => `${COMPLEXITY_KO[k] ?? k} ${n}`)
     .join(', ');
   const repeated = a.composition.repeatedArtists.map((r) => `${escapeHtml(r.artist)} ${r.songs}곡`).join(', ');
+  const L = a.composition.lengthSec;
+  const len = Number.isFinite(L.median) ? `가장 짧은 곡 ${mmss(L.min)}, 가운데값 ${mmss(L.median)}, 가장 긴 곡 ${mmss(L.max)}` : '–';
   const s = a.sufficiency;
   const tile = (label: string, v: string, sub: string) => `<div class="tile"><div class="tile-label">${label}</div><div class="tile-num">${v}</div><div class="tile-sub">${sub}</div></div>`;
   return `<section class="card"><h2>미리 정한 주 분석: 학습에 없는 곡의 곡 평균</h2>
@@ -61,7 +63,7 @@ function analysisSection(a: SongMeanAnalysis): string {
 <li>채점하지 못한 곡을 0% 또는 100%로 둔 범위(추정 점수가 아니라 한계값이에요): ${pct1(a.bounds.lower)} ~ ${pct1(a.bounds.upper)}, 고른 곡 ${a.bounds.songs}개 기준.</li>
 <li>가운데값 ${pct1(a.median)}, 가장 낮은 곡 ${pct1(a.min)}, 가장 높은 곡 ${pct1(a.max)}.</li>
 <li>곡 수: 고른 곡 ${c.selected}, 채점 ${c.scored}, 주 분석 ${c.primary}${c.scoredNotPrimary ? `(채점했지만 평가 시간이 없거나 점수가 없는 곡 ${c.scoredNotPrimary})` : ''}, 제외 ${c.excluded}${codes ? `(${escapeHtml(codes)})` : ''}, 아직 없음 ${c.missing}, 오류 ${c.error}, 0초 근처 후보와 마디 위치가 충돌한 곡 ${c.barConflict}.</li>
-<li>주 분석 곡의 구성: 복잡도 ${comp || '–'}${repeated ? `; 같은 가수의 여러 곡: ${repeated}` : ''}.</li>
+<li>주 분석 곡의 구성: 복잡도 ${comp || '–'}; 주석 길이 ${len}${repeated ? `; 같은 가수의 여러 곡: ${repeated}` : ''}.</li>
 </ul>
 <p class="note small">VGT-7 마무리 기준(주 분석 곡 ${s.minSongs}개 이상, 구간 반폭 ${pp1(s.maxHalfWidth)} 이하): <b>${s.met ? '충족' : '미충족'}</b> (곡 ${s.n}개, 반폭 ${pp1(s.halfWidth)}). 이 기준은 측정이 충분히 정밀한지를 보는 것이고, 정확도가 앱에 충분한지 판단하는 기준이 아니에요.</p>
 <p class="muted small">이 구간은 공식 업로드가 있고 정렬을 통과한, 이런 곡들에 대한 불확실성이에요. 곡끼리 서로 독립이라고 가정해요. 업로드 유무나 정렬 통과 여부로 곡이 걸러지는 효과, 정렬 오류, 학습 자료와 겹칠 가능성, Billboard 곡 전체에 대한 일반화는 이 구간에 들어 있지 않아요.</p></section>`;
