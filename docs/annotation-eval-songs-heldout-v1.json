@@ -1,0 +1,472 @@
+{
+  "schema": "vibe-guitar-annotation-eval-songs/1",
+  "declaredAt": "2026-11-13",
+  "purpose": "Predeclared before any result (VGT-7, PR #31): 25 held-out evaluation songs drawn by a fixed seed from McGill Billboard 2.0.1 songs with no known BTC training-song overlap, for scoring Vibe Guitar auto charts against public, time-aligned chord annotations. Pool: one song per normalized (artist, title), canonical entry = lowest id; excluded in order: a title in BTC's UsPop2002 annotation list, an Isophonics or Robbie Williams artist, a song already on docs/annotation-eval-songs.json, fewer than 12 chord changes. Order: sha256(\"vgt7-billboard-heldout-v1:\" + 4-digit id) ascending, ties by id; the ordered pool is docs/annotation-heldout-v1-pool.json. Upload search: two frozen YouTube queries per song read to 15 results; a result qualifies on a matching \"<artist> - Topic\" channel, or (PR #31 amendment, decided before any capture from the same search log) a verified official artist channel (owner badge BADGE_STYLE_TYPE_VERIFIED_ARTIST) of a matching artist whose upload description starts with \"Provided to YouTube by\", a matching cleaned title, none of the excluded words and a length within 2 s of annotationDurationSec; smallest difference, then Q1, then rank; songs without one are skipped and the walk stops at 25 (docs/annotation-heldout-v1-search-log.json, upload rule amended-v1; the topic-only selection is kept in docs/annotation-heldout-v1-selection-diff.json). Complexity rule (from the annotation, N and X ignored): complex when >= 20 distinct labels or >= 40% of chord time is not a plain major/minor triad; simple when <= 10 labels and < 20%; otherwise moderate. Primary analysis: unweighted mean of per-song majmin WCSR with a percentile bootstrap 95% interval over songs. Results never change the list: no redraw, no replacement.",
+  "datasets": {
+    "billboard-2.0.1-lab": {
+      "name": "McGill Billboard 2.0 (2.0.1 LAB files; chords only, no beats)",
+      "page": "https://ddmal.ca/research/The_McGill_Billboard_Project_(Chord_Analysis_Dataset)/",
+      "downloads": [
+        "https://www.dropbox.com/s/ep41gwy28vo3wxy/billboard-2.0.1-lab.tar.gz?dl=1",
+        "https://www.dropbox.com/s/o0olz0uwl9z9stb/billboard-2.0-index.csv?dl=1"
+      ],
+      "folder": "billboard-2.0.1-lab",
+      "licence": "CC0",
+      "licenceQuote": "we have made them available legally under a CC0 license, but we ask that users follow scholarly norms in any public-facing work based on upon these data by citing the following ISMIR paper",
+      "attribution": "John Ashley Burgoyne, Jonathan Wild, and Ichiro Fujinaga, 'An Expert Ground Truth Set for Audio Chord Recognition and Music Analysis', in Proceedings of the 12th International Society for Music Information Retrieval Conference (Miami, FL, 2011), pp. 633-38.",
+      "btcTraining": "Not listed in the BTC README. The chosen songs were also checked against the UsPop2002 annotation list BTC used (github.com/tmc323/Chord-Annotations, uspopLabels, 195 songs): no title match. Two Billboard candidates that are in that list (Michael Jackson 'Beat It', Billy Joel 'Just the Way You Are') were left out."
+    }
+  },
+  "songs": [
+    {
+      "id": "billboard-1020-the-dramatics-hey-you-get-off-my-mountain",
+      "role": "eval",
+      "artist": "The Dramatics",
+      "title": "Hey You! Get Off My Mountain",
+      "release": "Billboard Hot 100 entry 1973-05-26 (McGill Billboard id 1020); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/1020/full.lab",
+      "beats": null,
+      "annotationDurationSec": 211.2,
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "search": [
+        "The Dramatics Hey You! Get Off My Mountain \"Provided to YouTube\"",
+        "The Dramatics - Topic Hey You! Get Off My Mountain"
+      ],
+      "uploadHint": "Chosen by the PR #31 search, rule amended-v1 (Q1, result 3, official artist channel, Provided to YouTube): 'thedramaticschannel' upload 'Hey You! Get Off My Mountain' (QW4PD_q1VaI), length 3:31; annotation 3:31, difference 0.20 s. Pool rank 4."
+    },
+    {
+      "id": "billboard-1190-dr-hook-only-sixteen",
+      "role": "eval",
+      "artist": "Dr. Hook",
+      "title": "Only Sixteen",
+      "release": "Billboard Hot 100 entry 1976-01-24 (McGill Billboard id 1190); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/1190/full.lab",
+      "beats": null,
+      "annotationDurationSec": 166.27,
+      "btcTraining": "not-known",
+      "complexity": "simple",
+      "search": [
+        "Dr. Hook Only Sixteen \"Provided to YouTube\"",
+        "Dr. Hook - Topic Only Sixteen"
+      ],
+      "uploadHint": "Chosen by the PR #31 search, rule amended-v1 (Q1, result 2, Topic channel): 'Dr. Hook - Topic' upload 'Only Sixteen (Remastered)' (FUr7lC3631Q), length 2:46; annotation 2:46, difference 0.27 s. Pool rank 5."
+    },
+    {
+      "id": "billboard-0591-eagles-the-long-run",
+      "role": "eval",
+      "artist": "Eagles",
+      "title": "The Long Run",
+      "release": "Billboard Hot 100 entry 1980-03-15 (McGill Billboard id 0591); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0591/full.lab",
+      "beats": null,
+      "annotationDurationSec": 221.65,
+      "btcTraining": "not-known",
+      "complexity": "simple",
+      "search": [
+        "Eagles The Long Run \"Provided to YouTube\"",
+        "Eagles - Topic The Long Run"
+      ],
+      "uploadHint": "Chosen by the PR #31 search, rule amended-v1 (Q1, result 1, official artist channel, Provided to YouTube): 'Eagles' upload 'The Long Run (2013 Remaster)' (f6liGUpVuP8), length 3:42; annotation 3:42, difference 0.35 s. Pool rank 6."
+    },
+    {
+      "id": "billboard-0542-wham-wake-me-up-before-you-go-go",
+      "role": "eval",
+      "artist": "Wham!",
+      "title": "Wake Me Up Before You Go-Go",
+      "release": "Billboard Hot 100 entry 1984-10-27 (McGill Billboard id 0542); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0542/full.lab",
+      "beats": null,
+      "annotationDurationSec": 234.42,
+      "btcTraining": "not-known",
+      "complexity": "moderate",
+      "search": [
+        "Wham! Wake Me Up Before You Go-Go \"Provided to YouTube\"",
+        "Wham! - Topic Wake Me Up Before You Go-Go"
+      ],
+      "uploadHint": "Chosen by the PR #31 search, rule amended-v1 (Q1, result 3, official artist channel, Provided to YouTube): 'WHAM!' upload 'Wake Me Up Before You Go-Go (Remastered)' (17t7SEsoKfE), length 3:53; annotation 3:54, difference 1.42 s. Pool rank 8."
+    },
+    {
+      "id": "billboard-0891-the-who-happy-jack",
+      "role": "eval",
+      "artist": "The Who",
+      "title": "Happy Jack",
+      "release": "Billboard Hot 100 entry 1967-04-22 (McGill Billboard id 0891); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0891/full.lab",
+      "beats": null,
+      "annotationDurationSec": 132.1,
+      "btcTraining": "not-known",
+      "complexity": "simple",
+      "search": [
+        "The Who Happy Jack \"Provided to YouTube\"",
+        "The Who - Topic Happy Jack"
+      ],
+      "uploadHint": "Chosen by the PR #31 search, rule amended-v1 (Q1, result 3, official artist channel, Provided to YouTube): 'TheWho' upload 'Happy Jack' (_64CuYwlmT4), length 2:12; annotation 2:12, difference 0.10 s. Pool rank 9."
+    },
+    {
+      "id": "billboard-0046-the-staple-singers-i-ll-take-you-there",
+      "role": "eval",
+      "artist": "The Staple Singers",
+      "title": "I'll Take You There",
+      "release": "Billboard Hot 100 entry 1972-07-01 (McGill Billboard id 0046); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0046/full.lab",
+      "beats": null,
+      "annotationDurationSec": 194.75,
+      "btcTraining": "not-known",
+      "complexity": "moderate",
+      "search": [
+        "The Staple Singers I'll Take You There \"Provided to YouTube\"",
+        "The Staple Singers - Topic I'll Take You There"
+      ],
+      "uploadHint": "Chosen by the PR #31 search, rule amended-v1 (Q1, result 11, official artist channel, Provided to YouTube): 'The Staple Singers' upload 'I'll Take You There' (ZRFz8I72bTA), length 3:15; annotation 3:15, difference 0.25 s. Pool rank 11."
+    },
+    {
+      "id": "billboard-1232-bonnie-pointer-heaven-must-have-sent-you",
+      "role": "eval",
+      "artist": "Bonnie Pointer",
+      "title": "Heaven Must Have Sent You",
+      "release": "Billboard Hot 100 entry 1979-11-03 (McGill Billboard id 1232); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/1232/full.lab",
+      "beats": null,
+      "annotationDurationSec": 215.75,
+      "btcTraining": "not-known",
+      "complexity": "moderate",
+      "search": [
+        "Bonnie Pointer Heaven Must Have Sent You \"Provided to YouTube\"",
+        "Bonnie Pointer - Topic Heaven Must Have Sent You"
+      ],
+      "uploadHint": "Chosen by the PR #31 search, rule amended-v1 (Q1, result 1, official artist channel, Provided to YouTube): 'BonniePointer' upload 'Heaven Must Have Sent You' (owiYwYdjgM8), length 3:35; annotation 3:36, difference 0.75 s. Pool rank 12."
+    },
+    {
+      "id": "billboard-1126-genesis-invisible-touch",
+      "role": "eval",
+      "artist": "Genesis",
+      "title": "Invisible Touch",
+      "release": "Billboard Hot 100 entry 1986-07-26 (McGill Billboard id 1126); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/1126/full.lab",
+      "beats": null,
+      "annotationDurationSec": 209.35,
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "search": [
+        "Genesis Invisible Touch \"Provided to YouTube\"",
+        "Genesis - Topic Invisible Touch"
+      ],
+      "uploadHint": "Chosen by the PR #31 search, rule amended-v1 (Q1, result 1, official artist channel, Provided to YouTube): 'Genesis' upload 'Invisible Touch (2007 Remaster)' (MHSGsIPMQIo), length 3:29; annotation 3:29, difference 0.35 s. Pool rank 13."
+    },
+    {
+      "id": "billboard-0330-the-5th-dimension-go-where-you-wanna-go",
+      "role": "eval",
+      "artist": "The 5th Dimension",
+      "title": "Go Where You Wanna Go",
+      "release": "Billboard Hot 100 entry 1967-01-21 (McGill Billboard id 0330); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0330/full.lab",
+      "beats": null,
+      "annotationDurationSec": 145.01,
+      "btcTraining": "not-known",
+      "complexity": "moderate",
+      "search": [
+        "The 5th Dimension Go Where You Wanna Go \"Provided to YouTube\"",
+        "The 5th Dimension - Topic Go Where You Wanna Go"
+      ],
+      "uploadHint": "Chosen by the PR #31 search, rule amended-v1 (Q1, result 2, official artist channel, Provided to YouTube): 'The 5th Dimension' upload 'Go Where You Wanna Go (Digitally Remastered 1997)' (242bVcCcB5A), length 2:25; annotation 2:25, difference 0.01 s. Pool rank 14."
+    },
+    {
+      "id": "billboard-0010-billy-joel-an-innocent-man",
+      "role": "eval",
+      "artist": "Billy Joel",
+      "title": "An Innocent Man",
+      "release": "Billboard Hot 100 entry 1984-03-24 (McGill Billboard id 0010); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0010/full.lab",
+      "beats": null,
+      "annotationDurationSec": 318.16,
+      "btcTraining": "not-known",
+      "complexity": "moderate",
+      "search": [
+        "Billy Joel An Innocent Man \"Provided to YouTube\"",
+        "Billy Joel - Topic An Innocent Man"
+      ],
+      "uploadHint": "Chosen by the PR #31 search, rule amended-v1 (Q1, result 1, official artist channel, Provided to YouTube): 'Billy Joel' upload 'An Innocent Man' (zx9-3On46-c), length 5:18; annotation 5:18, difference 0.16 s. Pool rank 15."
+    },
+    {
+      "id": "billboard-0879-run-d-m-c-walk-this-way",
+      "role": "eval",
+      "artist": "Run-D.M.C.",
+      "title": "Walk This Way",
+      "release": "Billboard Hot 100 entry 1986-08-02 (McGill Billboard id 0879); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0879/full.lab",
+      "beats": null,
+      "annotationDurationSec": 312.03,
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "search": [
+        "Run-D.M.C. Walk This Way \"Provided to YouTube\"",
+        "Run-D.M.C. - Topic Walk This Way"
+      ],
+      "uploadHint": "Chosen by the PR #31 search, rule amended-v1 (Q1, result 1, official artist channel, Provided to YouTube): 'Run DMC' upload 'Walk This Way' (dLB0P8nT2w8), length 5:11; annotation 5:12, difference 1.03 s. Pool rank 16."
+    },
+    {
+      "id": "billboard-0571-gary-u-s-bonds-quarter-to-three",
+      "role": "eval",
+      "artist": "Gary U.S. Bonds",
+      "title": "Quarter To Three",
+      "release": "Billboard Hot 100 entry 1961-05-29 (McGill Billboard id 0571); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0571/full.lab",
+      "beats": null,
+      "annotationDurationSec": 150.54,
+      "btcTraining": "not-known",
+      "complexity": "simple",
+      "search": [
+        "Gary U.S. Bonds Quarter To Three \"Provided to YouTube\"",
+        "Gary U.S. Bonds - Topic Quarter To Three"
+      ],
+      "uploadHint": "Chosen by the PR #31 search, rule amended-v1 (Q1, result 5, Topic channel): 'Gary U.S. Bonds - Topic' upload 'Quarter To Three' (YF69PoyXskY), length 2:31; annotation 2:31, difference 0.46 s. Pool rank 18."
+    },
+    {
+      "id": "billboard-0674-the-fireballs-sugar-shack",
+      "role": "eval",
+      "artist": "The Fireballs",
+      "title": "Sugar Shack",
+      "release": "Billboard Hot 100 entry 1963-12-14 (McGill Billboard id 0674); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0674/full.lab",
+      "beats": null,
+      "annotationDurationSec": 123.85,
+      "btcTraining": "not-known",
+      "complexity": "moderate",
+      "search": [
+        "The Fireballs Sugar Shack \"Provided to YouTube\"",
+        "The Fireballs - Topic Sugar Shack"
+      ],
+      "uploadHint": "Chosen by the PR #31 search, rule amended-v1 (Q1, result 1, Topic channel): 'the Fireballs - Topic' upload 'Sugar Shack' (5szXUpJi6kA), length 2:02; annotation 2:04, difference 1.85 s. Pool rank 19."
+    },
+    {
+      "id": "billboard-0864-oak-ridge-boys-elvira",
+      "role": "eval",
+      "artist": "Oak Ridge Boys",
+      "title": "Elvira",
+      "release": "Billboard Hot 100 entry 1981-05-30 (McGill Billboard id 0864); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0864/full.lab",
+      "beats": null,
+      "annotationDurationSec": 161.16,
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "search": [
+        "Oak Ridge Boys Elvira \"Provided to YouTube\"",
+        "Oak Ridge Boys - Topic Elvira"
+      ],
+      "uploadHint": "Chosen by the PR #31 search, rule amended-v1 (Q1, result 3, official artist channel, Provided to YouTube): 'The Oak Ridge Boys' upload 'Elvira' (2mgxsXu3D9A), length 2:42; annotation 2:41, difference 0.84 s. Pool rank 20."
+    },
+    {
+      "id": "billboard-0159-elvis-presley-little-sister",
+      "role": "eval",
+      "artist": "Elvis Presley",
+      "title": "Little Sister",
+      "release": "Billboard Hot 100 entry 1961-10-30 (McGill Billboard id 0159); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0159/full.lab",
+      "beats": null,
+      "annotationDurationSec": 152.03,
+      "btcTraining": "not-known",
+      "complexity": "simple",
+      "search": [
+        "Elvis Presley Little Sister \"Provided to YouTube\"",
+        "Elvis Presley - Topic Little Sister"
+      ],
+      "uploadHint": "Chosen by the PR #31 search, rule amended-v1 (Q1, result 3, official artist channel, Provided to YouTube): 'Elvis Presley' upload 'Little Sister' (KM4JZBqjQqA), length 2:32; annotation 2:32, difference 0.03 s. Pool rank 21."
+    },
+    {
+      "id": "billboard-0094-the-rolling-stones-wild-horses",
+      "role": "eval",
+      "artist": "The Rolling Stones",
+      "title": "Wild Horses",
+      "release": "Billboard Hot 100 entry 1971-06-19 (McGill Billboard id 0094); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0094/full.lab",
+      "beats": null,
+      "annotationDurationSec": 344.14,
+      "btcTraining": "not-known",
+      "complexity": "simple",
+      "search": [
+        "The Rolling Stones Wild Horses \"Provided to YouTube\"",
+        "The Rolling Stones - Topic Wild Horses"
+      ],
+      "uploadHint": "Chosen by the PR #31 search, rule amended-v1 (Q1, result 10, official artist channel, Provided to YouTube): 'The Rolling Stones' upload 'Wild Horses' (1PxuYrGEVow), length 5:45; annotation 5:44, difference 0.86 s. Pool rank 22."
+    },
+    {
+      "id": "billboard-0578-anita-baker-giving-you-the-best-that-i-got",
+      "role": "eval",
+      "artist": "Anita Baker",
+      "title": "Giving You The Best That I Got",
+      "release": "Billboard Hot 100 entry 1989-01-21 (McGill Billboard id 0578); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0578/full.lab",
+      "beats": null,
+      "annotationDurationSec": 260.55,
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "search": [
+        "Anita Baker Giving You The Best That I Got \"Provided to YouTube\"",
+        "Anita Baker - Topic Giving You The Best That I Got"
+      ],
+      "uploadHint": "Chosen by the PR #31 search, rule amended-v1 (Q1, result 2, official artist channel, Provided to YouTube): 'Anita Baker' upload 'Giving You the Best That I Got' (GNDuWcLI5fg), length 4:21; annotation 4:21, difference 0.45 s. Pool rank 23."
+    },
+    {
+      "id": "billboard-0162-brenda-lee-sweet-nothin-s",
+      "role": "eval",
+      "artist": "Brenda Lee",
+      "title": "Sweet Nothin's",
+      "release": "Billboard Hot 100 entry 1960-01-04 (McGill Billboard id 0162); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0162/full.lab",
+      "beats": null,
+      "annotationDurationSec": 145.76,
+      "btcTraining": "not-known",
+      "complexity": "simple",
+      "search": [
+        "Brenda Lee Sweet Nothin's \"Provided to YouTube\"",
+        "Brenda Lee - Topic Sweet Nothin's"
+      ],
+      "uploadHint": "Chosen by the PR #31 search, rule amended-v1 (Q1, result 3, official artist channel, Provided to YouTube): 'Brenda Lee' upload 'Sweet Nothin's' (y5mznY_WPFw), length 2:26; annotation 2:26, difference 0.24 s. Pool rank 24."
+    },
+    {
+      "id": "billboard-1145-tevin-campbell-tell-me-what-you-want-me-to-do",
+      "role": "eval",
+      "artist": "Tevin Campbell",
+      "title": "Tell Me What You Want Me To Do",
+      "release": "Billboard Hot 100 entry 1991-11-16 (McGill Billboard id 1145); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/1145/full.lab",
+      "beats": null,
+      "annotationDurationSec": 257.59,
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "search": [
+        "Tevin Campbell Tell Me What You Want Me To Do \"Provided to YouTube\"",
+        "Tevin Campbell - Topic Tell Me What You Want Me To Do"
+      ],
+      "uploadHint": "Chosen by the PR #31 search, rule amended-v1 (Q1, result 1, Topic channel): 'Tevin Campbell - Topic' upload 'Tell Me What You Want Me to Do' (LpMlZCXPYRQ), length 4:17; annotation 4:18, difference 0.59 s. Pool rank 25."
+    },
+    {
+      "id": "billboard-0393-genesis-misunderstanding",
+      "role": "eval",
+      "artist": "Genesis",
+      "title": "Misunderstanding",
+      "release": "Billboard Hot 100 entry 1980-07-26 (McGill Billboard id 0393); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0393/full.lab",
+      "beats": null,
+      "annotationDurationSec": 194.87,
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "search": [
+        "Genesis Misunderstanding \"Provided to YouTube\"",
+        "Genesis - Topic Misunderstanding"
+      ],
+      "uploadHint": "Chosen by the PR #31 search, rule amended-v1 (Q1, result 2, official artist channel, Provided to YouTube): 'Genesis' upload 'Misunderstanding (Platinum Collection Version)' (tVQHWKfzYEM), length 3:14; annotation 3:15, difference 0.87 s. Pool rank 26."
+    },
+    {
+      "id": "billboard-0577-canned-heat-let-s-work-together",
+      "role": "eval",
+      "artist": "Canned Heat",
+      "title": "Let's Work Together",
+      "release": "Billboard Hot 100 entry 1970-10-10 (McGill Billboard id 0577); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0577/full.lab",
+      "beats": null,
+      "annotationDurationSec": 169.9,
+      "btcTraining": "not-known",
+      "complexity": "moderate",
+      "search": [
+        "Canned Heat Let's Work Together \"Provided to YouTube\"",
+        "Canned Heat - Topic Let's Work Together"
+      ],
+      "uploadHint": "Chosen by the PR #31 search, rule amended-v1 (Q1, result 3, Topic channel): 'Canned Heat - Topic' upload 'Let's Work Together' (L5O0rPsfFmM), length 2:50; annotation 2:50, difference 0.10 s. Pool rank 27."
+    },
+    {
+      "id": "billboard-1040-eric-clapton-lay-down-sally",
+      "role": "eval",
+      "artist": "Eric Clapton",
+      "title": "Lay Down Sally",
+      "release": "Billboard Hot 100 entry 1978-05-20 (McGill Billboard id 1040); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/1040/full.lab",
+      "beats": null,
+      "annotationDurationSec": 230.84,
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "search": [
+        "Eric Clapton Lay Down Sally \"Provided to YouTube\"",
+        "Eric Clapton - Topic Lay Down Sally"
+      ],
+      "uploadHint": "Chosen by the PR #31 search, rule amended-v1 (Q1, result 4, official artist channel, Provided to YouTube): 'Eric Clapton' upload 'Lay Down Sally' (vvomrmBmQAM), length 3:52; annotation 3:51, difference 1.16 s. Pool rank 28."
+    },
+    {
+      "id": "billboard-0887-de-la-soul-me-myself-and-i",
+      "role": "eval",
+      "artist": "De La Soul",
+      "title": "Me Myself And I",
+      "release": "Billboard Hot 100 entry 1989-09-09 (McGill Billboard id 0887); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0887/full.lab",
+      "beats": null,
+      "annotationDurationSec": 221.44,
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "search": [
+        "De La Soul Me Myself And I \"Provided to YouTube\"",
+        "De La Soul - Topic Me Myself And I"
+      ],
+      "uploadHint": "Chosen by the PR #31 search, rule amended-v1 (Q1, result 7, official artist channel, Provided to YouTube): 'WeAreDeLaSoul' upload 'Me Myself and I (Single Mix)' (FPs2M0KPyP8), length 3:41; annotation 3:41, difference 0.44 s. Pool rank 29."
+    },
+    {
+      "id": "billboard-1170-blue-cheer-summertime-blues",
+      "role": "eval",
+      "artist": "Blue Cheer",
+      "title": "Summertime Blues",
+      "release": "Billboard Hot 100 entry 1968-05-25 (McGill Billboard id 1170); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/1170/full.lab",
+      "beats": null,
+      "annotationDurationSec": 226.19,
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "search": [
+        "Blue Cheer Summertime Blues \"Provided to YouTube\"",
+        "Blue Cheer - Topic Summertime Blues"
+      ],
+      "uploadHint": "Chosen by the PR #31 search, rule amended-v1 (Q1, result 12, Topic channel): 'Blue Cheer - Topic' upload 'Summertime Blues' (6un_fi7F_1w), length 3:47; annotation 3:46, difference 0.81 s. Pool rank 31."
+    },
+    {
+      "id": "billboard-0261-iron-butterfly-in-a-gadda-da-vida",
+      "role": "eval",
+      "artist": "Iron Butterfly",
+      "title": "In-A-Gadda-Da-Vida",
+      "release": "Billboard Hot 100 entry 1968-11-02 (McGill Billboard id 0261); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0261/full.lab",
+      "beats": null,
+      "annotationDurationSec": 174.48,
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "search": [
+        "Iron Butterfly In-A-Gadda-Da-Vida \"Provided to YouTube\"",
+        "Iron Butterfly - Topic In-A-Gadda-Da-Vida"
+      ],
+      "uploadHint": "Chosen by the PR #31 search, rule amended-v1 (Q1, result 1, Topic channel): 'Iron Butterfly - Topic' upload 'In-A-Gadda-Da-Vida (Single Version)' (XugIsZbTFy0), length 2:54; annotation 2:54, difference 0.48 s. Pool rank 32."
+    }
+  ]
+}

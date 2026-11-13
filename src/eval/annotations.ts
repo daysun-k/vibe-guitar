@@ -10,6 +10,7 @@ import { parseChord } from '../arrange/chord';
 import type { Chart, CoverageRange } from '../chart/types';
 import { normalizeCoverage } from '../chart/coverage';
 import { chordChangeOffset, compareCharts, median, type ChartComparison } from './metrics';
+import { quantile, songMeanAnalysis, type SongMeanAnalysis } from './song-mean';
 
 // ---------------------------------------------------------------- Harte labels
 
@@ -1137,6 +1138,11 @@ export interface EvalResult {
   datasets: Record<string, DatasetInfo>;
   songs: SongResult[];
   totals: { all: GroupTotals; heldOut: GroupTotals; trainingOverlap: GroupTotals };
+  /**
+   * The predeclared song-mean analysis (VGT-7, PR #31) over the held-out eval songs
+   * (btcTraining not-known). Absent in results written before it existed.
+   */
+  analysis?: { heldOut: SongMeanAnalysis };
 }
 
 export interface EvalIo {
@@ -1144,15 +1150,6 @@ export interface EvalIo {
   readAnnotation(datasetFolder: string, relPath: string): string | null;
   /** Parsed JSON of <chartsDir>/<youtubeId>.json, or null when it does not exist. */
   readChart(youtubeId: string): unknown;
-}
-
-function quantile(xs: number[], q: number): number {
-  if (!xs.length) return NaN;
-  const s = [...xs].sort((a, b) => a - b);
-  const pos = (s.length - 1) * q;
-  const lo = Math.floor(pos);
-  const hi = Math.ceil(pos);
-  return s[lo] + (s[hi] - s[lo]) * (pos - lo);
 }
 
 export function groupTotals(rows: SongResult[]): GroupTotals {
@@ -1272,5 +1269,6 @@ export function evaluateSongs(list: SongList, uploads: Record<string, UploadEntr
       heldOut: groupTotals(evalRows.filter((r) => r.btcTraining === 'not-known')),
       trainingOverlap: groupTotals(evalRows.filter((r) => r.btcTraining === 'likely')),
     },
+    analysis: { heldOut: songMeanAnalysis(evalRows.filter((r) => r.btcTraining === 'not-known')) },
   };
 }
