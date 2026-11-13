@@ -4,9 +4,12 @@
  */
 import { escapeHtml } from '../extension/sidepanel/diagram';
 import type { EvalResult, ExclusionCode, GroupTotals, SongResult } from './annotations';
+import type { SongMeanAnalysis } from './song-mean';
 import { durationKo } from './report';
 
 const pct = (x: number) => (Number.isFinite(x) ? `${Math.round(x * 100)}%` : '–');
+const pct1 = (x: number) => (Number.isFinite(x) ? `${(x * 100).toFixed(1)}%` : '–');
+const pp1 = (x: number) => (Number.isFinite(x) ? `${(x * 100).toFixed(1)}%p` : '–');
 const ms = (x: number) => (Number.isFinite(x) ? `${x > 0 ? '+' : ''}${Math.round(x)}` : '–');
 const sec1 = (x: number) => `${x.toFixed(1)}초`;
 const mmss = (sec: number) => `${Math.floor(sec / 60)}:${(sec % 60).toFixed(1).padStart(4, '0')}`;
@@ -31,6 +34,37 @@ function groupTiles(title: string, t: GroupTotals, help: string): string {
   const tile = (label: string, w: { score: number; evaluatedSec: number }, mean: number) =>
     `<div class="tile"><div class="tile-label">${label}</div><div class="tile-num">${pct(w.score)}</div><div class="tile-sub">곡 평균 ${pct(mean)} · ${durationKo(w.evaluatedSec)}</div></div>`;
   return `<section class="card"><h2>${escapeHtml(title)}</h2><p class="muted small">${escapeHtml(help)} 채점한 곡 ${t.songs}개.</p><div class="tiles">${tile('장·단 코드 이름', t.majmin, t.songMean.majmin)}${tile('근음', t.root, t.songMean.root)}${tile('7th 포함', t.sevenths, t.songMean.sevenths)}</div></section>`;
+}
+
+const COMPLEXITY_KO: Record<string, string> = { simple: '단순', moderate: '보통', complex: '복잡' };
+
+/** The predeclared primary analysis (VGT-7, PR #31): song mean, bootstrap interval, sensitivity. */
+function analysisSection(a: SongMeanAnalysis): string {
+  const c = a.counts;
+  const b = a.bootstrap;
+  const codes = Object.entries(c.excludedByCode)
+    .map(([k, n]) => `${REASON_KO[k as ExclusionCode] ?? k} ${n}`)
+    .join(', ');
+  const t = a.tInterval ? `${pct1(a.tInterval.lower)} ~ ${pct1(a.tInterval.upper)} (자유도 ${a.tInterval.df})` : '곡이 2개보다 적어서 계산하지 않았어요';
+  const comp = Object.entries(a.composition.complexity)
+    .map(([k, n]) => `${COMPLEXITY_KO[k] ?? k} ${n}`)
+    .join(', ');
+  const repeated = a.composition.repeatedArtists.map((r) => `${escapeHtml(r.artist)} ${r.songs}곡`).join(', ');
+  const s = a.sufficiency;
+  const tile = (label: string, v: string, sub: string) => `<div class="tile"><div class="tile-label">${label}</div><div class="tile-num">${v}</div><div class="tile-sub">${sub}</div></div>`;
+  return `<section class="card"><h2>미리 정한 주 분석: 학습에 없는 곡의 곡 평균</h2>
+<p class="small">곡마다 장·단 코드 이름 점수를 구한 뒤, 곡마다 같은 비중으로 평균을 냈어요(길이로 가중하지 않아요). 채점했고 점수가 있고 평가 시간이 0초보다 긴 곡 ${c.primary}개가 들어갔어요.</p>
+<div class="tiles">${tile('장·단 코드 이름 (주 지표)', pct1(a.mean), `95% 구간 ${pct1(b.lower)} ~ ${pct1(b.upper)}`)}${tile('근음', pct1(a.songMean.root), '곡 평균')}${tile('7th 포함', pct1(a.songMean.sevenths), '곡 평균')}</div>
+<ul class="notes small">
+<li><b>95% 신뢰구간</b>: 곡 단위 부트스트랩으로 구했어요(곡 ${c.primary}개를 중복을 허용해 다시 뽑기 ${b.resamples.toLocaleString('en-US')}번, mulberry32 시드 ${b.seed}, 2.5%와 97.5% 지점). ${pct1(b.lower)} ~ ${pct1(b.upper)}, 반폭 ${pp1(b.halfWidth)}.</li>
+<li>참고용 t 구간(주 구간을 대신하지 않아요): ${t}.</li>
+<li>채점하지 못한 곡을 0% 또는 100%로 둔 범위(추정 점수가 아니라 한계값이에요): ${pct1(a.bounds.lower)} ~ ${pct1(a.bounds.upper)}, 고른 곡 ${a.bounds.songs}개 기준.</li>
+<li>가운데값 ${pct1(a.median)}, 가장 낮은 곡 ${pct1(a.min)}, 가장 높은 곡 ${pct1(a.max)}.</li>
+<li>곡 수: 고른 곡 ${c.selected}, 채점 ${c.scored}, 주 분석 ${c.primary}${c.scoredNotPrimary ? `(채점했지만 평가 시간이 없거나 점수가 없는 곡 ${c.scoredNotPrimary})` : ''}, 제외 ${c.excluded}${codes ? `(${escapeHtml(codes)})` : ''}, 아직 없음 ${c.missing}, 오류 ${c.error}, 0초 근처 후보와 마디 위치가 충돌한 곡 ${c.barConflict}.</li>
+<li>주 분석 곡의 구성: 복잡도 ${comp || '–'}${repeated ? `; 같은 가수의 여러 곡: ${repeated}` : ''}.</li>
+</ul>
+<p class="note small">VGT-7 마무리 기준(주 분석 곡 ${s.minSongs}개 이상, 구간 반폭 ${pp1(s.maxHalfWidth)} 이하): <b>${s.met ? '충족' : '미충족'}</b> (곡 ${s.n}개, 반폭 ${pp1(s.halfWidth)}). 이 기준은 측정이 충분히 정밀한지를 보는 것이고, 정확도가 앱에 충분한지 판단하는 기준이 아니에요.</p>
+<p class="muted small">이 구간은 공식 업로드가 있고 정렬을 통과한, 이런 곡들에 대한 불확실성이에요. 곡끼리 서로 독립이라고 가정해요. 업로드 유무나 정렬 통과 여부로 곡이 걸러지는 효과, 정렬 오류, 학습 자료와 겹칠 가능성, Billboard 곡 전체에 대한 일반화는 이 구간에 들어 있지 않아요.</p></section>`;
 }
 
 function alignmentCell(r: SongResult): string {
@@ -159,6 +193,7 @@ export function renderAnnotationReport(res: EvalResult): string {
     `<h1>공개 정답 코드와 비교한 자동 코드표 정확도</h1>`,
     `<p class="muted small">만든 날짜 ${escapeHtml(res.generatedAt.slice(0, 10))} · 곡 목록 확정 ${escapeHtml(res.songList.declaredAt)}${res.songList.sha256 ? ` (sha256 ${escapeHtml(res.songList.sha256.slice(0, 12))})` : ''} · 평가 곡 ${evalRows.length}개 중 채점 ${count('scored')}, 제외 ${count('excluded')}, 아직 없음 ${count('missing')}, 오류 ${count('error')}</p>`,
     `<section class="card"><p>연구용으로 공개된 사람의 코드 주석(정답)과, 같은 녹음의 공식 업로드를 끝까지 재생해서 만든 자동 코드표를 비교했어요. 귀로 판단하지 않아도 되는 객관적인 숫자예요.</p><p class="note small">코드 인식 모델(BTC)은 Isophonics 주석(Beatles, Queen 등)으로 학습됐어요. 그래서 “학습 겹침 가능” 곡의 숫자는 실제보다 높게 나올 수 있어요. 앱의 실제 실력은 “학습에 없는 곡” 숫자로 판단하세요.</p></section>`,
+    res.analysis ? analysisSection(res.analysis.heldOut) : '',
     groupTiles('학습에 없는 곡 (가장 믿을 만한 숫자)', t.heldOut, 'McGill Billboard 곡이에요. BTC 학습 자료와 겹치지 않는 곡만 골랐어요.'),
     groupTiles('학습 겹침 가능 곡 (낙관적인 숫자)', t.trainingOverlap, 'Isophonics(Beatles, Queen) 곡이에요.'),
     groupTiles('평가 곡 전체', t.all, '두 묶음을 합친 숫자예요. 시범 곡은 빼요.'),
