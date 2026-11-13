@@ -480,36 +480,33 @@
         "nearestTopic": [
           {
             "query": "Q1",
-            "rank": 8,
-            "videoId": "sW4rk5sMsB0",
-            "title": "Addicted To Love (Remix)",
-            "channel": "Robert Palmer",
-            "lengthText": "4:26",
-            "lengthSec": 266,
-            "diffSec": 1.0699999999999932,
-            "branch": "official-artist"
+            "rank": 15,
+            "videoId": "jwjcPAScD1s",
+            "title": "Addicted to Love",
+            "channel": "Release - Topic",
+            "lengthText": "4:10",
+            "lengthSec": 250,
+            "diffSec": 14.930000000000007
           },
           {
             "query": "Q1",
-            "rank": 9,
-            "videoId": "a6cdN1PQSiE",
-            "title": "Addicted To Love (Edit)",
-            "channel": "Robert Palmer",
-            "lengthText": "4:27",
-            "lengthSec": 267,
-            "diffSec": 2.069999999999993,
-            "branch": "official-artist"
+            "rank": 13,
+            "videoId": "L9rFT4E3DEU",
+            "title": "Addicted To Love",
+            "channel": "Studio Allstars - Topic",
+            "lengthText": "4:07",
+            "lengthSec": 247,
+            "diffSec": 17.930000000000007
           },
           {
             "query": "Q1",
-            "rank": 11,
-            "videoId": "NtpGw1p7R90",
-            "title": "Addicted To Love (Edit)",
-            "channel": "Robert Palmer",
-            "lengthText": "4:20",
-            "lengthSec": 260,
-            "diffSec": 4.930000000000007,
-            "branch": "official-artist"
+            "rank": 12,
+            "videoId": "FqxJjwvF-yg",
+            "title": "Addicted To Love (Made Popular By Robert Palmer) [Vocal Version]",
+            "channel": "Release - Topic",
+            "lengthText": "3:06",
+            "lengthSec": 186,
+            "diffSec": 78.93
           }
         ]
       }
@@ -964,36 +961,13 @@
         "nearestTopic": [
           {
             "query": "Q1",
-            "rank": 3,
-            "videoId": "P57rRpl2hpo",
-            "title": "Frankenstein (Single Version)",
-            "channel": "Edgar Winter",
-            "lengthText": "3:26",
-            "lengthSec": 206,
-            "diffSec": 2.1399999999999864,
-            "branch": "official-artist"
-          },
-          {
-            "query": "Q1",
-            "rank": 5,
-            "videoId": "jhtztznkVBc",
-            "title": "Frankenstein (Single Version)",
-            "channel": "Edgar Winter",
-            "lengthText": "3:26",
-            "lengthSec": 206,
-            "diffSec": 2.1399999999999864,
-            "branch": "official-artist"
-          },
-          {
-            "query": "Q1",
-            "rank": 4,
-            "videoId": "22L-vgEvKsM",
-            "title": "Frankenstein (Single Version)",
-            "channel": "Edgar Winter",
-            "lengthText": "3:25",
-            "lengthSec": 205,
-            "diffSec": 3.1399999999999864,
-            "branch": "official-artist"
+            "rank": 11,
+            "videoId": "P7TyiB6L9oQ",
+            "title": "The Edgar Winter Group - Frankenstein (Live at Veteran's Memorial Coliseum New Haven, CT 1974)",
+            "channel": "The Mosh Pit - Topic",
+            "lengthText": "13:46",
+            "lengthSec": 826,
+            "diffSec": 617.86
           }
         ]
       }
@@ -1456,36 +1430,33 @@
         "nearestTopic": [
           {
             "query": "Q1",
-            "rank": 14,
-            "videoId": "-wrfo2An0qo",
-            "title": "Cradle Of Love",
-            "channel": "Billy Idol",
-            "lengthText": "4:42",
-            "lengthSec": 282,
-            "diffSec": 3.9499999999999886,
-            "branch": "official-artist"
+            "rank": 13,
+            "videoId": "BUpsyQXHQhA",
+            "title": "Flesh for Fantasy (made popular by Billy Idol) [vocal version]",
+            "channel": "Party Tyme - Topic",
+            "lengthText": "4:41",
+            "lengthSec": 281,
+            "diffSec": 2.9499999999999886
           },
           {
             "query": "Q1",
-            "rank": 9,
-            "videoId": "seHlHzYpWBU",
-            "title": "Rebel Yell",
-            "channel": "Billy Idol",
-            "lengthText": "4:49",
-            "lengthSec": 289,
-            "diffSec": 10.949999999999989,
-            "branch": "official-artist"
+            "rank": 8,
+            "videoId": "rhlyhf1s-_A",
+            "title": "Flesh for Fantasy",
+            "channel": "Union of Sound - Topic",
+            "lengthText": "4:43",
+            "lengthSec": 283,
+            "diffSec": 4.949999999999989
           },
           {
             "query": "Q1",
-            "rank": 4,
-            "videoId": "Ri5iXRipuYM",
-            "title": "Flesh For Fantasy (Session Take)",
-            "channel": "Billy Idol",
-            "lengthText": "5:10",
-            "lengthSec": 310,
-            "diffSec": 31.94999999999999,
-            "branch": "official-artist"
+            "rank": 15,
+            "videoId": "UWs560PHxyA",
+            "title": "Flesh for Fantasy",
+            "channel": "Part Of The Art - Topic",
+            "lengthText": "4:08",
+            "lengthSec": 248,
+            "diffSec": 30.05000000000001
           }
         ]
       }
@@ -1942,41 +1913,7 @@
         },
         "qualifying": 8,
         "reason": null,
-        "nearestTopic": [
-          {
-            "query": "Q1",
-            "rank": 3,
-            "videoId": "QW4PD_q1VaI",
-            "title": "Hey You! Get Off My Mountain",
-            "channel": "thedramaticschannel",
-            "lengthText": "3:31",
-            "lengthSec": 211,
-            "diffSec": 0.19999999999998863,
-            "branch": "official-artist"
-          },
-          {
-            "query": "Q1",
-            "rank": 4,
-            "videoId": "jybIJnQox5k",
-            "title": "Hey You! Get Off My Mountain",
-            "channel": "thedramaticschannel",
-            "lengthText": "3:31",
-            "lengthSec": 211,
-            "diffSec": 0.19999999999998863,
-            "branch": "official-artist"
-          },
-          {
-            "query": "Q1",
-            "rank": 6,
-            "videoId": "irvjOcus_aQ",
-            "title": "Hey You! Get Off My Mountain",
-            "channel": "thedramaticschannel",
-            "lengthText": "3:30",
-            "lengthSec": 210,
-            "diffSec": 1.1999999999999886,
-            "branch": "official-artist"
-          }
-        ]
+        "nearestTopic": []
       }
     },
     {
@@ -2452,8 +2389,7 @@
             "channel": "Dr. Hook - Topic",
             "lengthText": "2:46",
             "lengthSec": 166,
-            "diffSec": 0.27000000000001023,
-            "branch": "topic"
+            "diffSec": 0.27000000000001023
           },
           {
             "query": "Q1",
@@ -2463,8 +2399,7 @@
             "channel": "Dr. Hook - Topic",
             "lengthText": "2:46",
             "lengthSec": 166,
-            "diffSec": 0.27000000000001023,
-            "branch": "topic"
+            "diffSec": 0.27000000000001023
           },
           {
             "query": "Q1",
@@ -2474,8 +2409,7 @@
             "channel": "Dr. Hook - Topic",
             "lengthText": "2:48",
             "lengthSec": 168,
-            "diffSec": 1.7299999999999898,
-            "branch": "topic"
+            "diffSec": 1.7299999999999898
           }
         ]
       }
@@ -2960,36 +2894,33 @@
         "nearestTopic": [
           {
             "query": "Q1",
-            "rank": 1,
-            "videoId": "f6liGUpVuP8",
-            "title": "The Long Run (2013 Remaster)",
-            "channel": "Eagles",
-            "lengthText": "3:42",
-            "lengthSec": 222,
-            "diffSec": 0.3499999999999943,
-            "branch": "official-artist"
+            "rank": 6,
+            "videoId": "E-mY2wqd2Mk",
+            "title": "Long Run",
+            "channel": "The Desperado Dreamers - Topic",
+            "lengthText": "3:32",
+            "lengthSec": 212,
+            "diffSec": 9.650000000000006
           },
           {
             "query": "Q1",
-            "rank": 2,
-            "videoId": "v_6Wc1tePbk",
-            "title": "The Long Run (2013 Remaster)",
-            "channel": "Eagles",
-            "lengthText": "3:42",
-            "lengthSec": 222,
-            "diffSec": 0.3499999999999943,
-            "branch": "official-artist"
+            "rank": 14,
+            "videoId": "mqqjKeWEBjI",
+            "title": "The Long Run",
+            "channel": "The Starsound Orchestra - Topic",
+            "lengthText": "3:21",
+            "lengthSec": 201,
+            "diffSec": 20.650000000000006
           },
           {
             "query": "Q1",
-            "rank": 11,
-            "videoId": "VNA2LoTYoU0",
-            "title": "How Long",
-            "channel": "Eagles",
-            "lengthText": "3:17",
-            "lengthSec": 197,
-            "diffSec": 24.650000000000006,
-            "branch": "official-artist"
+            "rank": 10,
+            "videoId": "Y2WpmaDj9aU",
+            "title": "The Long Run",
+            "channel": "Release - Topic",
+            "lengthText": "4:03",
+            "lengthSec": 243,
+            "diffSec": 21.349999999999994
           }
         ]
       }
@@ -3452,36 +3383,33 @@
         "nearestTopic": [
           {
             "query": "Q1",
-            "rank": 4,
-            "videoId": "Z2P3b3Cw4Oc",
+            "rank": 14,
+            "videoId": "gA-oAkNI4A4",
             "title": "These Boots Are Made for Walkin'",
-            "channel": "Nancy Sinatra",
-            "lengthText": "2:30",
-            "lengthSec": 150,
-            "diffSec": 4.1699999999999875,
-            "branch": "official-artist"
+            "channel": "The New Christy Minstrels - Topic",
+            "lengthText": "2:21",
+            "lengthSec": 141,
+            "diffSec": 13.169999999999987
           },
           {
             "query": "Q1",
-            "rank": 6,
-            "videoId": "jqpsVXJrm4s",
-            "title": "These Boots Are Made for Walking",
-            "channel": "Nancy Sinatra",
-            "lengthText": "2:41",
-            "lengthSec": 161,
-            "diffSec": 6.8300000000000125,
-            "branch": "official-artist"
+            "rank": 8,
+            "videoId": "AKUVuIF7UbA",
+            "title": "These Boots Are Made For Walkin' (Made Popular By Nancy Sinatra) [Vocal Version]",
+            "channel": "Release - Topic",
+            "lengthText": "2:50",
+            "lengthSec": 170,
+            "diffSec": 15.830000000000013
           },
           {
             "query": "Q1",
-            "rank": 3,
-            "videoId": "fZjrkbkeWzo",
-            "title": "These Boots Are Made for Walkin'",
-            "channel": "Nancy Sinatra",
-            "lengthText": "2:43",
-            "lengthSec": 163,
-            "diffSec": 8.830000000000013,
-            "branch": "official-artist"
+            "rank": 11,
+            "videoId": "Wnbyn0qLcRQ",
+            "title": "These Boots Are Made For Walkin'",
+            "channel": "Release - Topic",
+            "lengthText": "2:50",
+            "lengthSec": 170,
+            "diffSec": 15.830000000000013
           }
         ]
       }
@@ -3962,36 +3890,33 @@
         "nearestTopic": [
           {
             "query": "Q1",
-            "rank": 3,
-            "videoId": "17t7SEsoKfE",
-            "title": "Wake Me Up Before You Go-Go (Remastered)",
-            "channel": "WHAM!",
-            "lengthText": "3:53",
-            "lengthSec": 233,
-            "diffSec": 1.4199999999999875,
-            "branch": "official-artist"
+            "rank": 11,
+            "videoId": "CNZs7qZKkV0",
+            "title": "Wake Me up Before You Go- Go",
+            "channel": "The Big 80s Guys - Topic",
+            "lengthText": "3:57",
+            "lengthSec": 237,
+            "diffSec": 2.5800000000000125
           },
           {
             "query": "Q1",
-            "rank": 1,
-            "videoId": "R14lGgHgVJM",
+            "rank": 8,
+            "videoId": "6jomQpxbsk0",
             "title": "Wake Me Up Before You Go-Go",
-            "channel": "WHAM!",
-            "lengthText": "3:52",
-            "lengthSec": 232,
-            "diffSec": 2.4199999999999875,
-            "branch": "official-artist"
-          },
-          {
-            "query": "Q1",
-            "rank": 2,
-            "videoId": "c5DGcQoBC9k",
-            "title": "Wake Me Up Before You Go-Go",
-            "channel": "WHAM!",
+            "channel": "The Pop Posse - Topic",
             "lengthText": "3:51",
             "lengthSec": 231,
-            "diffSec": 3.4199999999999875,
-            "branch": "official-artist"
+            "diffSec": 3.4199999999999875
+          },
+          {
+            "query": "Q1",
+            "rank": 10,
+            "videoId": "wupJTN3V6Go",
+            "title": "Wake Me Up Before You Go Go",
+            "channel": "Release - Topic",
+            "lengthText": "3:37",
+            "lengthSec": 217,
+            "diffSec": 17.419999999999987
           }
         ]
       }
@@ -4462,36 +4387,13 @@
         "nearestTopic": [
           {
             "query": "Q1",
-            "rank": 3,
-            "videoId": "_64CuYwlmT4",
-            "title": "Happy Jack",
-            "channel": "TheWho",
-            "lengthText": "2:12",
-            "lengthSec": 132,
-            "diffSec": 0.09999999999999432,
-            "branch": "official-artist"
-          },
-          {
-            "query": "Q1",
-            "rank": 1,
-            "videoId": "FI7ssXjFY2c",
-            "title": "Happy Jack",
-            "channel": "TheWho",
-            "lengthText": "2:13",
-            "lengthSec": 133,
-            "diffSec": 0.9000000000000057,
-            "branch": "official-artist"
-          },
-          {
-            "query": "Q1",
-            "rank": 2,
-            "videoId": "mguSawjjKMQ",
-            "title": "Happy Jack",
-            "channel": "TheWho",
-            "lengthText": "2:13",
-            "lengthSec": 133,
-            "diffSec": 0.9000000000000057,
-            "branch": "official-artist"
+            "rank": 12,
+            "videoId": "6tT7LR7glEo",
+            "title": "The Who - Happy Jack (Live at Fillmore East New York, NY 1968)",
+            "channel": "The Mosh Pit - Topic",
+            "lengthText": "3:01",
+            "lengthSec": 181,
+            "diffSec": 48.900000000000006
           }
         ]
       }
@@ -4948,41 +4850,7 @@
         "chosen": null,
         "qualifying": 0,
         "reason": "no qualifying upload in the first 15 results of Q1 and Q2",
-        "nearestTopic": [
-          {
-            "query": "Q1",
-            "rank": 2,
-            "videoId": "yLH4IbJiiSo",
-            "title": "Kicks (Album Version)",
-            "channel": "Paul Revere & The Raiders",
-            "lengthText": "2:27",
-            "lengthSec": 147,
-            "diffSec": 2.319999999999993,
-            "branch": "official-artist"
-          },
-          {
-            "query": "Q1",
-            "rank": 15,
-            "videoId": "JRSHuS03VhI",
-            "title": "Kicks",
-            "channel": "Paul Revere & The Raiders",
-            "lengthText": "2:27",
-            "lengthSec": 147,
-            "diffSec": 2.319999999999993,
-            "branch": "official-artist"
-          },
-          {
-            "query": "Q1",
-            "rank": 1,
-            "videoId": "_mUNIGbwrNI",
-            "title": "Kicks",
-            "channel": "Paul Revere & The Raiders",
-            "lengthText": "2:32",
-            "lengthSec": 152,
-            "diffSec": 2.680000000000007,
-            "branch": "official-artist"
-          }
-        ]
+        "nearestTopic": []
       }
     },
     {
@@ -5427,41 +5295,7 @@
         },
         "qualifying": 10,
         "reason": null,
-        "nearestTopic": [
-          {
-            "query": "Q1",
-            "rank": 11,
-            "videoId": "ZRFz8I72bTA",
-            "title": "I'll Take You There",
-            "channel": "The Staple Singers",
-            "lengthText": "3:15",
-            "lengthSec": 195,
-            "diffSec": 0.25,
-            "branch": "official-artist"
-          },
-          {
-            "query": "Q1",
-            "rank": 3,
-            "videoId": "3VuWrYlMwuE",
-            "title": "I'll Take You There",
-            "channel": "The Staple Singers",
-            "lengthText": "3:16",
-            "lengthSec": 196,
-            "diffSec": 1.25,
-            "branch": "official-artist"
-          },
-          {
-            "query": "Q1",
-            "rank": 5,
-            "videoId": "FXq3TPvh1Wc",
-            "title": "I'll Take You There",
-            "channel": "The Staple Singers",
-            "lengthText": "3:16",
-            "lengthSec": 196,
-            "diffSec": 1.25,
-            "branch": "official-artist"
-          }
-        ]
+        "nearestTopic": []
       }
     },
     {
@@ -5916,25 +5750,33 @@
         "nearestTopic": [
           {
             "query": "Q1",
-            "rank": 1,
-            "videoId": "owiYwYdjgM8",
-            "title": "Heaven Must Have Sent You",
-            "channel": "BonniePointer",
-            "lengthText": "3:35",
-            "lengthSec": 215,
-            "diffSec": 0.75,
-            "branch": "official-artist"
+            "rank": 14,
+            "videoId": "C6_jo75KVIc",
+            "title": "Heaven Must Have Sent You (made popular by Bonnie Pointer) [backing version]",
+            "channel": "Party Tyme - Topic",
+            "lengthText": "3:29",
+            "lengthSec": 209,
+            "diffSec": 6.75
           },
           {
             "query": "Q1",
-            "rank": 5,
-            "videoId": "e_yC2CZqMfM",
-            "title": "Hide",
-            "channel": "BonniePointer",
-            "lengthText": "3:11",
-            "lengthSec": 191,
-            "diffSec": 24.75,
-            "branch": "official-artist"
+            "rank": 11,
+            "videoId": "T4nPiFxxxWY",
+            "title": "Heaven Must Have Sent You (Motorcity Version)",
+            "channel": "THE ELGINS - Topic",
+            "lengthText": "3:51",
+            "lengthSec": 231,
+            "diffSec": 15.25
+          },
+          {
+            "query": "Q1",
+            "rank": 8,
+            "videoId": "qLKiXFyDWRs",
+            "title": "Heaven Must Have Sent You (Motorcity Version)",
+            "channel": "THE ELGINS - Topic",
+            "lengthText": "3:54",
+            "lengthSec": 234,
+            "diffSec": 18.25
           }
         ]
       }
@@ -6395,36 +6237,33 @@
         "nearestTopic": [
           {
             "query": "Q1",
-            "rank": 1,
-            "videoId": "MHSGsIPMQIo",
-            "title": "Invisible Touch (2007 Remaster)",
-            "channel": "Genesis",
-            "lengthText": "3:29",
-            "lengthSec": 209,
-            "diffSec": 0.3499999999999943,
-            "branch": "official-artist"
-          },
-          {
-            "query": "Q1",
-            "rank": 3,
-            "videoId": "Kx2UU-iI1sE",
-            "title": "Invisible Touch (Platinum Collection Version)",
-            "channel": "Genesis",
-            "lengthText": "3:29",
-            "lengthSec": 209,
-            "diffSec": 0.3499999999999943,
-            "branch": "official-artist"
-          },
-          {
-            "query": "Q1",
-            "rank": 2,
-            "videoId": "hHdBRygLBxc",
-            "title": "Invisible Touch",
-            "channel": "Genesis",
+            "rank": 15,
+            "videoId": "ID1cJvxWI-E",
+            "title": "Invisible Touch (karaoke-Version) As Made Famous By: Genesis",
+            "channel": "Studio Group - Topic",
             "lengthText": "3:28",
             "lengthSec": 208,
-            "diffSec": 1.3499999999999943,
-            "branch": "official-artist"
+            "diffSec": 1.3499999999999943
+          },
+          {
+            "query": "Q1",
+            "rank": 14,
+            "videoId": "fMNoYwdnoMY",
+            "title": "Invisible Touch",
+            "channel": "Yoyo International Orchestra - Topic",
+            "lengthText": "3:32",
+            "lengthSec": 212,
+            "diffSec": 2.6500000000000057
+          },
+          {
+            "query": "Q1",
+            "rank": 11,
+            "videoId": "vEjLesRW7Ik",
+            "title": "Invisible Touch",
+            "channel": "Release - Topic",
+            "lengthText": "3:19",
+            "lengthSec": 199,
+            "diffSec": 10.349999999999994
           }
         ]
       }
@@ -6909,36 +6748,33 @@
         "nearestTopic": [
           {
             "query": "Q1",
-            "rank": 2,
-            "videoId": "242bVcCcB5A",
-            "title": "Go Where You Wanna Go (Digitally Remastered 1997)",
-            "channel": "The 5th Dimension",
-            "lengthText": "2:25",
-            "lengthSec": 145,
-            "diffSec": 0.009999999999990905,
-            "branch": "official-artist"
+            "rank": 13,
+            "videoId": "BX6Xpd6Ywdo",
+            "title": "Go Where You Wanne Go",
+            "channel": "Release - Topic",
+            "lengthText": "2:30",
+            "lengthSec": 150,
+            "diffSec": 4.990000000000009
           },
           {
             "query": "Q1",
-            "rank": 3,
-            "videoId": "83gsr3xYnLk",
-            "title": "Go Where You Wanna Go",
-            "channel": "The 5th Dimension",
-            "lengthText": "2:23",
-            "lengthSec": 143,
-            "diffSec": 2.009999999999991,
-            "branch": "official-artist"
+            "rank": 15,
+            "videoId": "Hx-rJgIIWhE",
+            "title": "Go Where You Wanna Go (Karaoke Version) (Originally Performed By 5th Dimension)",
+            "channel": "Tommy Melody - Topic",
+            "lengthText": "2:31",
+            "lengthSec": 151,
+            "diffSec": 5.990000000000009
           },
           {
             "query": "Q1",
-            "rank": 8,
-            "videoId": "CcxSRaBLZzc",
-            "title": "Go Where You Wanna Go (The Mama's and The Papa's Cover)",
-            "channel": "The 5th Dimension",
-            "lengthText": "2:23",
-            "lengthSec": 143,
-            "diffSec": 2.009999999999991,
-            "branch": "official-artist"
+            "rank": 10,
+            "videoId": "YdHzk_vXjxc",
+            "title": "GO WHERE YOU WANNA GO",
+            "channel": "Residents - Topic",
+            "lengthText": "2:39",
+            "lengthSec": 159,
+            "diffSec": 13.990000000000009
           }
         ]
       }
@@ -7425,36 +7261,23 @@
         "nearestTopic": [
           {
             "query": "Q1",
-            "rank": 1,
-            "videoId": "zx9-3On46-c",
+            "rank": 12,
+            "videoId": "q7l4rmS1xUc",
             "title": "An Innocent Man",
-            "channel": "Billy Joel",
+            "channel": "PMC All-Stars - Topic",
             "lengthText": "5:18",
             "lengthSec": 318,
-            "diffSec": 0.160000000000025,
-            "branch": "official-artist"
+            "diffSec": 0.160000000000025
           },
           {
             "query": "Q1",
-            "rank": 2,
-            "videoId": "QpPoYt_9IN4",
-            "title": "An Innocent Man",
-            "channel": "Billy Joel",
-            "lengthText": "5:19",
-            "lengthSec": 319,
-            "diffSec": 0.839999999999975,
-            "branch": "official-artist"
-          },
-          {
-            "query": "Q1",
-            "rank": 3,
-            "videoId": "L-jZdVCP6kM",
-            "title": "An Innocent Man",
-            "channel": "Billy Joel",
-            "lengthText": "5:20",
-            "lengthSec": 320,
-            "diffSec": 1.839999999999975,
-            "branch": "official-artist"
+            "rank": 14,
+            "videoId": "ZVq6hN2-Ohg",
+            "title": "An Innocent Man (In The Style Of 'Billy Joel')",
+            "channel": "Hot Fox Karaoke - Topic",
+            "lengthText": "5:16",
+            "lengthSec": 316,
+            "diffSec": 2.160000000000025
           }
         ]
       }
@@ -7937,36 +7760,33 @@
         "nearestTopic": [
           {
             "query": "Q1",
-            "rank": 1,
-            "videoId": "dLB0P8nT2w8",
-            "title": "Walk This Way",
-            "channel": "Run DMC",
-            "lengthText": "5:11",
-            "lengthSec": 311,
-            "diffSec": 1.0299999999999727,
-            "branch": "official-artist"
+            "rank": 14,
+            "videoId": "JTiU0AMLCTw",
+            "title": "Walk This Way (As Made Famous by Run DMC)",
+            "channel": "Ultimate Dance Hits - Topic",
+            "lengthText": "4:03",
+            "lengthSec": 243,
+            "diffSec": 69.02999999999997
           },
           {
             "query": "Q1",
-            "rank": 7,
-            "videoId": "7K_d5bKT3k4",
-            "title": "Walk This Way (Demo)",
-            "channel": "Run DMC",
-            "lengthText": "5:26",
-            "lengthSec": 326,
-            "diffSec": 13.970000000000027,
-            "branch": "official-artist"
+            "rank": 15,
+            "videoId": "bX9KHDeyTFs",
+            "title": "Walk This Way (In The Style Of Aerosmith Feat. Run DMC)",
+            "channel": "1980s Karaoke Band - Topic",
+            "lengthText": "3:43",
+            "lengthSec": 223,
+            "diffSec": 89.02999999999997
           },
           {
             "query": "Q1",
-            "rank": 11,
-            "videoId": "dVrpJWlwcO0",
-            "title": "Walk This Way (Instrumental)",
-            "channel": "Run DMC",
-            "lengthText": "4:02",
-            "lengthSec": 242,
-            "diffSec": 70.02999999999997,
-            "branch": "official-artist"
+            "rank": 10,
+            "videoId": "Mde4_Ec6nV4",
+            "title": "Walk This Way (As Made Famous By Run DMC/Aerosmith)",
+            "channel": "The Backing Tracks - Topic",
+            "lengthText": "3:03",
+            "lengthSec": 183,
+            "diffSec": 129.02999999999997
           }
         ]
       }
@@ -8423,36 +8243,33 @@
         "nearestTopic": [
           {
             "query": "Q1",
-            "rank": 3,
-            "videoId": "Wz7IRdvQsG0",
-            "title": "Willie And The Hand Jive / Get Ready (Live At Long Beach Arena, California / 1974)",
-            "channel": "Eric Clapton",
-            "lengthText": "11:43",
-            "lengthSec": 703,
-            "diffSec": 0.7200000000000273,
-            "branch": "official-artist"
+            "rank": 15,
+            "videoId": "9M1ZsRe_Dvo",
+            "title": "Willie & the Hand Jive",
+            "channel": "CMH Steel - Topic",
+            "lengthText": "3:58",
+            "lengthSec": 238,
+            "diffSec": 464.28
           },
           {
             "query": "Q1",
-            "rank": 1,
-            "videoId": "h7m8eTlQNYM",
-            "title": "Willie And The Hand Jive",
-            "channel": "Eric Clapton",
-            "lengthText": "3:30",
-            "lengthSec": 210,
-            "diffSec": 492.28,
-            "branch": "official-artist"
+            "rank": 7,
+            "videoId": "OnxctSwupy4",
+            "title": "Willie and the Hand Jive",
+            "channel": "The Slowhands - Topic",
+            "lengthText": "3:34",
+            "lengthSec": 214,
+            "diffSec": 488.28
           },
           {
             "query": "Q1",
-            "rank": 2,
-            "videoId": "OYkgKNfszAY",
-            "title": "Willie And The Hand Jive",
-            "channel": "Eric Clapton",
-            "lengthText": "3:30",
-            "lengthSec": 210,
-            "diffSec": 492.28,
-            "branch": "official-artist"
+            "rank": 11,
+            "videoId": "ruQa-CinHSQ",
+            "title": "Willie & The Hand Jive (Made Famous by Eric Clapton)",
+            "channel": "The Slowhand Guitar Players - Topic",
+            "lengthText": "3:18",
+            "lengthSec": 198,
+            "diffSec": 504.28
           }
         ]
       }
@@ -8912,8 +8729,7 @@
             "channel": "Gary U.S. Bonds - Topic",
             "lengthText": "2:31",
             "lengthSec": 151,
-            "diffSec": 0.46000000000000796,
-            "branch": "topic"
+            "diffSec": 0.46000000000000796
           },
           {
             "query": "Q1",
@@ -8923,8 +8739,7 @@
             "channel": "Gary U.S. Bonds - Topic",
             "lengthText": "2:31",
             "lengthSec": 151,
-            "diffSec": 0.46000000000000796,
-            "branch": "topic"
+            "diffSec": 0.46000000000000796
           },
           {
             "query": "Q1",
@@ -8934,8 +8749,7 @@
             "channel": "Gary U.S. Bonds - Topic",
             "lengthText": "2:31",
             "lengthSec": 151,
-            "diffSec": 0.46000000000000796,
-            "branch": "topic"
+            "diffSec": 0.46000000000000796
           }
         ]
       }
@@ -9389,36 +9203,33 @@
         "nearestTopic": [
           {
             "query": "Q1",
-            "rank": 1,
-            "videoId": "5szXUpJi6kA",
-            "title": "Sugar Shack",
-            "channel": "the Fireballs - Topic",
-            "lengthText": "2:02",
-            "lengthSec": 122,
-            "diffSec": 1.8499999999999943,
-            "branch": "topic"
+            "rank": 6,
+            "videoId": "K0hfSL3z1q0",
+            "title": "Sugar Shack (made popular by Jerry Glimer & The Fireballs) [vocal version]",
+            "channel": "Party Tyme - Topic",
+            "lengthText": "2:04",
+            "lengthSec": 124,
+            "diffSec": 0.15000000000000568
           },
           {
             "query": "Q1",
-            "rank": 2,
-            "videoId": "3Muad1UgTLY",
+            "rank": 8,
+            "videoId": "t_wgqvluFqQ",
             "title": "Sugar Shack",
-            "channel": "Jimmy Gilmer & The Fireballs - Topic",
-            "lengthText": "2:01",
-            "lengthSec": 121,
-            "diffSec": 2.8499999999999943,
-            "branch": "topic"
+            "channel": "Release - Topic",
+            "lengthText": "2:04",
+            "lengthSec": 124,
+            "diffSec": 0.15000000000000568
           },
           {
             "query": "Q1",
-            "rank": 15,
-            "videoId": "73drPeJhYIk",
-            "title": "I Wonder Why",
-            "channel": "the Fireballs - Topic",
-            "lengthText": "2:28",
-            "lengthSec": 148,
-            "diffSec": 24.150000000000006,
-            "branch": "topic"
+            "rank": 7,
+            "videoId": "7c7aGDsTh0g",
+            "title": "Sugar Shack [In the Style of Jimmy Gilmer & The Fireballs] (Karaoke Version)",
+            "channel": "The Karaoke Channel - Topic",
+            "lengthText": "2:03",
+            "lengthSec": 123,
+            "diffSec": 0.8499999999999943
           }
         ]
       }
@@ -9901,36 +9712,33 @@
         "nearestTopic": [
           {
             "query": "Q1",
-            "rank": 3,
-            "videoId": "2mgxsXu3D9A",
-            "title": "Elvira",
-            "channel": "The Oak Ridge Boys",
-            "lengthText": "2:42",
-            "lengthSec": 162,
-            "diffSec": 0.8400000000000034,
-            "branch": "official-artist"
+            "rank": 11,
+            "videoId": "Tu6EhgBUsfo",
+            "title": "The Oak Ridge Boys - Elvira Reprise (Live at Tennessee Performing Arts Center Nashville, TN 1981)",
+            "channel": "The Mosh Pit - Topic",
+            "lengthText": "2:21",
+            "lengthSec": 141,
+            "diffSec": 20.159999999999997
           },
           {
             "query": "Q1",
-            "rank": 2,
-            "videoId": "iWuRO_DJC7o",
-            "title": "Elvira",
-            "channel": "The Oak Ridge Boys",
-            "lengthText": "2:39",
-            "lengthSec": 159,
-            "diffSec": 2.1599999999999966,
-            "branch": "official-artist"
+            "rank": 12,
+            "videoId": "5oTJrjpuYNQ",
+            "title": "The Oak Ridge Boys - Elvira (Live at Harrah's Marina Hotel Atlantic City, NJ 1984)",
+            "channel": "The Mosh Pit - Topic",
+            "lengthText": "3:17",
+            "lengthSec": 197,
+            "diffSec": 35.84
           },
           {
             "query": "Q1",
-            "rank": 14,
-            "videoId": "67DNgP5bGdM",
-            "title": "Elvira",
-            "channel": "The Oak Ridge Boys",
-            "lengthText": "3:24",
-            "lengthSec": 204,
-            "diffSec": 42.84,
-            "branch": "official-artist"
+            "rank": 15,
+            "videoId": "D-D097ZQ_BY",
+            "title": "The Oak Ridge Boys - Elvira (Live at Reunion Arena Dallas, TX 1982)",
+            "channel": "The Mosh Pit - Topic",
+            "lengthText": "3:41",
+            "lengthSec": 221,
+            "diffSec": 59.84
           }
         ]
       }
@@ -10375,41 +10183,7 @@
         },
         "qualifying": 6,
         "reason": null,
-        "nearestTopic": [
-          {
-            "query": "Q1",
-            "rank": 3,
-            "videoId": "KM4JZBqjQqA",
-            "title": "Little Sister",
-            "channel": "Elvis Presley",
-            "lengthText": "2:32",
-            "lengthSec": 152,
-            "diffSec": 0.030000000000001137,
-            "branch": "official-artist"
-          },
-          {
-            "query": "Q1",
-            "rank": 5,
-            "videoId": "crws9A33OUs",
-            "title": "Little Sister (Remastered)",
-            "channel": "Elvis Presley",
-            "lengthText": "2:33",
-            "lengthSec": 153,
-            "diffSec": 0.9699999999999989,
-            "branch": "official-artist"
-          },
-          {
-            "query": "Q1",
-            "rank": 7,
-            "videoId": "EThzIahhmtc",
-            "title": "Little Sister",
-            "channel": "Elvis Presley",
-            "lengthText": "2:31",
-            "lengthSec": 151,
-            "diffSec": 1.0300000000000011,
-            "branch": "official-artist"
-          }
-        ]
+        "nearestTopic": []
       }
     },
     {
@@ -10854,41 +10628,7 @@
         },
         "qualifying": 6,
         "reason": null,
-        "nearestTopic": [
-          {
-            "query": "Q1",
-            "rank": 10,
-            "videoId": "1PxuYrGEVow",
-            "title": "Wild Horses",
-            "channel": "The Rolling Stones",
-            "lengthText": "5:45",
-            "lengthSec": 345,
-            "diffSec": 0.8600000000000136,
-            "branch": "official-artist"
-          },
-          {
-            "query": "Q1",
-            "rank": 4,
-            "videoId": "ux6SKYa7n2U",
-            "title": "Wild Horses",
-            "channel": "The Rolling Stones",
-            "lengthText": "5:43",
-            "lengthSec": 343,
-            "diffSec": 1.1399999999999864,
-            "branch": "official-artist"
-          },
-          {
-            "query": "Q1",
-            "rank": 11,
-            "videoId": "FqX8UXBpR-w",
-            "title": "Wild Horses",
-            "channel": "The Rolling Stones",
-            "lengthText": "5:46",
-            "lengthSec": 346,
-            "diffSec": 1.8600000000000136,
-            "branch": "official-artist"
-          }
-        ]
+        "nearestTopic": []
       }
     },
     {
@@ -11363,36 +11103,33 @@
         "nearestTopic": [
           {
             "query": "Q1",
-            "rank": 2,
-            "videoId": "GNDuWcLI5fg",
-            "title": "Giving You the Best That I Got",
-            "channel": "Anita Baker",
-            "lengthText": "4:21",
-            "lengthSec": 261,
-            "diffSec": 0.44999999999998863,
-            "branch": "official-artist"
+            "rank": 6,
+            "videoId": "UNmsRDHC59I",
+            "title": "Giving You The Best That I Got",
+            "channel": "Sam Levine - Topic",
+            "lengthText": "4:13",
+            "lengthSec": 253,
+            "diffSec": 7.550000000000011
           },
           {
             "query": "Q1",
-            "rank": 4,
-            "videoId": "qJOfWzkywPw",
-            "title": "Giving You the Best That I Got",
-            "channel": "Anita Baker",
-            "lengthText": "4:21",
-            "lengthSec": 261,
-            "diffSec": 0.44999999999998863,
-            "branch": "official-artist"
+            "rank": 12,
+            "videoId": "nNHlevXHTW8",
+            "title": "Giving You the Best that I Got",
+            "channel": "Smooth Jazz All Stars - Topic",
+            "lengthText": "4:08",
+            "lengthSec": 248,
+            "diffSec": 12.550000000000011
           },
           {
-            "query": "Q2",
-            "rank": 9,
-            "videoId": "Oz-b86LZ21c",
-            "title": "Caught Up in the Rapture",
-            "channel": "Anita Baker",
-            "lengthText": "4:11",
-            "lengthSec": 251,
-            "diffSec": 9.550000000000011,
-            "branch": "official-artist"
+            "query": "Q1",
+            "rank": 14,
+            "videoId": "P-DTwkTI2DU",
+            "title": "Giving You the Best That I Got",
+            "channel": "Anna Cimenti - Topic",
+            "lengthText": "4:39",
+            "lengthSec": 279,
+            "diffSec": 18.44999999999999
           }
         ]
       }
@@ -11857,41 +11594,7 @@
         },
         "qualifying": 17,
         "reason": null,
-        "nearestTopic": [
-          {
-            "query": "Q1",
-            "rank": 3,
-            "videoId": "y5mznY_WPFw",
-            "title": "Sweet Nothin's",
-            "channel": "Brenda Lee",
-            "lengthText": "2:26",
-            "lengthSec": 146,
-            "diffSec": 0.2400000000000091,
-            "branch": "official-artist"
-          },
-          {
-            "query": "Q2",
-            "rank": 5,
-            "videoId": "SasGw7LM0gg",
-            "title": "Sweet Nothin's",
-            "channel": "Brenda Lee",
-            "lengthText": "2:26",
-            "lengthSec": 146,
-            "diffSec": 0.2400000000000091,
-            "branch": "official-artist"
-          },
-          {
-            "query": "Q2",
-            "rank": 15,
-            "videoId": "nTikyl9Yaj0",
-            "title": "Sweet Nothin's",
-            "channel": "Brenda Lee",
-            "lengthText": "2:26",
-            "lengthSec": 146,
-            "diffSec": 0.2400000000000091,
-            "branch": "official-artist"
-          }
-        ]
+        "nearestTopic": []
       }
     },
     {
@@ -12355,8 +12058,7 @@
             "channel": "Tevin Campbell - Topic",
             "lengthText": "4:17",
             "lengthSec": 257,
-            "diffSec": 0.589999999999975,
-            "branch": "topic"
+            "diffSec": 0.589999999999975
           },
           {
             "query": "Q1",
@@ -12366,8 +12068,7 @@
             "channel": "Tevin Campbell - Topic",
             "lengthText": "4:17",
             "lengthSec": 257,
-            "diffSec": 0.589999999999975,
-            "branch": "topic"
+            "diffSec": 0.589999999999975
           },
           {
             "query": "Q1",
@@ -12377,8 +12078,7 @@
             "channel": "Tevin Campbell - Topic",
             "lengthText": "4:17",
             "lengthSec": 257,
-            "diffSec": 0.589999999999975,
-            "branch": "topic"
+            "diffSec": 0.589999999999975
           }
         ]
       }
@@ -12847,36 +12547,33 @@
         "nearestTopic": [
           {
             "query": "Q1",
-            "rank": 2,
-            "videoId": "tVQHWKfzYEM",
-            "title": "Misunderstanding (Platinum Collection Version)",
-            "channel": "Genesis",
-            "lengthText": "3:14",
-            "lengthSec": 194,
-            "diffSec": 0.8700000000000045,
-            "branch": "official-artist"
+            "rank": 15,
+            "videoId": "onx0ELJ51fQ",
+            "title": "Misunderstanding (Demonstration Version - Includes Lead Singer)",
+            "channel": "The Karaoke Channel - Topic",
+            "lengthText": "3:22",
+            "lengthSec": 202,
+            "diffSec": 7.1299999999999955
           },
           {
             "query": "Q1",
-            "rank": 1,
-            "videoId": "n8nGGYIlJxg",
-            "title": "Misunderstanding (2007 Remaster)",
-            "channel": "Genesis",
-            "lengthText": "3:12",
-            "lengthSec": 192,
-            "diffSec": 2.8700000000000045,
-            "branch": "official-artist"
+            "rank": 12,
+            "videoId": "45KRrDD0uLk",
+            "title": "Misunderstanding (Originally Performed By Genesis) (Karaoke Version)",
+            "channel": "MIDIFine Systems - Topic",
+            "lengthText": "3:23",
+            "lengthSec": 203,
+            "diffSec": 8.129999999999995
           },
           {
             "query": "Q1",
-            "rank": 3,
-            "videoId": "8fJGeZ6HuTo",
-            "title": "Misunderstanding",
-            "channel": "Genesis",
-            "lengthText": "3:12",
-            "lengthSec": 192,
-            "diffSec": 2.8700000000000045,
-            "branch": "official-artist"
+            "rank": 9,
+            "videoId": "AGnhAxvKqjI",
+            "title": "Misunderstanding (Karaoke Version)",
+            "channel": "The Karaoke Channel - Topic",
+            "lengthText": "3:24",
+            "lengthSec": 204,
+            "diffSec": 9.129999999999995
           }
         ]
       }
@@ -13342,8 +13039,7 @@
             "channel": "Canned Heat - Topic",
             "lengthText": "2:50",
             "lengthSec": 170,
-            "diffSec": 0.09999999999999432,
-            "branch": "topic"
+            "diffSec": 0.09999999999999432
           },
           {
             "query": "Q1",
@@ -13353,8 +13049,7 @@
             "channel": "Canned Heat - Topic",
             "lengthText": "2:50",
             "lengthSec": 170,
-            "diffSec": 0.09999999999999432,
-            "branch": "topic"
+            "diffSec": 0.09999999999999432
           },
           {
             "query": "Q1",
@@ -13364,8 +13059,7 @@
             "channel": "Canned Heat - Topic",
             "lengthText": "2:51",
             "lengthSec": 171,
-            "diffSec": 1.0999999999999943,
-            "branch": "topic"
+            "diffSec": 1.0999999999999943
           }
         ]
       }
@@ -13800,41 +13494,7 @@
         },
         "qualifying": 2,
         "reason": null,
-        "nearestTopic": [
-          {
-            "query": "Q1",
-            "rank": 4,
-            "videoId": "vvomrmBmQAM",
-            "title": "Lay Down Sally",
-            "channel": "Eric Clapton",
-            "lengthText": "3:52",
-            "lengthSec": 232,
-            "diffSec": 1.1599999999999966,
-            "branch": "official-artist"
-          },
-          {
-            "query": "Q1",
-            "rank": 1,
-            "videoId": "9BYyPok2O5k",
-            "title": "Lay Down Sally",
-            "channel": "Eric Clapton",
-            "lengthText": "3:57",
-            "lengthSec": 237,
-            "diffSec": 6.159999999999997,
-            "branch": "official-artist"
-          },
-          {
-            "query": "Q2",
-            "rank": 9,
-            "videoId": "O6yeLNNVa4A",
-            "title": "Cocaine",
-            "channel": "Eric Clapton",
-            "lengthText": "3:39",
-            "lengthSec": 219,
-            "diffSec": 11.840000000000003,
-            "branch": "official-artist"
-          }
-        ]
+        "nearestTopic": []
       }
     },
     {
@@ -14313,36 +13973,33 @@
         "nearestTopic": [
           {
             "query": "Q1",
-            "rank": 7,
-            "videoId": "FPs2M0KPyP8",
-            "title": "Me Myself and I (Single Mix)",
-            "channel": "WeAreDeLaSoul",
+            "rank": 10,
+            "videoId": "i20FOTS1koE",
+            "title": "Me, Myself And I (made popular by De La Soul) [vocal version]",
+            "channel": "Party Tyme - Topic",
             "lengthText": "3:41",
             "lengthSec": 221,
-            "diffSec": 0.4399999999999977,
-            "branch": "official-artist"
+            "diffSec": 0.4399999999999977
           },
           {
             "query": "Q1",
-            "rank": 4,
-            "videoId": "NerII_Zgd5I",
-            "title": "Me Myself and I",
-            "channel": "WeAreDeLaSoul",
-            "lengthText": "3:42",
-            "lengthSec": 222,
-            "diffSec": 0.5600000000000023,
-            "branch": "official-artist"
+            "rank": 11,
+            "videoId": "33XM2YamWbw",
+            "title": "Me Myself and I (Soul Version)",
+            "channel": "DJ De La Groove - Topic",
+            "lengthText": "3:44",
+            "lengthSec": 224,
+            "diffSec": 2.5600000000000023
           },
           {
             "query": "Q1",
-            "rank": 2,
-            "videoId": "Wa8u6NPGCDo",
-            "title": "Me Myself And I",
-            "channel": "WeAreDeLaSoul",
-            "lengthText": "3:45",
-            "lengthSec": 225,
-            "diffSec": 3.5600000000000023,
-            "branch": "official-artist"
+            "rank": 3,
+            "videoId": "WcgGwD8d1Fk",
+            "title": "De La Soul - Me Myself and I (Live at Tramps New York, NY 1996)",
+            "channel": "The Mosh Pit - Topic",
+            "lengthText": "3:23",
+            "lengthSec": 203,
+            "diffSec": 18.439999999999998
           }
         ]
       }
@@ -14808,7 +14465,38 @@
         "chosen": null,
         "qualifying": 0,
         "reason": "no qualifying upload in the first 15 results of Q1 and Q2",
-        "nearestTopic": []
+        "nearestTopic": [
+          {
+            "query": "Q1",
+            "rank": 8,
+            "videoId": "szN-X0BGMbE",
+            "title": "Little Too Late (Demonstration Version - Includes Lead Singer)",
+            "channel": "Release - Topic",
+            "lengthText": "4:08",
+            "lengthSec": 248,
+            "diffSec": 0.12000000000000455
+          },
+          {
+            "query": "Q1",
+            "rank": 13,
+            "videoId": "YlxTb15miKM",
+            "title": "Little Too Late",
+            "channel": "Sandemonium - Topic",
+            "lengthText": "4:08",
+            "lengthSec": 248,
+            "diffSec": 0.12000000000000455
+          },
+          {
+            "query": "Q1",
+            "rank": 7,
+            "videoId": "R0YPw1AYZjw",
+            "title": "Little Too Late",
+            "channel": "The Global HitMakers - Topic",
+            "lengthText": "4:07",
+            "lengthSec": 247,
+            "diffSec": 0.8799999999999955
+          }
+        ]
       }
     },
     {
@@ -15268,8 +14956,7 @@
             "channel": "Blue Cheer - Topic",
             "lengthText": "3:47",
             "lengthSec": 227,
-            "diffSec": 0.8100000000000023,
-            "branch": "topic"
+            "diffSec": 0.8100000000000023
           },
           {
             "query": "Q1",
@@ -15279,8 +14966,7 @@
             "channel": "Blue Cheer - Topic",
             "lengthText": "3:48",
             "lengthSec": 228,
-            "diffSec": 1.8100000000000023,
-            "branch": "topic"
+            "diffSec": 1.8100000000000023
           },
           {
             "query": "Q1",
@@ -15290,8 +14976,7 @@
             "channel": "Blue Cheer - Topic",
             "lengthText": "3:48",
             "lengthSec": 228,
-            "diffSec": 1.8100000000000023,
-            "branch": "topic"
+            "diffSec": 1.8100000000000023
           }
         ]
       }
@@ -15757,8 +15442,7 @@
             "channel": "Iron Butterfly - Topic",
             "lengthText": "2:54",
             "lengthSec": 174,
-            "diffSec": 0.47999999999998977,
-            "branch": "topic"
+            "diffSec": 0.47999999999998977
           },
           {
             "query": "Q1",
@@ -15768,8 +15452,7 @@
             "channel": "Iron Butterfly - Topic",
             "lengthText": "2:54",
             "lengthSec": 174,
-            "diffSec": 0.47999999999998977,
-            "branch": "topic"
+            "diffSec": 0.47999999999998977
           },
           {
             "query": "Q1",
@@ -15779,8 +15462,7 @@
             "channel": "Iron Butterfly - Topic",
             "lengthText": "2:54",
             "lengthSec": 174,
-            "diffSec": 0.47999999999998977,
-            "branch": "topic"
+            "diffSec": 0.47999999999998977
           }
         ]
       }

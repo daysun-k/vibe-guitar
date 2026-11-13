@@ -139,10 +139,7 @@ export interface UploadDecision {
   qualifying: number;
   /** Skipped songs: why. */
   reason: string | null;
-  /**
-   * Up to three results nearest to the annotation length (any title): topic-only-v1, every
-   * ' - Topic' channel (any artist); amended-v1, every result that meets the channel condition.
-   */
+  /** Up to three ' - Topic'-channel results nearest to the annotation length (any artist or title), under every rule. */
   nearestTopic: Candidate[];
 }
 
@@ -159,10 +156,9 @@ export function chooseUpload(song: SongForSearch, results: Record<QueryLabel, Se
     for (const r of results[query].filter((x) => x.rank >= 1 && x.rank <= RESULTS_PER_QUERY)) {
       const c = checkResult(r, song, rule);
       const cand: Candidate = { query, rank: r.rank, videoId: r.videoId, title: r.title, channel: r.channel, lengthText: r.lengthText, lengthSec: c.lengthSec, diffSec: c.diffSec };
-      if (rule === 'amended-v1' && c.branch) cand.branch = c.branch;
-      if (c.qualifies) qualifying.push(cand);
-      const near = rule === 'topic-only-v1' ? c.topic : c.branch !== null;
-      if (near && c.diffSec !== null) topics.push(cand);
+      if (c.qualifies) qualifying.push(rule === 'amended-v1' && c.branch ? { ...cand, branch: c.branch } : cand);
+      // The nearest-Topic diagnostic is rule-independent: ' - Topic' channels only, any artist or title.
+      if (c.topic && c.diffSec !== null) topics.push(cand);
     }
   }
   const byChoice = (a: Candidate, b: Candidate) => a.diffSec! - b.diffSec! || QUERY_ORDER[a.query] - QUERY_ORDER[b.query] || a.rank - b.rank;

@@ -397,6 +397,16 @@ describe('committed held-out list (VGT-7, PR #31 and its amendment)', () => {
     expect(amendLog(order, log)).toEqual(log);
   });
 
+  it('keeps the nearest-Topic diagnostic of every amended skip equal to the original one (Topic channels only)', () => {
+    const skipped = log.entries.filter((e: SearchLogEntry) => e.decisionAmended?.status === 'skipped');
+    expect(skipped.map((e: SearchLogEntry) => e.rank)).toEqual([1, 2, 3, 7, 10, 17, 30]);
+    for (const e of skipped) {
+      const amended = e.decisionAmended as { nearestTopic: { channel: string }[] };
+      expect(amended.nearestTopic).toEqual(e.decision!.nearestTopic);
+      expect(amended.nearestTopic.every((c) => c.channel.endsWith(' - Topic'))).toBe(true);
+    }
+  });
+
   it('fails when a logged amended decision differs from the recomputation', () => {
     const bad = JSON.parse(JSON.stringify(log));
     bad.entries[0].decisionAmended.status = 'chosen';
