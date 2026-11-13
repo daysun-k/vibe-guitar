@@ -60,7 +60,11 @@ describe('speed control', () => {
 
   it('content scripts set only the offered rates on the page player', () => {
     const yt = readFileSync(new URL('../src/extension/content/youtube.ts', import.meta.url), 'utf8');
-    expect(yt).toMatch(/if \(!isPracticeRate\(msg\.rate\)\)[\s\S]*?video\.playbackRate = msg\.rate;/);
+    expect(yt).toMatch(/if \(!isPracticeRate\(msg\.rate\)\)[\s\S]*?applyPracticeRate\(video, msg\.rate, rateViaPagePlayer\)/);
+    // The page-world side checks again (tests/yt-rate.test.ts covers handleRateRequest).
+    const ytMain = readFileSync(new URL('../src/extension/content/youtube-main.ts', import.meta.url), 'utf8');
+    expect(ytMain).toContain('handleRateRequest(e.data,');
+    expect(ytMain).toContain('e.source !== window || e.origin !== location.origin');
     const am = readFileSync(new URL('../src/extension/content/applemusic.ts', import.meta.url), 'utf8');
     expect(am).toContain("msg.action === 'rate' && !isPracticeRate(msg.rate)");
   });

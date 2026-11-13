@@ -103,7 +103,10 @@ Port of the approved mockup B ("진행표형", diagrams 3x):
 - **Transport**: seek bar with section ticks, play/pause (with the count-in when it is on), time, section
   and the **코드 고치기** button; below them the speed buttons and **구간 반복**. Play/pause/seek/speed control
   the YouTube (and YouTube Music) player through the content script.
-- **Speed (0.5× / 0.75× / 1×)**: sets the player's playback rate (the demo clock in demo playback). The
+- **Speed (0.5× / 0.75× / 1×)**: sets the player's playback rate (the demo clock in demo playback). On
+  YouTube and YouTube Music it goes through the page's own player (`movie_player.setPlaybackRate`, from a
+  page-world script that accepts only these three rates), so the site's ⚙ speed menu shows the same rate; if
+  that player API is missing or does not take effect, the `<video>` rate is set directly. The
   buttons show the rate the player reports, so a change in the site's own speed menu shows there too (a rate
   other than the three is shown next to them, e.g. "1.25×"). The speed stays until the user changes it; when
   another recording plays in that tab, a speed the panel set goes back to 1×. Not during an ad. The Apple

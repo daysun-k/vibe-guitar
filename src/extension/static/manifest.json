@@ -23,7 +23,7 @@
       "run_at": "document_idle"
     },
     {
-      "matches": ["https://music.youtube.com/*"],
+      "matches": ["https://www.youtube.com/*", "https://music.youtube.com/*"],
       "js": ["youtube-main.js"],
       "run_at": "document_idle",
       "world": "MAIN"
