@@ -264,6 +264,22 @@ describe('alignment', () => {
     expect(a.driftSec!).toBeLessThan(0.1);
   });
 
+  it('does not fit a time scale to sparse noisy boundaries when the lengths agree (review s14-r3 R3)', () => {
+    const beats = Array.from({ length: 398 }, (_, k) => 1 + 0.5 * k);
+    const jitter = [-0.07, 0.15, 0.17, 0.01, -0.04, 0.16, 0.11, 0.1, 0.15, -0.1, 0.17, -0.18, -0.09, 0.04, 0.18, 0.14, -0.01, -0.12, 0.18, 0.2, 0.07, -0.05, -0.07, 0.17];
+    const changes = jitter.map((j, k) => 1 + 8 * k + j);
+    const a = alignAnnotation(alignInput(beats, changes, { method: 'chord-boundaries', downbeatLandmarks: changes, estimateFirstDownbeatSec: null }));
+    expect(a.excluded).toBeNull();
+    expect(a.driftSec!).toBeLessThan(0.1);
+  });
+
+  it('keeps a same-speed upload whose length differs by a longer intro or outro', () => {
+    const beats = Array.from({ length: 398 }, (_, k) => 1 + 0.5 * k);
+    const changes = Array.from({ length: 100 }, (_, k) => 1 + 2 * k);
+    const a = alignAnnotation(alignInput(beats, changes, { method: 'chord-boundaries', downbeatLandmarks: changes, annotationDurationSec: 200, mediaDurationSec: 201.5, estimateFirstDownbeatSec: null }));
+    expect(a.excluded).toBeNull();
+  });
+
   it('derives downbeats from the first downbeat and the bar length', () => {
     expect(impliedDownbeats([0, 1, 2, 3, 4, 5, 6, 7, 8], 2, 3)).toEqual([2, 5, 8]);
     expect(impliedDownbeats([0, 1, 2], 1.5, 3)).toBeNull();

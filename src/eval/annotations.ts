@@ -387,16 +387,13 @@ function matchedResiduals(landmarks: number[], beats: number[], offset: number, 
 /**
  * Playback-rate check. An upload a little faster or slower than the annotated recording drifts
  * by whole beats across the song, and matching each landmark to its nearest beat hides that
- * (with beats every half second, some beat is always close). So try small time scales instead:
- * scale the landmark times about the first landmark, take the best offset for each scale, and
- * compare the best scale with 1. Local wobble in a few chord boundaries cannot win this way,
- * because it does not make more landmarks fall on beats across the whole song.
+ * (with beats every half second, some beat is always close). Searching many time scales would
+ * overfit sparse or noisy landmarks, so only one hypothesis is tested, taken from independent
+ * evidence: the length ratio of the upload to the annotated recording. The landmark times are
+ * scaled by that ratio about the first landmark, the best offset is taken for it and for scale 1,
+ * and the scale wins only when it puts clearly more landmarks on beats.
  */
-/** How much better (fraction of landmarks on beats) another time scale must fit than 1. */
-export const RATE_WIN_MARGIN = 0.15;
-export const RATE_STEPS = Array.from({ length: 81 }, (_, k) => 1 + (k - 40) * 0.0005);
-
-export function rateFit(landmarks: number[], beats: number[], o: AlignOptions): { rate: number; matchedFraction: number; matchedAtOne: number } {
+export function rateCheck(landmarks: number[], beats: number[], o: AlignOptions, scale: number): { scale: number; matchedFraction: number; matchedAtOne: number } {
   const steps = Math.round(o.maxShiftSec / o.stepSec);
   const t0 = landmarks[0];
   const bestAt = (rate: number) => {
@@ -405,19 +402,11 @@ export function rateFit(landmarks: number[], beats: number[], o: AlignOptions): 
     for (let k = -steps; k <= steps; k++) best = Math.max(best, matchedResiduals(scaled, beats, k * o.stepSec, o.tolSec).length);
     return best / landmarks.length;
   };
-  const atOne = bestAt(1);
-  let rate = 1;
-  let matchedFraction = atOne;
-  for (const r of RATE_STEPS) {
-    if (r === 1) continue;
-    const f = bestAt(r);
-    if (f > matchedFraction) {
-      matchedFraction = f;
-      rate = r;
-    }
-  }
-  return { rate, matchedFraction, matchedAtOne: atOne };
+  return { scale, matchedFraction: bestAt(scale), matchedAtOne: bestAt(1) };
 }
+
+/** How much more of the landmarks (fraction on beats) the length-ratio scale must fit than 1. */
+export const RATE_WIN_MARGIN = 0.15;
 
 /** Downbeats implied by the first downbeat and a fixed bar length, or null. */
 export function impliedDownbeats(beats: number[], firstDownbeatSec: number | null, beatsPerBar: number | null): number[] | null {
@@ -534,12 +523,15 @@ export function alignAnnotation(input: AlignInput, options?: Partial<AlignOption
   result.driftSec = locals.length === 3 ? Math.max(...locals) - Math.min(...locals) : null;
   // A time scale other than 1 that fits clearly more landmarks means the upload runs at another
   // speed; its displacement across the landmarks counts as drift.
-  const rf = rateFit(landmarks, beats, o);
   let rateNote: string | null = null;
-  const rateDrift = Math.abs(rf.rate - 1) * (last - first);
-  if (rf.rate !== 1 && rf.matchedFraction >= rf.matchedAtOne + RATE_WIN_MARGIN && rateDrift > o.driftLimitSec) {
-    result.driftSec = Math.max(result.driftSec ?? 0, rateDrift);
-    rateNote = `landmarks fit a ${(rf.rate * 100).toFixed(2)}% time scale (${Math.round(rf.matchedFraction * 100)}% on beats vs ${Math.round(rf.matchedAtOne * 100)}% at 100%): about ${Math.round(rateDrift * 1000)} ms apart by the end`;
+  const scale = input.mediaDurationSec && input.annotationDurationSec > 0 ? input.mediaDurationSec / input.annotationDurationSec : 1;
+  const rateDrift = Math.abs(scale - 1) * (last - first);
+  if (rateDrift > o.driftLimitSec) {
+    const rf = rateCheck(landmarks, beats, o, scale);
+    if (rf.matchedFraction >= rf.matchedAtOne + RATE_WIN_MARGIN) {
+      result.driftSec = Math.max(result.driftSec ?? 0, rateDrift);
+      rateNote = `landmarks fit the length-ratio time scale ${(scale * 100).toFixed(2)}% (${Math.round(rf.matchedFraction * 100)}% on beats vs ${Math.round(rf.matchedAtOne * 100)}% at 100%): the upload runs at another speed, about ${Math.round(rateDrift * 1000)} ms apart by the end`;
+    }
   }
   for (const c of [coarse.startOffsetSec, coarse.endOffsetSec]) {
     if (c !== null && Math.abs(c - offsetSec) > 2) {
