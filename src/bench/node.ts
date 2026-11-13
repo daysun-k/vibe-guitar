@@ -3,6 +3,8 @@
  *   --runtime node|web   onnxruntime-node (CPU) or onnxruntime-web (WASM in Node)
  *   --clips N            first N clips of the default synthetic set
  *   --compare a.json b.json   compare two chart JSON files (reference, estimate) and exit
+ *   --config <json>      replay-style config ({ "label"?, "recognizer": { … } }, src/replay/replay.ts):
+ *                        the main analysis runs with those candidate options (src/bench/candidate.ts)
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -11,7 +13,9 @@ import { validateChart } from '../chart/validate';
 import { compareCharts } from '../eval/metrics';
 import type { BtcMeta } from '../recognize/chords';
 import { MODEL_FILES, ortRunner, type ModelRunner } from '../recognize/runner';
-import { measureLatency, runBench, type BenchModels } from './run';
+import { parseReplayConfig } from '../replay/replay';
+import { runBenchWithOptions } from './candidate';
+import { measureLatency, runBench, type BenchModels, type ClipResult } from './run';
 import { defaultSpecs } from './synth';
 
 const args = process.argv.slice(2);
@@ -37,6 +41,9 @@ async function main(): Promise<void> {
   const clips = Number(opt('clips', '24'));
   const modelsDir = path.resolve(opt('models', 'models'));
   const outDir = path.resolve(opt('out', 'bench-out'));
+  const configFile = args.includes('--config') ? opt('config', '') : '';
+  if (args.includes('--config') && !configFile) throw new Error('--config needs a file');
+  const config = configFile ? parseReplayConfig(JSON.parse(readFileSync(configFile, 'utf8'))) : null;
   mkdirSync(outDir, { recursive: true });
 
   let make: (file: string) => Promise<ModelRunner>;
@@ -60,19 +67,22 @@ async function main(): Promise<void> {
     majminMeta: meta.models.majmin,
   };
   console.log(`runtime: ${ortVersion}; node ${process.version}; ${process.platform}/${process.arch}`);
+  if (config) console.log(`config: ${path.resolve(configFile)}${config.label ? ` (${config.label})` : ''}; recognizer ${JSON.stringify(config.recognizer)}`);
   const latency = await measureLatency(models, 10);
   console.log('latency', JSON.stringify(latency));
   const specs = defaultSpecs().slice(0, clips);
-  const { results, summary } = await runBench(specs, models, (r, i) => {
+  const progress = (r: ClipResult, i: number) => {
     const s = r.spec;
     const pct = (x: { good: number; total: number }) => (x.total ? ((100 * x.good) / x.total).toFixed(1) : 'n/a');
     console.log(
       `${String(i + 1).padStart(2)} ${r.id} ${s.bpm}bpm ${s.beatsPerBar}/4 ${s.timbre}/${s.voicing}${s.drums ? '+drums' : ''}${s.bass ? '+bass' : ''}${s.snrDb !== null ? ` snr${s.snrDb}` : ''}: ` +
         `majmin ${pct(r.wcsr.majmin)} root ${pct(r.wcsr.root)} 7ths ${pct(r.wcsr.sevenths)} | beatF ${r.beatF.f.toFixed(3)} downF ${r.downbeatF.f.toFixed(3)} | bpm ${r.bpm.est?.toFixed(1)} meter ${r.meter.est}`,
     );
-  });
-  const out = { date: new Date().toISOString(), runtime: ortVersion, node: process.version, platform: `${process.platform}/${process.arch}`, latency, summary, results };
-  const file = path.join(outDir, `bench-${runtime}.json`);
+  };
+  const { results, summary } = config ? await runBenchWithOptions(specs, models, config.recognizer, progress) : await runBench(specs, models, progress);
+  const out = { date: new Date().toISOString(), runtime: ortVersion, node: process.version, platform: `${process.platform}/${process.arch}`, ...(config ? { config, configFile: path.resolve(configFile) } : {}), latency, summary, results };
+  // A config run never overwrites the default bench file.
+  const file = path.join(outDir, config ? `bench-${runtime}-config.json` : `bench-${runtime}.json`);
   writeFileSync(file, JSON.stringify(out, null, 2));
   console.log('summary', JSON.stringify(summary, null, 2));
   console.log(`wrote ${path.relative(process.cwd(), file)}`);

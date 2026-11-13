@@ -77,11 +77,26 @@ hashes the model files it loads and compares them with the hashes the capture re
 bytes differ, or that the capture does not name, is printed as a `WARNING` and listed in the manifest
 (`modelMismatch`), because such a replay does not run the live model bytes.
 
-`--config` is `{ "label"?: string, "recognizer": RecognizerOptions }`. Accepted today:
+`--config` is `{ "label"?: string, "recognizer": CandidateRecognizerOptions }`. Accepted:
 `recognizer.vocabulary` (`full` | `simple` | `majmin`) and `recognizer.decode.changePenalty`
-(three numbers: bar start, half bar, other beats; default `[2, 4, 6]`). Unknown fields are errors. A new
-candidate option is added to `RecognizerOptions` in `src/recognize` and to `parseReplayConfig` in
-`src/replay/replay.ts`.
+(three numbers: bar start, half bar, other beats; default `[2, 4, 6]`), which run the extension's own
+`Recognizer`; and the VGT-18 candidate options of `docs/recognition-candidates.md`, which run
+`CandidateRecognizer` (`src/recognize/candidate-recognizer.ts`, not bundled into the extension):
+`decode.familyFirst: { penaltyScale }` (C1), `units: { halfBeat: true, offbeatExtraPenalty }` (U),
+`emission: "durationWeighted" | "meanLog"` (E), `majmin: "familyDecide" | "average"` (C5; loads
+`btc_majmin.onnx`, whose sha256 goes to the manifest's `candidateModels`), `nLogPrior` (C7),
+`pitchShift: [semitones…]` (C6) and `keyPrior: { bonus, margin }` (C4: a second decode pass with the
+key that `estimateKey` gives for the pass-1 chart; the manifest records it per song). Options combine;
+unknown fields are errors. A new candidate option is added to `CandidateRecognizerOptions` in
+`src/recognize/candidate-decode.ts` and to `parseReplayConfig` in `src/replay/replay.ts`.
+`npm run bench -- --config <json>` runs the synthetic benchmark with the same options.
+
+Baseline analyses (error anatomy, top-k family oracle, unit-grid ceilings, majmin-model
+disagreement) of replayed captures under the frozen maps:
+
+```
+npm run baseline-analysis -- --audio ~/vg-captures/<campaign> --maps docs/recognition-dev-maps.json --annotations <dir> --out <result.json> [--config <json>] [--ids songId,…]
+```
 
 ## Parity
 
