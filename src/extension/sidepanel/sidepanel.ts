@@ -68,6 +68,7 @@ import { PhoneLink, phoneStatusText, type PhoneStatus, type PlaybackSample } fro
 import { ShownModel, modelSongId, playerTargetKey, songIdOf, songViewReady, type TargetParts, restartTargetSec, barStepTargetSec, runPhoneCommand, panelClock, type CommandContext, type ObservedPlayer, type PanelTransport, type WrapSample } from './phone-control';
 import type { CommandOutcome, PhoneCommand, PhoneEntry } from '../../phone/protocol';
 import { buildSongView } from '../../phone/song-view';
+import { CAPTURE_OFF_RECEIVED, captureIsOff, capturedTabLabel, capturedTabOnReport, capturedTabOnUpdate, listenStatusText, type CapturedTab } from './capture-readout';
 
 // ---------- DOM helpers ----------
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
@@ -116,6 +117,10 @@ let leftDraft: EditorDraft | null = null;
 /** Latest listening-mode status for the active tab, and when it arrived. */
 let listen: ListenStateMessage | null = null;
 let listenAt = 0;
+/** Tab-audio capture was stopped or failed (the last capture-status said so); readouts show it is off. */
+let captureOff = false;
+/** The captured tab and its current address (대상 탭). */
+let capturedTab: CapturedTab | null = null;
 /** Auto chart waiting for the user's confirm (a manual chart is in use). */
 let pendingAuto: Chart | null = null;
 /** Lyrics for chartKey (null = none / not loaded) and the request bookkeeping. */
@@ -651,7 +656,10 @@ function renderListen(): void {
   }
   card.hidden = false;
   const l = listen;
-  if (l.modelState !== 'ready') {
+  if (captureOff) {
+    setText('listen-chord', '–');
+    setText('listen-conf', '');
+  } else if (l.modelState !== 'ready') {
     setText('listen-chord', '–');
     setText('listen-conf', l.modelState === 'error' ? `모델 오류: ${l.modelError ?? ''}` : '모델을 불러오는 중…');
   } else if (l.live) {
@@ -665,7 +673,7 @@ function renderListen(): void {
   ($('listen-coverage-fill') as HTMLElement).style.width = `${pct}%`;
   const heard = l.coverage.reduce((s, r) => s + r.toSec - r.fromSec, 0);
   setText('listen-coverage', l.durationSec > 0 ? `들은 구간 ${pct}% (${formatTime(heard)} / ${formatTime(l.durationSec)}, 구간 ${l.coverage.length}개) · 90% 이상 듣고 끝까지 재생하면 자동으로 코드표를 만듭니다.` : '곡 길이를 기다리는 중');
-  setText('listen-status', l.analyzing ? '분석 중… (곡 길이에 따라 수 초)' : l.recordingAudio ? '기록 중' : `기록 멈춤: ${l.idleReason ?? '오디오 대기'}`);
+  setText('listen-status', listenStatusText(l, captureOff));
   $<HTMLButtonElement>('listen-analyze').disabled = l.analyzing || l.modelState !== 'ready' || l.coverage.length === 0;
   const a = l.lastAnalysis;
   if (a && a.recordingKey === key) {
@@ -698,14 +706,34 @@ async function doAdoptAuto(): Promise<void> {
 function renderCaptureStatus(msg: CaptureStatusMessage): void {
   const label = { starting: '시작 중', running: '캡처 중', stopped: '중지됨', error: '오류' }[msg.state];
   setText('cap-state', label);
-  if (msg.url) setText('cap-tab', msg.url);
+  capturedTab = capturedTabOnReport(capturedTab, msg);
+  setText('cap-tab', capturedTabLabel(capturedTab));
   setText('cap-error', msg.error ?? '–');
   $('cap-error').className = msg.state === 'error' ? 'err' : '';
+  captureOff = captureIsOff(msg.state);
+  if (captureOff) {
+    // The last stats (audio received, level, chroma) and the listening card are stale now.
+    setHtml($('cap-received'), `<span class="muted">${CAPTURE_OFF_RECEIVED}</span>`);
+    for (const id of ['cap-rms', 'cap-rate', 'cap-track']) setText(id, '–');
+    $('chroma').innerHTML = '';
+  }
+  if (listen) renderListen();
+}
+
+/** The captured tab navigated (another video or site): show where it is now. */
+function onCapturedTabUpdated(tabId: number, change: { url?: string; status?: string }, tab: chrome.tabs.Tab): void {
+  if (captureOff) return;
+  const next = capturedTabOnUpdate(capturedTab, tabId, change, tab.url);
+  if (next === capturedTab) return;
+  capturedTab = next;
+  setText('cap-tab', capturedTabLabel(capturedTab));
 }
 
 function renderCaptureStats(msg: CaptureStatsMessage): void {
   setText('cap-state', '캡처 중');
-  if (msg.url) setText('cap-tab', msg.url);
+  capturedTab = capturedTabOnReport(capturedTab, msg);
+  setText('cap-tab', capturedTabLabel(capturedTab));
+  captureOff = false;
   setHtml($('cap-received'), msg.audioReceived ? '<span class="ok">예</span>' : `<span class="err">아니요</span>${msg.everReceived ? ' (이전에는 수신됨: 일시정지?)' : ` (${msg.elapsedSec.toFixed(0)}초째 무음)`}`);
   const db = msg.rms > 0 ? 20 * Math.log10(msg.rms) : -Infinity;
   setText('cap-rms', `${msg.rms.toFixed(5)} (${Number.isFinite(db) ? db.toFixed(1) : '-∞'} dBFS)`);
@@ -1837,6 +1865,7 @@ async function main(): Promise<void> {
     });
     // Switching tabs: forget the old player until the new active tab reports.
     // The active tab is followed during demo too, so leaving the demo knows where the user is.
+    chrome.tabs.onUpdated.addListener(onCapturedTabUpdated);
     chrome.tabs.onActivated.addListener((info) => {
       if (myWindowId === null || info.windowId === myWindowId) activeTabId = info.tabId;
       if (demo) return;

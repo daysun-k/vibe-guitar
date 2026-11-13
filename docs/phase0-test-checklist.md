@@ -29,8 +29,12 @@ Things only a person with Chrome, a guitar and the real services can check. Reco
 - [ ] YouTube: click the toolbar icon. 캡처 tab shows 상태 "캡처 중", 오디오 수신 "예", a moving RMS value,
       the sample rate (usually 48000 Hz), and chroma bars that change with the music. The tab stays audible.
 - [ ] YouTube Music: same as above.
-- [ ] Navigate to another video in the same tab: capture keeps running (expected per Chrome docs).
-- [ ] 캡처 중지 stops it and the tab sound remains normal.
+- [ ] Navigate to another video in the same tab: capture keeps running (expected per Chrome docs), and
+      대상 탭 shows the new video's address (on a site outside the extension's permissions it says
+      "다른 사이트 (권한 밖이라 주소는 표시하지 않아요)").
+- [ ] 캡처 중지 stops it and the tab sound remains normal. 상태 "중지됨", 오디오 수신 "아니요 (캡처 꺼짐)", RMS,
+      샘플레이트 and 트랙 "–", no chroma bars; the 듣기 모드 card (if shown) says "기록 멈춤: 캡처가 꺼졌어요 · 툴바
+      아이콘을 누르면 다시 켜져요" with no chord. Clicking the toolbar icon again brings back "캡처 중" and live values.
 - [ ] **Apple Music web (music.apple.com)**, signed in, playing a full song:
       - [ ] Click the toolbar icon. Record: 오디오 수신 예/아니요, RMS level, chroma moving or flat.
             "아니요" with RMS ≈ 0 while music is audible means DRM-protected audio is not capturable → per the
