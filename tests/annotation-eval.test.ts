@@ -273,6 +273,15 @@ describe('alignment', () => {
     expect(a.driftSec!).toBeLessThan(0.1);
   });
 
+  it('does not fit the length-ratio scale to sparse noisy boundaries (review s14-r4 R3)', () => {
+    const beats = Array.from({ length: 398 }, (_, k) => 1 + 0.5 * k);
+    const jitter = [0.19, 0.15, -0.18, -0.03, 0.08, 0.03, -0.14, -0.07, -0.19, -0.14, -0.07, 0.08, 0.14, 0.13, -0.06, -0.06, -0.12, 0.19, -0.14, 0.08, 0.16, -0.2, 0.03, -0.06];
+    const changes = jitter.map((j, k) => 1 + 8 * k + j);
+    const a = alignAnnotation(alignInput(beats, changes, { method: 'chord-boundaries', downbeatLandmarks: changes, annotationDurationSec: 200, mediaDurationSec: 201.5, estimateFirstDownbeatSec: null }));
+    expect(a.excluded).toBeNull();
+    expect(a.driftSec!).toBeLessThan(0.1);
+  });
+
   it('keeps a same-speed upload whose length differs by a longer intro or outro', () => {
     const beats = Array.from({ length: 398 }, (_, k) => 1 + 0.5 * k);
     const changes = Array.from({ length: 100 }, (_, k) => 1 + 2 * k);

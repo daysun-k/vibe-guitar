@@ -407,6 +407,12 @@ export function rateCheck(landmarks: number[], beats: number[], o: AlignOptions,
 
 /** How much more of the landmarks (fraction on beats) the length-ratio scale must fit than 1. */
 export const RATE_WIN_MARGIN = 0.15;
+/**
+ * Guards against chance fits on sparse or noisy boundaries: the test runs only with enough
+ * landmarks, and the scaled landmarks must mostly fall on beats, as a real speed change makes them.
+ */
+export const RATE_MIN_LANDMARKS = 30;
+export const RATE_MIN_FRACTION = 0.8;
 
 /** Downbeats implied by the first downbeat and a fixed bar length, or null. */
 export function impliedDownbeats(beats: number[], firstDownbeatSec: number | null, beatsPerBar: number | null): number[] | null {
@@ -526,9 +532,9 @@ export function alignAnnotation(input: AlignInput, options?: Partial<AlignOption
   let rateNote: string | null = null;
   const scale = input.mediaDurationSec && input.annotationDurationSec > 0 ? input.mediaDurationSec / input.annotationDurationSec : 1;
   const rateDrift = Math.abs(scale - 1) * (last - first);
-  if (rateDrift > o.driftLimitSec) {
+  if (rateDrift > o.driftLimitSec && landmarks.length >= RATE_MIN_LANDMARKS) {
     const rf = rateCheck(landmarks, beats, o, scale);
-    if (rf.matchedFraction >= rf.matchedAtOne + RATE_WIN_MARGIN) {
+    if (rf.matchedFraction >= RATE_MIN_FRACTION && rf.matchedFraction >= rf.matchedAtOne + RATE_WIN_MARGIN) {
       result.driftSec = Math.max(result.driftSec ?? 0, rateDrift);
       rateNote = `landmarks fit the length-ratio time scale ${(scale * 100).toFixed(2)}% (${Math.round(rf.matchedFraction * 100)}% on beats vs ${Math.round(rf.matchedAtOne * 100)}% at 100%): the upload runs at another speed, about ${Math.round(rateDrift * 1000)} ms apart by the end`;
     }
