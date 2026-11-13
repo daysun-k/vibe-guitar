@@ -176,4 +176,8 @@ captured in Aside on DEV songs must reproduce the offline finalist charts (R1 ru
   enough. Licences are recorded.
 
 ## Recorded during implementation
-(none yet)
+- 2026-11-14, before any candidate result (follow-up F8 of the PR #34 review): every "not lower at
+  one decimal" or "lower at one decimal" comparison in this protocol (secondary metrics, group
+  alarms, TEST safeguards) compares the two values in percentage points after rounding each to one
+  decimal place with `Math.round(10 * x) / 10`; equal rounded values are not lower. The group alarm's
+  "below -0.05 pp" wording means this same comparison of the two rounded group means.
