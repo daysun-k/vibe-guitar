@@ -8,6 +8,8 @@ import { isPracticeRate } from '../../play/practice';
 import { sendQuietly, type ExtensionMessage, type PlayerControlResult, type PlayerStateMessage } from '../messages';
 import { chooseRecordingId, isVideoId, type PlayerVideoData, type RecordingIdChoice } from './recording-id';
 import { claimInstance, onRuntimeMessage } from './instance';
+import { applyPracticeRate, parseRateReply, RATE_REPLY_TIMEOUT_MS, RATE_REQUEST, type RateRequest } from './yt-rate';
+import type { PracticeRate } from '../../play/practice';
 
 const instanceSignal = claimInstance('__vibeGuitarYouTube');
 
@@ -50,6 +52,29 @@ window.addEventListener('message', (e: MessageEvent) => {
       ? { videoId: p.videoId, title: String(p.title ?? ''), author: String(p.author ?? ''), sampledAt: Number(p.sampledAt) || Date.now() }
       : null;
 }, { signal: instanceSignal });
+
+/** Practice speed through the page's own player (MAIN world, ./youtube-main.ts); see ./yt-rate.ts. */
+let rateSeq = 0;
+const pendingRates = new Map<number, (r: { ok: boolean }) => void>();
+
+window.addEventListener('message', (e: MessageEvent) => {
+  if (e.source !== window || e.origin !== location.origin) return;
+  const r = parseRateReply(e.data); // untrusted: the page can post anything here
+  if (!r) return;
+  pendingRates.get(r.seq)?.({ ok: r.ok });
+  pendingRates.delete(r.seq);
+}, { signal: instanceSignal });
+
+function rateViaPagePlayer(rate: PracticeRate): Promise<{ ok: boolean }> {
+  const seq = ++rateSeq;
+  return new Promise((resolve) => {
+    pendingRates.set(seq, resolve);
+    window.postMessage({ __vibeGuitar: RATE_REQUEST, seq, rate } satisfies RateRequest, location.origin);
+    setTimeout(() => {
+      if (pendingRates.delete(seq)) resolve({ ok: false });
+    }, RATE_REPLY_TIMEOUT_MS);
+  });
+}
 
 function text(sel: string): string {
   return document.querySelector(sel)?.textContent?.trim() ?? '';
@@ -154,8 +179,12 @@ onRuntimeMessage(instanceSignal, (msg: ExtensionMessage, _sender, sendResponse) 
       sendResponse({ ok: false, reason: `unsupported rate ${String(msg.rate)}` } satisfies PlayerControlResult);
       return;
     }
-    // The page's own player follows a change of the <video> rate (its ratechange report updates the panel).
-    video.playbackRate = msg.rate;
+    // Through the page's player so its ⚙ menu shows the same rate; the <video> ratechange report updates the panel.
+    void applyPracticeRate(video, msg.rate, rateViaPagePlayer).then(() => {
+      report('control:rate');
+      sendResponse({ ok: true } satisfies PlayerControlResult);
+    });
+    return true; // async response
   }
   if (msg.action === 'seek' && typeof msg.time === 'number') video.currentTime = Math.max(0, msg.time);
   if (msg.action === 'pause') video.pause();
