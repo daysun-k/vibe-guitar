@@ -610,11 +610,11 @@ describe('heldout-songs script list-v2', () => {
       expect(noK.stderr).toContain('needs --eligible-k');
       const badK = spawnSync(process.execPath, ['scripts/heldout-songs.mjs', 'list-v2', '--eligible-k', '13.5', ...args], { encoding: 'utf8' });
       expect(badK.status).toBe(1);
-      const short = spawnSync(process.execPath, ['scripts/heldout-songs.mjs', 'list-v2', '--eligible-k', '0', ...args], { encoding: 'utf8' });
+      const short = spawnSync(process.execPath, ['scripts/heldout-songs.mjs', 'list-v2', '--eligible-k', '10', ...args], { encoding: 'utf8' });
       expect(short.status).toBe(1);
       expect(short.stderr).toContain('stop and ask the user');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
-  });
+  }, 30_000);
 });

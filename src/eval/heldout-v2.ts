@@ -46,10 +46,16 @@ export function betaBinomialPmf(x: number, n: number, a: number, b: number): num
   return Math.exp(logChoose + logBeta(x + a, n - x + b) - logBeta(a, b));
 }
 
-/** P(X >= m) for X ~ BetaBinomial(n, a, b). */
+/** P(X >= m) for X ~ BetaBinomial(n, a, b): the sum over the shorter side (1 minus P(X < m) when that side is below m). */
 export function betaBinomialAtLeast(m: number, n: number, a: number, b: number): number {
+  const lo = Math.max(0, Math.ceil(m));
+  if (lo > n) return 0;
   let p = 0;
-  for (let x = Math.max(0, Math.ceil(m)); x <= n; x++) p += betaBinomialPmf(x, n, a, b);
+  if (lo <= n - lo) {
+    for (let x = 0; x < lo; x++) p += betaBinomialPmf(x, n, a, b);
+    return Math.min(1, Math.max(0, 1 - p));
+  }
+  for (let x = lo; x <= n; x++) p += betaBinomialPmf(x, n, a, b);
   return Math.min(1, p);
 }
 
