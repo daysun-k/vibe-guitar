@@ -3,7 +3,7 @@
  * scripts, phone-friendly), in the style of the accuracy overview report.
  */
 import { escapeHtml } from '../extension/sidepanel/diagram';
-import type { EvalResult, ExclusionCode, GroupTotals, SongResult } from './annotations';
+import type { ChanceWindow, EvalResult, ExclusionCode, GroupTotals, SensitivityCandidate, SongResult } from './annotations';
 import type { SongMeanAnalysis } from './song-mean';
 import { durationKo } from './report';
 
@@ -26,6 +26,7 @@ const REASON_KO: Record<ExclusionCode, string> = {
   'too-few-landmarks': '정렬에 쓸 기준점이 너무 적어요',
   'duration-mismatch': '업로드 길이가 주석의 음원 길이와 2초 넘게 달라요(다른 버전일 가능성)',
   'landmarks-disagree': '주석의 기준점이 자동 박자와 잘 맞지 않아요',
+  'near-chance': '기준점이 박자 위에 놓이는 비율이 아무 시각이나 찍었을 때보다 분명히 높다는 근거가 부족해요(틀린 정렬이라는 증거는 아니에요)',
   drift: '곡의 앞·중간·끝에서 맞춘 시차가 속도 보정 뒤에도 0.1초 넘게 달라요(속도나 편집 차이)',
   ambiguous: '1박 또는 1마디 차이 후보 가운데 시차를 하나로 정할 수 없어요(0초 근처 후보와 마디 위치가 서로 다른 시차를 가리키는 경우 포함)',
 };
@@ -35,6 +36,8 @@ function groupTiles(title: string, t: GroupTotals, help: string): string {
     `<div class="tile"><div class="tile-label">${label}</div><div class="tile-num">${pct(w.score)}</div><div class="tile-sub">곡 평균 ${pct(mean)} · ${durationKo(w.evaluatedSec)}</div></div>`;
   return `<section class="card"><h2>${escapeHtml(title)}</h2><p class="muted small">${escapeHtml(help)} 채점한 곡 ${t.songs}개.</p><div class="tiles">${tile('장·단 코드 이름', t.majmin, t.songMean.majmin)}${tile('근음', t.root, t.songMean.root)}${tile('7th 포함', t.sevenths, t.songMean.sevenths)}</div></section>`;
 }
+
+const SENS_KO = { majmin: '장·단', root: '근음', sevenths: '7th' } as const;
 
 const COMPLEXITY_KO: Record<string, string> = { simple: '단순', moderate: '보통', complex: '복잡' };
 
@@ -69,6 +72,10 @@ function analysisSection(a: SongMeanAnalysis): string {
 <p class="muted small">이 구간은 공식 업로드가 있고 정렬을 통과한, 이런 곡들에 대한 불확실성이에요. 곡끼리 서로 독립이라고 가정해요. 업로드 유무나 정렬 통과 여부로 곡이 걸러지는 효과, 정렬 오류, 학습 자료와 겹칠 가능성, Billboard 곡 전체에 대한 일반화는 이 구간에 들어 있지 않아요.</p></section>`;
 }
 
+const GRID_KO = { G0: '전체 박자', H0: '반쪽 박 격자 H0', H1: '반쪽 박 격자 H1' } as const;
+
+const CHANCE_PART_KO: Record<ChanceWindow['part'], string> = { span: '전체', start: '앞', middle: '중간', end: '끝' };
+
 function alignmentCell(r: SongResult): string {
   const a = r.alignment;
   if (!a) return '–';
@@ -79,6 +86,12 @@ function alignmentCell(r: SongResult): string {
   if (a.driftSec !== null) parts.push(`앞·중간·끝 차이 ${Math.round(a.driftSec * 1000)} ms${rate !== 1 ? '(속도 보정 뒤)' : ''}`);
   if (a.durationDiffSec !== null) parts.push(`길이 차이 ${a.durationDiffSec > 0 ? '+' : ''}${a.durationDiffSec.toFixed(1)}초`);
   parts.push(`기준점 일치 ${pct(a.matchedFraction)}`);
+  if (a.chance)
+    parts.push(
+      `우연 수준 검사 ${a.chance.passed ? `통과(${(a.chance.grids ?? []).filter((g) => g.passed).map((g) => GRID_KO[g.grid]).join(', ') || '전체 박자'})` : '<b>통과 못 함</b>(반쪽 박 격자도 통과 못 함)'}, 전체 박자 기준: ${a.chance.windows
+        .map((w) => `${CHANCE_PART_KO[w.part]} ${w.matched}/${w.landmarks}(우연 ${pct(w.chance)}, p ${w.p.toPrecision(2)}${w.insufficient ? ', 기준점이 적어 통과 불가' : ''})`)
+        .join(' · ')}`,
+    );
   if (a.barConflict) parts.push('<b>0초 근처 후보와 마디 위치가 서로 다른 시차를 가리켜서 시차가 정해지지 않았어요</b>');
   else if (a.ambiguous) parts.push('<b>1박 또는 1마디 차이 후보를 가릴 수 없어 시차가 정해지지 않았어요</b>');
   for (const w of a.warnings) parts.push(`<span class="muted">${escapeHtml(w)}</span>`);
@@ -110,6 +123,34 @@ function exclusionList(rows: SongResult[]): string {
     return `<li><b>${escapeHtml(r.title)}</b> (${escapeHtml(r.artist)}): ${escapeHtml(STATUS_KO[r.status])}. ${escapeHtml(why)}${r.reason ? ` <span class="muted">[${escapeHtml(r.reason)}]</span>` : ''}</li>`;
   });
   return `<section class="card"><h2>채점하지 않은 곡</h2><ul class="notes">${items.join('')}</ul></section>`;
+}
+
+const SENS_KEYS = ['majmin', 'root', 'sevenths'] as const;
+
+/**
+ * Candidate-offset sensitivity (VGT-7, PR #32): one row per selected song, the score under every
+ * alignment candidate with the per-song min-max range. No mean across candidates or songs and no
+ * best-candidate pick.
+ */
+function sensitivitySection(rows: SongResult[]): string {
+  const cand = (c: SensitivityCandidate, hypothetical: boolean) => {
+    const head = `${c.chosen ? '<b>고른 후보</b> ' : ''}시차 ${ms(c.offsetSec * 1000)} ms${c.rate !== 1 ? ` · 속도 ${c.rate > 1 ? '+' : ''}${((c.rate - 1) * 100).toFixed(3)}%` : ''} · 기준점 일치 ${pct(c.matchedFraction)} · 마디 위치 ${c.barScore === null ? '–' : pct(c.barScore)}`;
+    const scores = SENS_KEYS.map((k) => `${SENS_KO[k]} ${pct1(c[k].score)} (평가 ${sec1(c[k].evaluatedSec)}, 제외 ${sec1(c[k].excludedSec)})`).join(' · ');
+    return `<li>${head}<br>${hypothetical ? '<span class="muted">이 시차라면 나왔을 가상 점수(hypothetical score under this map)</span>: ' : ''}${scores}${c.notCoveredSec > 0.5 ? ` · 기록 안 됨 ${sec1(c.notCoveredSec)}` : ''}</li>`;
+  };
+  const items = rows.map((r) => {
+    const name = `<b>${escapeHtml(r.title)}</b> <span class="muted">(${escapeHtml(r.artist)} · ${escapeHtml(STATUS_KO[r.status])})</span>`;
+    const s = r.sensitivity;
+    if (!s) return `<li>${name}: <span class="muted">기록 없음</span></li>`;
+    if (!s.available) return `<li>${name}: <span class="muted">계산할 수 없음: ${escapeHtml(s.reason)}</span></li>`;
+    const hypothetical = r.status !== 'scored';
+    const range = SENS_KEYS.map((k) => {
+      const xs = s.candidates.map((c) => c[k].score).filter(Number.isFinite);
+      return `${SENS_KO[k]} ${xs.length ? `${pct1(Math.min(...xs))} ~ ${pct1(Math.max(...xs))}` : '–'}`;
+    }).join(' · ');
+    return `<li>${name}<br>후보 ${s.candidates.length}개, 곡 안의 범위(가장 낮은 값 ~ 가장 높은 값): ${range}${hypothetical ? ' <span class="muted">(가상 점수)</span>' : ''}<ul class="notes small">${s.candidates.map((c) => cand(c, hypothetical)).join('')}</ul></li>`;
+  });
+  return `<section class="card"><h2>민감도: 정렬 후보마다 계산한 점수 (공식 점수가 아니에요)</h2><p class="muted small">Sensitivity: score at each alignment candidate (not an official score)</p><p class="note small">정렬 후보(대개 1박 또는 1마디 차이) 각각의 시차로 채점하면 점수가 얼마나 달라지는지 보여 줘요. 공식 점수, 전체 숫자, 미리 정한 곡 평균 분석에는 들어가지 않아요. 제외된 곡의 값은 그 시차라면 나왔을 가상 점수예요. 후보끼리나 곡끼리의 평균은 내지 않고, 가장 좋은 후보를 고르지도 않아요.</p><ul class="notes small">${items.join('')}</ul></section>`;
 }
 
 function timingSection(res: EvalResult, rows: SongResult[]): string {
@@ -144,6 +185,7 @@ function songListNote(res: EvalResult): string {
 const METHOD_REST = `
 <dt>시간 맞추기(정렬)</dt><dd>코드 인식 결과는 쓰지 않았어요. 주석의 박자(없으면 주석의 코드 경계)를 자동 코드표의 Beat This! 박자와 맞춰 곡 전체의 시차를 정하고, 채점 전에 고정했어요. 같은 녹음도 음원마다 재생 속도가 아주 조금(0.2% 이하) 다를 수 있어서, 이런 속도 차이는 시차와 함께 맞춰요. 단, 곡을 다섯 구간으로 나눠 한 구간씩 빼고 맞춘 값이 뺀 구간에서도 분명히 더 잘 맞을 때만 속도 차이를 써요(5%p 이상 개선, 아무 시각이나 찍어도 맞는 비율을 뺀 뒤 80% 이상 일치). 그렇게 맞춘 뒤에도 곡의 앞·중간·끝 시차가 0.1초 넘게 다르거나, 업로드와 주석 음원의 길이가 2초 넘게 다르거나, 길이 비율로 본 재생 속도가 다르면 다른 녹음일 수 있어서 제외했어요. 박자 주석이 없는 곡(Queen, Billboard)은 정렬 근거가 약하다고 표시했어요.</dd>
 <dt>1박 차이 문제</dt><dd>박자는 일정하게 반복돼서 1박 어긋난 시차도 거의 똑같이 잘 맞아요. 같은 음원이면 시작 시차가 작으므로, 0.2초 안쪽 후보가 있고 다른 후보가 0.4초보다 멀리 떨어져 있으면 그 값을 써요. 이때 마디 첫 박 위치가 분명히 다른 후보를 가리키면, 마디 위치로 후보를 바꾸지 않고 시차가 정해지지 않은 것으로 보고 제외해요. 후보 간격이 0.4초 이하면 어떤 시차든 0.2초 안쪽 후보가 우연히 생기므로, 마디 첫 박 위치로 골라요. 마디 첫 박 위치로도 후보 하나를 가를 수 없으면 시차가 정해지지 않은 것으로 보고 제외했어요.</dd>
+<dt>우연 수준 검사</dt><dd>박자 간격이 길면 기준점을 아무 시각에나 찍어도 박자 근처(허용 오차 안)에 떨어질 확률이 꽤 커요. 그래서 고른 시차에서 곡 전체와 앞·중간·끝 구간마다, 박자 허용 범위가 그 구간을 덮는 비율(우연히 맞을 확률)을 구하고, 박자 위에 놓인 기준점 수가 우연보다 분명히 많은지 이항 검정(한쪽)으로 확인해요. 먼저 전체 박자에서 네 구간이 모두 유의수준 5%를 통과하는지 봐요. 추정 박자가 실제 템포의 두 배로 잡힌 경우를 위해, 전체 박자에서 통과하지 못하면 한 박씩 건너뛴 두 격자(반쪽 박 격자 H0, H1)를 같은 시차에서 따로 검사해요. 이때 박자 수는 주변 박자 간격으로 세기 때문에, 빠진 박자는 두 칸으로 셉니다. 그래서 박자 하나가 빠져도 뒤쪽 박자의 짝·홀이 바뀌지 않아요. 반쪽 박 격자는 네 구간이 모두 유의수준 2.5%를 통과해야 하고, 전체 박자나 두 반쪽 박 격자 가운데 하나라도 통과하면 통과예요. 통과하지 못하면 정렬이 틀렸다는 뜻이 아니라 우연보다 낫다는 근거가 부족하다는 뜻이고, 이런 곡은 제외해요. 이 규칙은 첫 번째 학습 외 묶음의 결과를 본 뒤에 추가했어요(PR #32).</dd>
 <dt>채점</dt><dd>저장소의 비교 코드(npm run bench -- --compare, 정확도 모아 보기와 같은 compareCharts)로, 주석의 첫 코드부터 마지막 코드까지 자동 코드표가 기록한 시간만 비교했어요. 장·단, 근음, 7th 포함 세 가지 기준이에요.</dd>
 <dt>주석 라벨 바꾸기</dt><dd>주석의 Harte 표기(예: Bb:maj6(7,#11), C:min/b3)를 저장소 코드 이름으로 바꿨어요. 실제 음높이 그대로, 샵 표기로 통일해서 Db와 C#을 같은 코드로 봐요. 자리바꿈(슬래시 베이스)은 기본형과 같게 채점해요. 9·11·13 같은 확장음은 장·단과 근음에서는 무시하고, 7th 포함 기준에서는 7th만 봐요. 3음이 없는 코드(파워 코드 C5, 단음)는 근음 기준에서만 채점해요. N(코드 없음)은 자동 코드표도 N이어야 맞아요. X(알 수 없음)는 채점에서 빼요.</dd>
 <dt>제외 시간</dt><dd>비교한 시간 가운데 그 기준으로 채점할 수 없는 시간이에요(X, 기준 밖 코드: 예를 들어 장·단 기준에서 sus4·dim·aug). 기록 안 됨은 주석에는 코드가 있는데 자동 코드표가 기록하지 않은 시간이에요.</dd>
@@ -192,6 +234,7 @@ export function renderAnnotationReport(res: EvalResult): string {
   const count = (s: SongResult['status']) => evalRows.filter((r) => r.status === s).length;
   const t = res.totals;
   const parts = [
+    res.label ? `<p class="note"><b>${escapeHtml(res.label)}</b></p>` : '',
     `<h1>공개 정답 코드와 비교한 자동 코드표 정확도</h1>`,
     `<p class="muted small">만든 날짜 ${escapeHtml(res.generatedAt.slice(0, 10))} · 곡 목록 확정 ${escapeHtml(res.songList.declaredAt)}${res.songList.sha256 ? ` (sha256 ${escapeHtml(res.songList.sha256.slice(0, 12))})` : ''} · 평가 곡 ${evalRows.length}개 중 채점 ${count('scored')}, 제외 ${count('excluded')}, 아직 없음 ${count('missing')}, 오류 ${count('error')}</p>`,
     `<section class="card"><p>연구용으로 공개된 사람의 코드 주석(정답)과, 같은 녹음의 공식 업로드를 끝까지 재생해서 만든 자동 코드표를 비교했어요. 귀로 판단하지 않아도 되는 객관적인 숫자예요.</p><p class="note small">코드 인식 모델(BTC)은 Isophonics 주석(Beatles, Queen 등)으로 학습됐어요. 그래서 “학습 겹침 가능” 곡의 숫자는 실제보다 높게 나올 수 있어요. 앱의 실제 실력은 “학습에 없는 곡” 숫자로 판단하세요.</p></section>`,
@@ -202,6 +245,7 @@ export function renderAnnotationReport(res: EvalResult): string {
     `<section class="card"><h2>곡별 결과</h2>${songTable(evalRows)}</section>`,
     exclusionList(evalRows),
     pilots.length ? `<section class="card"><h2>시범 곡 (전체 숫자에 넣지 않음)</h2>${songTable(pilots)}</section>` : '',
+    [...evalRows, ...pilots].some((r) => r.sensitivity) ? sensitivitySection([...evalRows, ...pilots]) : '',
     timingSection(res, [...evalRows, ...pilots]),
     `<section class="card small"><h2>계산 방법</h2><dl class="glossary">\n${songListNote(res)}${METHOD_REST}`,
     datasetSection(res),

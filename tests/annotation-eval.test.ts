@@ -19,6 +19,7 @@ import {
   parseBeats,
   parseLab,
   parseSongList,
+  groupTotals,
   parseUploads,
   scoreSong,
   withoutBass,
@@ -28,6 +29,7 @@ import {
   type SongList,
 } from '../src/eval/annotations';
 import { chordChangeOffset, reduceSymbol } from '../src/eval/metrics';
+import { songMeanAnalysis } from '../src/eval/song-mean';
 
 const sym = (label: string) => {
   const m = harteToSymbol(label);
@@ -264,8 +266,9 @@ describe('alignment', () => {
     const changes = Array.from({ length: 100 }, (_, k) => (1 + 2 * k) * 1.01);
     const a = alignAnnotation(alignInput(beats, changes, { method: 'chord-boundaries', downbeatLandmarks: changes, annotationDurationSec: 202, mediaDurationSec: 200, estimateFirstDownbeatSec: null }));
     expect(a.driftSec!).toBeGreaterThan(1);
-    expect(a.excluded?.code).toBe('drift');
-    expect(a.excluded?.reason).toContain('time scale');
+    // PR #32: the landmarks sit at chance under any single offset, and the chance-level screen
+    // comes before drift in the exclusion order; the drift diagnostic is still recorded.
+    expect(a.excluded?.code).toBe('near-chance');
   });
 
   it('keeps a clean song whose chord boundaries wobble for a few changes (review s14-r2 R2)', () => {
@@ -282,7 +285,9 @@ describe('alignment', () => {
     const jitter = [-0.07, 0.15, 0.17, 0.01, -0.04, 0.16, 0.11, 0.1, 0.15, -0.1, 0.17, -0.18, -0.09, 0.04, 0.18, 0.14, -0.01, -0.12, 0.18, 0.2, 0.07, -0.05, -0.07, 0.17];
     const changes = jitter.map((j, k) => 1 + 8 * k + j);
     const a = alignAnnotation(alignInput(beats, changes, { method: 'chord-boundaries', downbeatLandmarks: changes, estimateFirstDownbeatSec: null }));
-    expect(a.excluded).toBeNull();
+    // PR #32: 13/24 on a beat at 40% chance is not above chance, so the song is now excluded as
+    // near-chance; what this case checks (no time scale fitted, no drift) is unchanged.
+    expect(a.excluded?.code).toBe('near-chance');
     expect(a.driftSec!).toBeLessThan(0.1);
     expect(a.rate).toBe(1);
   });
@@ -292,7 +297,8 @@ describe('alignment', () => {
     const jitter = [0.19, 0.15, -0.18, -0.03, 0.08, 0.03, -0.14, -0.07, -0.19, -0.14, -0.07, 0.08, 0.14, 0.13, -0.06, -0.06, -0.12, 0.19, -0.14, 0.08, 0.16, -0.2, 0.03, -0.06];
     const changes = jitter.map((j, k) => 1 + 8 * k + j);
     const a = alignAnnotation(alignInput(beats, changes, { method: 'chord-boundaries', downbeatLandmarks: changes, annotationDurationSec: 200, mediaDurationSec: 201.5, estimateFirstDownbeatSec: null }));
-    expect(a.excluded).toBeNull();
+    // PR #32: excluded as near-chance (13/24 at 40% chance); no length-ratio scale and no drift, as before.
+    expect(a.excluded?.code).toBe('near-chance');
     expect(a.driftSec!).toBeLessThan(0.1);
     expect(a.rate).toBe(1);
   });
@@ -402,6 +408,12 @@ describe('alignment: bounded rate and offset choice (VGT-7)', () => {
     const a = alignAnnotation(alignInput(beats, lm, { method: 'chord-boundaries', downbeatLandmarks: lm, estimateFirstDownbeatSec: null }));
     expect(a.rate).toBe(1);
     expect(a.candidates.length).toBeGreaterThan(1);
+    expect(a.ambiguous).toBe(true);
+    // PR #32: on all beats (0.21 s, chance about 95%) the landmarks are at chance, but every landmark
+    // sits on one beat-count parity, and that half-rate grid (0.42 s, chance about 48%) passes at
+    // 0.025 (Amendment 2), so the song reaches the ambiguous check as before.
+    expect(a.chance!.grids[0].passed).toBe(false);
+    expect(a.chance!.passed).toBe(true);
     expect(a.excluded?.code).toBe('ambiguous');
   });
 
@@ -873,6 +885,53 @@ describe('evaluateSongs', () => {
     expect(html).toContain('<details>');
   });
 
+  it('gives every selected song a sensitivity entry that never becomes an official score (VGT-7, PR #32)', () => {
+    for (const r of res.songs) expect(r.sensitivity).toBeDefined();
+    expect(by('d').sensitivity).toEqual({ available: false, reason: 'no upload' });
+    // Scored song: the chosen candidate's entry is the official score under the same map.
+    const sa = by('a').sensitivity!;
+    if (!sa.available) throw new Error('expected candidates');
+    const chosen = sa.candidates.filter((c) => c.chosen);
+    expect(chosen).toHaveLength(1);
+    expect(chosen[0].offsetSec).toBe(by('a').alignment!.offsetSec);
+    expect(chosen[0].majmin.score).toBe(by('a').score!.comparison.majmin.score);
+    expect(chosen[0].majmin.evaluatedSec).toBe(by('a').score!.comparison.majmin.evaluatedSec);
+    expect(sa.candidates.length).toBe(by('a').alignment!.candidates.length);
+    // Excluded song: hypothetical scores, no `score`, status unchanged.
+    const sc = by('c').sensitivity!;
+    expect(sc.available).toBe(true);
+    expect(by('c').status).toBe('excluded');
+    expect(by('c').score).toBeUndefined();
+  });
+
+  it('keeps totals and the song-mean analysis independent of the sensitivity entries (VGT-7, PR #32)', () => {
+    const scramble = res.songs.map((r) =>
+      r.sensitivity?.available
+        ? { ...r, sensitivity: { available: true as const, candidates: r.sensitivity.candidates.map((c) => ({ ...c, majmin: { score: 0, evaluatedSec: 1e6, excludedSec: 0 } })) } }
+        : r,
+    );
+    const evalRows = (rows: typeof res.songs) => rows.filter((r) => r.role === 'eval');
+    expect(groupTotals(evalRows(scramble))).toEqual(res.totals.all);
+    expect(songMeanAnalysis(evalRows(scramble).filter((r) => r.btcTraining === 'not-known'))).toEqual(res.analysis!.heldOut);
+    const stripped = res.songs.map(({ sensitivity: _s, ...r }) => r);
+    expect(groupTotals(evalRows(stripped))).toEqual(res.totals.all);
+  });
+
+  it('renders the sensitivity section, the near-chance code and the run label (VGT-7, PR #32)', () => {
+    const songs = res.songs.map((r) =>
+      r.id === 'b' ? { ...r, status: 'excluded' as const, score: undefined, reason: 'near chance', alignment: { ...r.alignment!, excluded: { code: 'near-chance' as const, reason: 'near chance' } } } : r,
+    );
+    const html = renderAnnotationReport({ ...res, songs, label: 'Post-result re-analysis <test>' });
+    expect(html).toContain('민감도: 정렬 후보마다 계산한 점수 (공식 점수가 아니에요)');
+    expect(html).toContain('Sensitivity: score at each alignment candidate (not an official score)');
+    expect(html).toContain('hypothetical score under this map');
+    expect(html).toContain('분명히 높다는 근거가 부족해요(틀린 정렬이라는 증거는 아니에요)');
+    expect(html).toContain('Post-result re-analysis &lt;test&gt;');
+    expect(html.indexOf('Post-result re-analysis')).toBeLessThan(html.indexOf('<h1>'));
+    expect(html).not.toContain('undefined');
+    expect(html).not.toContain('NaN');
+  });
+
   it('renders every exclusion code in Korean, including ambiguous (VGT-7 re-scoring crash)', () => {
     const songs = res.songs.map((r) =>
       r.id === 'b' ? { ...r, status: 'excluded' as const, score: undefined, reason: 'offset not determined', alignment: { ...r.alignment!, ambiguous: true, excluded: { code: 'ambiguous' as const, reason: 'offset not determined' } } } : r,
@@ -907,6 +966,15 @@ describe('eval-annotations script', () => {
       expect(out.songs.find((s: { id: string }) => s.id === 'a').status).toBe('scored');
       expect(out.songList.sha256).toMatch(/^[0-9a-f]{64}$/);
       expect(readFileSync(path.join(dir, 'charts', 'annotation-eval.html'), 'utf8')).toContain('공개 정답 코드');
+      expect(out.label).toBeUndefined();
+      const labelled = spawnSync(
+        process.execPath,
+        ['scripts/eval-annotations.mjs', '--annotations', path.join(dir, 'ann'), '--charts', path.join(dir, 'charts'), '--songs', path.join(dir, 'songs.json'), '--out', path.join(dir, 'post'), '--label', 'Post-result re-analysis'],
+        { encoding: 'utf8' },
+      );
+      expect(labelled.status, labelled.stderr).toBe(0);
+      expect(JSON.parse(readFileSync(path.join(dir, 'post.json'), 'utf8')).label).toBe('Post-result re-analysis');
+      expect(readFileSync(path.join(dir, 'post.html'), 'utf8')).toContain('<p class="note"><b>Post-result re-analysis</b></p>');
       const bad = spawnSync(process.execPath, ['scripts/eval-annotations.mjs', '--charts', dir], { encoding: 'utf8' });
       expect(bad.status).toBe(1);
     } finally {
