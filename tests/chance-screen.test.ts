@@ -1,6 +1,6 @@
 // Chance-level screen of the annotation alignment (VGT-7, PR #32): V0 cases with known truth.
 import { describe, expect, it } from 'vitest';
-import { CHANCE_ALPHA, alignAnnotation, beatWindowCoverage, binomialUpperTail, chanceScreen, type AlignInput, type Alignment } from '../src/eval/annotations';
+import { CHANCE_ALPHA, alignAnnotation, beatWindowCoverage, binomialUpperTail, chanceScreen, halfRateBeatCounts, type AlignInput, type Alignment } from '../src/eval/annotations';
 
 function grid(start: number, end: number, period: number, jitter = 0): number[] {
   const out: number[] = [];
@@ -193,36 +193,83 @@ describe('chance-level screen: V0 cases with known truth (VGT-7, PR #32)', () =>
     expect(a.excluded?.reason).not.toMatch(/start third|middle third|whole span/);
   });
 
-  it('passes a doubled-tempo grid through a half-rate grid when the landmarks sit on one parity (Amendment 1)', () => {
-    // Estimate beats every 0.25 s (twice the 0.5 s annotated tempo); landmarks on every other estimate beat only.
-    const dbl = grid(1, 190, 0.25, 0.005);
-    const lm = dbl.filter((_, k) => k % 24 === 0).map((t) => t - 0.15); // about 10 per third: too few to pass at 80% chance
+  it('counts beats by local intervals, so a dropped beat counts two steps (Amendment 2)', () => {
+    expect(halfRateBeatCounts([])).toEqual([]);
+    expect(halfRateBeatCounts([3])).toEqual([0]);
+    const reg = grid(1, 20, 0.5, 0.01);
+    expect(halfRateBeatCounts(reg)).toEqual(reg.map((_, k) => k));
+    const dropped = reg.filter((_, k) => k !== 11);
+    const c = halfRateBeatCounts(dropped);
+    expect(c.slice(0, 11)).toEqual(Array.from({ length: 11 }, (_, k) => k));
+    expect(c.slice(11)).toEqual(dropped.slice(11).map((_, k) => k + 12));
+  });
+
+  it('passes a doubled-tempo grid with one dropped beat through a half-rate grid, landmarks on the annotated beats (Amendment 2)', () => {
+    // Annotated beats every 0.5 s; estimate beats every 0.25 s (doubled tempo) with one off-beat dropped in the middle third.
+    const full = grid(1, 190, 0.25, 0.005);
+    const dbl = full.filter((_, k) => k !== 381);
+    const lm = full.filter((_, k) => k % 24 === 0).map((t) => t - 0.15); // annotated beats, about 10 per third
     const s = chanceScreen(lm, dbl, 0.15, 1, 0.1);
-    expect(s.gridAlpha).toBeCloseTo(0.05 / 3, 12);
-    expect(s.grids.map((g) => g.grid)).toEqual(['G0', 'G1', 'G2']);
+    expect(s.alpha).toBe(CHANCE_ALPHA);
+    expect(s.halfRateAlpha).toBeCloseTo(CHANCE_ALPHA / 2, 12);
+    expect(s.grids.map((g) => [g.grid, g.alpha])).toEqual([
+      ['G0', CHANCE_ALPHA],
+      ['H0', CHANCE_ALPHA / 2],
+      ['H1', CHANCE_ALPHA / 2],
+    ]);
     expect(s.grids[0].windows[1].chance).toBeCloseTo(0.8, 1);
+    expect(s.grids[0].passed).toBe(false);
     expect(s.grids[1].windows[1].chance).toBeCloseTo(0.4, 1);
     expect(s.grids[1].medianBeatIntervalSec).toBeCloseTo(0.5, 1);
-    expect(s.grids[0].passed).toBe(false);
+    expect(s.grids[1].windows.every((w) => w.matched === w.landmarks)).toBe(true);
     expect(s.grids[1].passed).toBe(true);
     expect(s.grids[2].windows.every((w) => w.matched === 0)).toBe(true);
     expect(s.passed).toBe(true);
     expect(s.windows).toBe(s.grids[0].windows);
+    // Index parity (Amendment 1) flips at the dropped beat: the even-index beats miss the end third.
+    const byIndex = chanceScreen(lm, dbl.filter((_, k) => k % 2 === 0), 0.15, 1, 0.1);
+    expect(byIndex.windows[3].matched).toBe(0);
   });
 
-  it('keeps random-phase landmarks failing on all three grids, with per-grid diagnostics (Amendment 1)', () => {
+  it('keeps random-phase landmarks failing on all three grids, with per-grid diagnostics (Amendment 2)', () => {
     const r = rng(2);
     const lm = Array.from({ length: 48 }, () => 5 + r() * 180).sort((x, y) => x - y);
     const a = alignAnnotation(changesInput(grid(1, 190, 0.64), lm, { estimateFirstDownbeatSec: null }));
-    expect(a.chance!.grids).toHaveLength(3);
+    expect(a.chance!.grids.map((g) => g.grid)).toEqual(['G0', 'H0', 'H1']);
     for (const g of a.chance!.grids) {
       expect(g.windows).toHaveLength(4);
       expect(g.passed).toBe(false);
-      for (const w of g.windows) expect(w.insufficient).toBe(Math.pow(w.chance, w.landmarks) > 0.05 / 3);
+      for (const w of g.windows) {
+        expect(w.insufficient).toBe(Math.pow(w.chance, w.landmarks) > g.alpha);
+        expect(w.passed).toBe(w.p <= g.alpha);
+      }
     }
     expect(a.chance!.grids[1].beats + a.chance!.grids[2].beats).toBe(a.chance!.grids[0].beats);
     expect(a.excluded?.code).toBe('near-chance');
-    expect(a.excluded?.reason).toMatch(/no half-rate grid passed$/);
+    expect(a.excluded?.reason).toMatch(/^landmarks on a beat not clearly above chance \(p > 0\.05\): /);
+    expect(a.excluded?.reason).toMatch(/; neither half-rate grid \(H0, H1 at p <= 0\.025\) passed$/);
+  });
+
+  it('passes the screen in every case where all beats pass at 0.05, the original test (Amendment 2)', () => {
+    let g0Passed = 0;
+    let g0Failed = 0;
+    for (let seed = 1; seed <= 300; seed++) {
+      const r = rng(seed);
+      const period = 0.35 + r() * 0.45;
+      const beats = grid(1, 190, period, 0.01);
+      const n = 12 + Math.floor(r() * 60);
+      const onBeat = r();
+      const lm = Array.from({ length: n }, () => (r() < onBeat ? beats[Math.floor(r() * beats.length)] + (r() - 0.5) * 0.1 : 2 + r() * 185)).sort((x, y) => x - y);
+      const s = chanceScreen(lm, beats, 0, 1, 0.1);
+      const original = s.windows.length === 4 && s.windows.every((w) => w.p <= 0.05);
+      expect(s.grids[0].passed).toBe(original);
+      if (original) {
+        g0Passed++;
+        expect(s.passed).toBe(true);
+      } else g0Failed++;
+    }
+    expect(g0Passed).toBeGreaterThan(30);
+    expect(g0Failed).toBeGreaterThan(30);
   });
 
   it('records the screen whichever exclusion is primary, and keeps landmarks-disagree and duration first', () => {

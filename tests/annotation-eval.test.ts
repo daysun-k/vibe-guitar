@@ -410,8 +410,8 @@ describe('alignment: bounded rate and offset choice (VGT-7)', () => {
     expect(a.candidates.length).toBeGreaterThan(1);
     expect(a.ambiguous).toBe(true);
     // PR #32: on all beats (0.21 s, chance about 95%) the landmarks are at chance, but every landmark
-    // sits on one parity, and the half-rate grid (0.42 s, chance about 48%) passes (Amendment 1), so
-    // the song reaches the ambiguous check as before.
+    // sits on one beat-count parity, and that half-rate grid (0.42 s, chance about 48%) passes at
+    // 0.025 (Amendment 2), so the song reaches the ambiguous check as before.
     expect(a.chance!.grids[0].passed).toBe(false);
     expect(a.chance!.passed).toBe(true);
     expect(a.excluded?.code).toBe('ambiguous');

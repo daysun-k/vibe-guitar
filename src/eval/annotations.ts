@@ -383,9 +383,10 @@ export interface ChanceWindow {
  * calibrated false-acceptance rate after the offset search (measured by scripts/align-validation.mjs).
  */
 export interface ChanceScreen {
-  /** Overall level; each grid is tested at alpha / 3 (Amendment 1). */
+  /** Level of the full grid G0 (the original test). */
   alpha: number;
-  gridAlpha: number;
+  /** Level of each half-rate grid H0 / H1: alpha / 2 (Amendment 2). */
+  halfRateAlpha: number;
   tolSec: number;
   /** Median interval of the estimate beats. */
   medianBeatIntervalSec: number;
@@ -393,20 +394,22 @@ export interface ChanceScreen {
   gridChance: number;
   /** G0's windows (all estimate beats), the same as grids[0].windows. */
   windows: ChanceWindow[];
-  /** G0 = all estimate beats, G1 = even-index beats, G2 = odd-index beats (time order). */
+  /** G0 = all estimate beats; H0 / H1 = estimate beats with an even / odd beat count (Amendment 2). */
   grids: ChanceGrid[];
-  /** At least one grid passed. */
+  /** G0 passed, or H0 or H1 passed. */
   passed: boolean;
 }
 
-/** One beat grid of the chance-level screen (PR #32, Amendment 1: half-rate beat grids). */
+/** One beat grid of the chance-level screen (PR #32, Amendment 2: full grid plus drop-robust half-rate grids). */
 export interface ChanceGrid {
-  grid: 'G0' | 'G1' | 'G2';
+  grid: 'G0' | 'H0' | 'H1';
+  /** The level this grid's windows are tested at (alpha for G0, alpha / 2 for H0 and H1). */
+  alpha: number;
   beats: number;
   medianBeatIntervalSec: number;
   gridChance: number;
   windows: ChanceWindow[];
-  /** All four windows have p ≤ gridAlpha. */
+  /** All four windows have p ≤ this grid's alpha. */
   passed: boolean;
 }
 
@@ -689,20 +692,21 @@ function thirdsOf(landmarks: number[]): { part: AlignSegmentCheck['part']; fromS
 /**
  * The chance-level screen at a given map (media = offsetSec + rate × annotation time): the whole
  * landmark span and the start / middle / end thirds, each passing when P(Binomial(n, chance) ≥ k)
- * ≤ alpha / 3, with chance the union coverage of the beat windows in the mapped window. Three
- * grids are tested at the same map (PR #32, Amendment 1): G0 = all estimate beats, G1 / G2 = the
- * even- / odd-index estimate beats (a grid at twice the beat interval, for estimates at double the
- * annotated tempo). A grid passes when all four windows pass (an intersection: no multiplicity
- * correction across windows); the song passes when at least one grid passes. Windows are never
- * merged; a window that cannot pass even with every landmark on a beat is flagged insufficient.
+ * ≤ the grid's alpha, with chance the union coverage of the beat windows in the mapped window.
+ * Three grids are tested at the same map (PR #32, Amendment 2): G0 = all estimate beats at alpha
+ * (the original test), and the half-rate grids H0 / H1 = the estimate beats with an even / odd
+ * beat count (halfRateBeatCounts) at alpha / 2, for estimates at double the annotated tempo. A grid
+ * passes when all four windows pass (an intersection: no multiplicity correction across windows);
+ * the song passes when G0 passes or H0 or H1 passes. Windows are never merged; a window that cannot
+ * pass at its grid's alpha even with every landmark on a beat is flagged insufficient.
  */
 export function chanceScreen(landmarksIn: number[], beatsIn: number[], offsetSec: number, rate: number, tolSec: number, alpha = CHANCE_ALPHA): ChanceScreen {
   const landmarks = [...landmarksIn].sort((a, b) => a - b);
   const beats = [...beatsIn].sort((a, b) => a - b);
-  const gridAlpha = alpha / 3;
+  const halfRateAlpha = alpha / 2;
   const m = (t: number) => offsetSec + rate * t;
   const thirds = landmarks.length ? thirdsOf(landmarks) : [];
-  const testGrid = (grid: ChanceGrid['grid'], gb: number[]): ChanceGrid => {
+  const testGrid = (grid: ChanceGrid['grid'], gb: number[], gridAlpha: number): ChanceGrid => {
     const medianBeatIntervalSec = gb.length > 1 ? median(gb.slice(1).map((b, i) => b - gb[i])) : NaN;
     const gridChance = Number.isFinite(medianBeatIntervalSec) && medianBeatIntervalSec > 0 ? Math.min(1, (2 * tolSec) / medianBeatIntervalSec) : 1;
     const window = (part: ChanceWindow['part'], fromSec: number, toSec: number, inPart: number[]): ChanceWindow => {
@@ -715,11 +719,36 @@ export function chanceScreen(landmarksIn: number[], beatsIn: number[], offsetSec
       return { part, fromSec, toSec, mediaFromSec, mediaToSec, landmarks: inPart.length, matched, chance, p, insufficient, passed: p <= gridAlpha };
     };
     const windows = landmarks.length ? [window('span', landmarks[0], landmarks[landmarks.length - 1], landmarks), ...thirds.map((t) => window(t.part, t.fromSec, t.toSec, t.inPart))] : [];
-    return { grid, beats: gb.length, medianBeatIntervalSec, gridChance, windows, passed: windows.length > 0 && windows.every((w) => w.passed) };
+    return { grid, alpha: gridAlpha, beats: gb.length, medianBeatIntervalSec, gridChance, windows, passed: windows.length > 0 && windows.every((w) => w.passed) };
   };
-  const grids = [testGrid('G0', beats), testGrid('G1', beats.filter((_, k) => k % 2 === 0)), testGrid('G2', beats.filter((_, k) => k % 2 === 1))];
+  const counts = halfRateBeatCounts(beats);
+  const grids = [
+    testGrid('G0', beats, alpha),
+    testGrid('H0', beats.filter((_, i) => counts[i] % 2 === 0), halfRateAlpha),
+    testGrid('H1', beats.filter((_, i) => counts[i] % 2 === 1), halfRateAlpha),
+  ];
   const g0 = grids[0];
-  return { alpha, gridAlpha, tolSec, medianBeatIntervalSec: g0.medianBeatIntervalSec, gridChance: g0.gridChance, windows: g0.windows, grids, passed: grids.some((g) => g.passed) };
+  return { alpha, halfRateAlpha, tolSec, medianBeatIntervalSec: g0.medianBeatIntervalSec, gridChance: g0.gridChance, windows: g0.windows, grids, passed: grids.some((g) => g.passed) };
+}
+
+/**
+ * Beat counts for the half-rate grids (PR #32, Amendment 2), for beats sorted in time: c_0 = 0 and
+ * c_i = c_(i-1) + max(1, round((b_i - b_(i-1)) / L_i)), where L_i is the median of the intervals
+ * b_j - b_(j-1) for j = i-4 ... i+3, clipped to the intervals that exist. A dropped beat counts as two
+ * steps, so it does not flip the parity of the beats after it. A non-positive local median (only
+ * duplicate beats nearby) counts one step.
+ */
+export function halfRateBeatCounts(beats: number[]): number[] {
+  const n = beats.length;
+  const counts = n ? [0] : [];
+  for (let i = 1; i < n; i++) {
+    const local: number[] = [];
+    for (let j = Math.max(1, i - 4); j <= Math.min(n - 1, i + 3); j++) local.push(beats[j] - beats[j - 1]);
+    const L = median(local);
+    const steps = L > 0 ? Math.max(1, Math.round((beats[i] - beats[i - 1]) / L)) : 1;
+    counts.push(counts[i - 1] + steps);
+  }
+  return counts;
 }
 
 /**
@@ -1015,9 +1044,9 @@ export function alignAnnotation(input: AlignInput, options?: Partial<AlignOption
     else if (failing.length)
       result.excluded = {
         code: 'near-chance',
-        reason: `landmarks on a beat not clearly above chance (p > ${result.chance.alpha} / 3 per grid): ${failing
+        reason: `landmarks on a beat not clearly above chance (p > ${result.chance.alpha}): ${failing
           .map((w) => `${w.part === 'span' ? 'whole span' : `${w.part} third`} ${w.matched}/${w.landmarks} (chance ${Math.round(w.chance * 100)}%, p ${w.p.toPrecision(2)}${w.insufficient ? ', too few landmarks to pass at this chance' : ''})`)
-          .join('; ')}; no half-rate grid passed`,
+          .join('; ')}; neither half-rate grid (H0, H1 at p <= ${result.chance.halfRateAlpha}) passed`,
       };
     else if (result.driftSec !== null && result.driftSec > o.driftLimitSec)
       result.excluded = { code: 'drift', reason: rateNote ?? `local offsets differ by ${Math.round(result.driftSec * 1000)} ms across the song${rate !== 1 ? ' after the fitted speed difference' : ''}` };
