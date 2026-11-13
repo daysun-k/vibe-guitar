@@ -1,0 +1,942 @@
+{
+  "schema": "vibe-guitar-annotation-eval-songs/1",
+  "declaredAt": "2026-11-13",
+  "purpose": "Predeclared before any v2 song is captured or scored (VGT-7, PR #33): the second held-out batch (v2) of McGill Billboard 2.0.1 songs with no known BTC training-song overlap, for scoring Vibe Guitar auto charts against public, time-aligned chord annotations. Songs: the frozen v1 pool and order (docs/annotation-heldout-v1-pool.json) from rank 33 (v1's amended stop was rank 32), upload rule amended-v1 exactly as in PR #31, recomputed from the raw results of docs/annotation-heldout-v1-search-log.json (no new search; that log's not-needed marks are not decisions); songs without a qualifying upload are skipped and the walk stops at the first N = 46 with one. Size: k = 13 v1 songs in PR #31's primary mean under PR #32's evaluator; N = 46 is the smallest N with P(X >= 15) >= 0.95 for X ~ BetaBinomial(N, 14, 13) (P = 0.9555); planning for the count condition only. Capture as frozen in PR #33: list order, a build of main after PR #33; a technical failure (no chart, or a chart covering less than 90% of the upload) is retried up to 2 more times before any v2 scoring, then the song is missing; no song is ever replaced and N stays the denominator. Analysis: PR #31's analysis on v2 alone (unweighted mean of per-song majmin WCSR, percentile bootstrap 95% interval over songs, 10 000 resamples, mulberry32 seed 7007), never pooled with v1 or the earlier lists. Results never change the list: no redraw, no replacement or addition.",
+  "datasets": {
+    "billboard-2.0.1-lab": {
+      "name": "McGill Billboard 2.0 (2.0.1 LAB files; chords only, no beats)",
+      "page": "https://ddmal.ca/research/The_McGill_Billboard_Project_(Chord_Analysis_Dataset)/",
+      "downloads": [
+        "https://www.dropbox.com/s/ep41gwy28vo3wxy/billboard-2.0.1-lab.tar.gz?dl=1",
+        "https://www.dropbox.com/s/o0olz0uwl9z9stb/billboard-2.0-index.csv?dl=1"
+      ],
+      "folder": "billboard-2.0.1-lab",
+      "licence": "CC0",
+      "licenceQuote": "we have made them available legally under a CC0 license, but we ask that users follow scholarly norms in any public-facing work based on upon these data by citing the following ISMIR paper",
+      "attribution": "John Ashley Burgoyne, Jonathan Wild, and Ichiro Fujinaga, 'An Expert Ground Truth Set for Audio Chord Recognition and Music Analysis', in Proceedings of the 12th International Society for Music Information Retrieval Conference (Miami, FL, 2011), pp. 633-38.",
+      "btcTraining": "Not listed in the BTC README. The chosen songs were also checked against the UsPop2002 annotation list BTC used (github.com/tmc323/Chord-Annotations, uspopLabels, 195 songs): no title match. Two Billboard candidates that are in that list (Michael Jackson 'Beat It', Billy Joel 'Just the Way You Are') were left out."
+    }
+  },
+  "songs": [
+    {
+      "id": "billboard-0813-lesley-gore-california-nights",
+      "role": "eval",
+      "artist": "Lesley Gore",
+      "title": "California Nights",
+      "release": "Billboard Hot 100 entry 1967-04-22 (McGill Billboard id 0813); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0813/full.lab",
+      "beats": null,
+      "annotationDurationSec": 169.5,
+      "btcTraining": "not-known",
+      "complexity": "moderate",
+      "search": [
+        "Lesley Gore California Nights \"Provided to YouTube\"",
+        "Lesley Gore - Topic California Nights"
+      ],
+      "uploadHint": "Chosen by the PR #31 search log, walked for the v2 batch (PR #33), rule amended-v1 (Q1, result 3, official artist channel, Provided to YouTube): 'Lesley Gore' upload 'California Nights' (9KvzNL-p9TI), length 2:50; annotation 2:50, difference 0.50 s. Pool rank 33."
+    },
+    {
+      "id": "billboard-0133-bobby-bare-detroit-city",
+      "role": "eval",
+      "artist": "Bobby Bare",
+      "title": "Detroit City",
+      "release": "Billboard Hot 100 entry 1963-07-20 (McGill Billboard id 0133); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0133/full.lab",
+      "beats": null,
+      "annotationDurationSec": 167.84,
+      "btcTraining": "not-known",
+      "complexity": "simple",
+      "search": [
+        "Bobby Bare Detroit City \"Provided to YouTube\"",
+        "Bobby Bare - Topic Detroit City"
+      ],
+      "uploadHint": "Chosen by the PR #31 search log, walked for the v2 batch (PR #33), rule amended-v1 (Q1, result 9, official artist channel, Provided to YouTube): 'Bobby Bare Official' upload 'Detroit City' (Y7tGjpYzWa8), length 2:47; annotation 2:48, difference 0.84 s. Pool rank 34."
+    },
+    {
+      "id": "billboard-0026-the-chiffons-sweet-talkin-guy",
+      "role": "eval",
+      "artist": "The Chiffons",
+      "title": "Sweet Talkin' Guy",
+      "release": "Billboard Hot 100 entry 1966-05-07 (McGill Billboard id 0026); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0026/full.lab",
+      "beats": null,
+      "annotationDurationSec": 148.39,
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "search": [
+        "The Chiffons Sweet Talkin' Guy \"Provided to YouTube\"",
+        "The Chiffons - Topic Sweet Talkin' Guy"
+      ],
+      "uploadHint": "Chosen by the PR #31 search log, walked for the v2 batch (PR #33), rule amended-v1 (Q1, result 1, Topic channel): 'The Chiffons - Topic' upload 'Sweet Talkin' Guy' (UAPaGi7HuKo), length 2:27; annotation 2:28, difference 1.39 s. Pool rank 35."
+    },
+    {
+      "id": "billboard-0112-gladys-knight-and-the-pips-letter-full-of-tears",
+      "role": "eval",
+      "artist": "Gladys Knight & The Pips",
+      "title": "Letter Full Of Tears",
+      "release": "Billboard Hot 100 entry 1962-01-27 (McGill Billboard id 0112); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0112/full.lab",
+      "beats": null,
+      "annotationDurationSec": 165.69,
+      "btcTraining": "not-known",
+      "complexity": "simple",
+      "search": [
+        "Gladys Knight & The Pips Letter Full Of Tears \"Provided to YouTube\"",
+        "Gladys Knight & The Pips - Topic Letter Full Of Tears"
+      ],
+      "uploadHint": "Chosen by the PR #31 search log, walked for the v2 batch (PR #33), rule amended-v1 (Q1, result 3, Topic channel): 'Gladys Knight & The Pips - Topic' upload 'Letter Full of Tears' (OI9pyee5DIU), length 2:45; annotation 2:46, difference 0.69 s. Pool rank 36."
+    },
+    {
+      "id": "billboard-0762-grand-funk-railroad-walk-like-a-man",
+      "role": "eval",
+      "artist": "Grand Funk Railroad",
+      "title": "Walk Like A Man",
+      "release": "Billboard Hot 100 entry 1973-12-08 (McGill Billboard id 0762); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0762/full.lab",
+      "beats": null,
+      "annotationDurationSec": 245.24,
+      "btcTraining": "not-known",
+      "complexity": "simple",
+      "search": [
+        "Grand Funk Railroad Walk Like A Man \"Provided to YouTube\"",
+        "Grand Funk Railroad - Topic Walk Like A Man"
+      ],
+      "uploadHint": "Chosen by the PR #31 search log, walked for the v2 batch (PR #33), rule amended-v1 (Q1, result 1, Topic channel): 'Grand Funk Railroad - Topic' upload 'Walk Like A Man (You Can Call Me Your Man) (Remastered 1999)' (j6C4b7wzZVo), length 4:06; annotation 4:05, difference 0.76 s. Pool rank 37."
+    },
+    {
+      "id": "billboard-1051-billy-squier-my-kinda-lover",
+      "role": "eval",
+      "artist": "Billy Squier",
+      "title": "My Kinda Lover",
+      "release": "Billboard Hot 100 entry 1982-01-09 (McGill Billboard id 1051); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/1051/full.lab",
+      "beats": null,
+      "annotationDurationSec": 211.17,
+      "btcTraining": "not-known",
+      "complexity": "simple",
+      "search": [
+        "Billy Squier My Kinda Lover \"Provided to YouTube\"",
+        "Billy Squier - Topic My Kinda Lover"
+      ],
+      "uploadHint": "Chosen by the PR #31 search log, walked for the v2 batch (PR #33), rule amended-v1 (Q1, result 1, official artist channel, Provided to YouTube): 'Official Billy Squier' upload 'My Kinda Lover' (xtKRkAhY7cg), length 3:33; annotation 3:31, difference 1.83 s. Pool rank 38."
+    },
+    {
+      "id": "billboard-0242-stevie-b-because-i-love-you-the-postman-song",
+      "role": "eval",
+      "artist": "Stevie B",
+      "title": "Because I Love You (The Postman Song)",
+      "release": "Billboard Hot 100 entry 1991-02-16 (McGill Billboard id 0242); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0242/full.lab",
+      "beats": null,
+      "annotationDurationSec": 262.27,
+      "btcTraining": "not-known",
+      "complexity": "moderate",
+      "search": [
+        "Stevie B Because I Love You (The Postman Song) \"Provided to YouTube\"",
+        "Stevie B - Topic Because I Love You (The Postman Song)"
+      ],
+      "uploadHint": "Chosen by the PR #31 search log, walked for the v2 batch (PR #33), rule amended-v1 (Q1, result 15, official artist channel, Provided to YouTube): 'Stevie B Oficial' upload 'Because I Love You' (SAVK45GpriA), length 4:22; annotation 4:22, difference 0.27 s. Pool rank 40."
+    },
+    {
+      "id": "billboard-0054-j-frank-wilson-and-the-cavaliers-last-kiss",
+      "role": "eval",
+      "artist": "J. Frank Wilson & The Cavaliers",
+      "title": "Last Kiss",
+      "release": "Billboard Hot 100 entry 1964-09-05 (McGill Billboard id 0054); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0054/full.lab",
+      "beats": null,
+      "annotationDurationSec": 147.7,
+      "btcTraining": "not-known",
+      "complexity": "simple",
+      "search": [
+        "J. Frank Wilson & The Cavaliers Last Kiss \"Provided to YouTube\"",
+        "J. Frank Wilson & The Cavaliers - Topic Last Kiss"
+      ],
+      "uploadHint": "Chosen by the PR #31 search log, walked for the v2 batch (PR #33), rule amended-v1 (Q1, result 3, Topic channel): 'J. Frank Wilson & The Cavaliers - Topic' upload 'Last Kiss' (0PhOf9myHQM), length 2:28; annotation 2:28, difference 0.30 s. Pool rank 41."
+    },
+    {
+      "id": "billboard-0128-looking-glass-brandy-you-re-a-fine-girl",
+      "role": "eval",
+      "artist": "Looking Glass",
+      "title": "Brandy (You're A Fine Girl)",
+      "release": "Billboard Hot 100 entry 1972-09-30 (McGill Billboard id 0128); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0128/full.lab",
+      "beats": null,
+      "annotationDurationSec": 187.98,
+      "btcTraining": "not-known",
+      "complexity": "moderate",
+      "search": [
+        "Looking Glass Brandy (You're A Fine Girl) \"Provided to YouTube\"",
+        "Looking Glass - Topic Brandy (You're A Fine Girl)"
+      ],
+      "uploadHint": "Chosen by the PR #31 search log, walked for the v2 batch (PR #33), rule amended-v1 (Q1, result 1, official artist channel, Provided to YouTube): 'Looking Glass' upload 'Brandy (You're a Fine Girl)' (CFhFyvk0yS8), length 3:07; annotation 3:08, difference 0.98 s. Pool rank 43."
+    },
+    {
+      "id": "billboard-1143-eddie-rabbitt-i-love-a-rainy-night",
+      "role": "eval",
+      "artist": "Eddie Rabbitt",
+      "title": "I Love A Rainy Night",
+      "release": "Billboard Hot 100 entry 1981-03-21 (McGill Billboard id 1143); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/1143/full.lab",
+      "beats": null,
+      "annotationDurationSec": 190.43,
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "search": [
+        "Eddie Rabbitt I Love A Rainy Night \"Provided to YouTube\"",
+        "Eddie Rabbitt - Topic I Love A Rainy Night"
+      ],
+      "uploadHint": "Chosen by the PR #31 search log, walked for the v2 batch (PR #33), rule amended-v1 (Q1, result 1, official artist channel, Provided to YouTube): 'Eddie Rabbitt' upload 'I Love a Rainy Night (2009 Remaster)' (NWoL65SexB4), length 3:10; annotation 3:10, difference 0.43 s. Pool rank 44."
+    },
+    {
+      "id": "billboard-0648-pet-shop-boys-what-have-i-done-to-deserve-this",
+      "role": "eval",
+      "artist": "Pet Shop Boys",
+      "title": "What Have I Done To Deserve This?",
+      "release": "Billboard Hot 100 entry 1988-02-20 (McGill Billboard id 0648); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0648/full.lab",
+      "beats": null,
+      "annotationDurationSec": 259.95,
+      "btcTraining": "not-known",
+      "complexity": "moderate",
+      "search": [
+        "Pet Shop Boys What Have I Done To Deserve This? \"Provided to YouTube\"",
+        "Pet Shop Boys - Topic What Have I Done To Deserve This?"
+      ],
+      "uploadHint": "Chosen by the PR #31 search log, walked for the v2 batch (PR #33), rule amended-v1 (Q1, result 2, official artist channel, Provided to YouTube): 'Pet Shop Boys' upload 'What Have I Done to Deserve This? (with Dusty Springfield)' (KI3k9C6wD2A), length 4:21; annotation 4:20, difference 1.05 s. Pool rank 45."
+    },
+    {
+      "id": "billboard-0619-marvin-gaye-tammi-terrell-if-i-could-build-my-whole-world-around-you",
+      "role": "eval",
+      "artist": "Marvin Gaye,Tammi Terrell",
+      "title": "If I Could Build My Whole World Around You",
+      "release": "Billboard Hot 100 entry 1967-12-23 (McGill Billboard id 0619); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0619/full.lab",
+      "beats": null,
+      "annotationDurationSec": 146.23,
+      "btcTraining": "not-known",
+      "complexity": "moderate",
+      "search": [
+        "Marvin Gaye,Tammi Terrell If I Could Build My Whole World Around You \"Provided to YouTube\"",
+        "Marvin Gaye,Tammi Terrell - Topic If I Could Build My Whole World Around You"
+      ],
+      "uploadHint": "Chosen by the PR #31 search log, walked for the v2 batch (PR #33), rule amended-v1 (Q1, result 2, official artist channel, Provided to YouTube): 'Marvin Gaye' upload 'If I Could Build My Whole World Around You' (D3b3U6kkkP8), length 2:27; annotation 2:26, difference 0.77 s. Pool rank 46."
+    },
+    {
+      "id": "billboard-0307-smokey-robinson-cruisin",
+      "role": "eval",
+      "artist": "Smokey Robinson",
+      "title": "Cruisin'",
+      "release": "Billboard Hot 100 entry 1980-03-01 (McGill Billboard id 0307); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0307/full.lab",
+      "beats": null,
+      "annotationDurationSec": 270.03,
+      "btcTraining": "not-known",
+      "complexity": "moderate",
+      "search": [
+        "Smokey Robinson Cruisin' \"Provided to YouTube\"",
+        "Smokey Robinson - Topic Cruisin'"
+      ],
+      "uploadHint": "Chosen by the PR #31 search log, walked for the v2 batch (PR #33), rule amended-v1 (Q1, result 2, official artist channel, Provided to YouTube): 'Smokey Robinson' upload 'Cruisin'' (cGsOCUaJlDE), length 4:30; annotation 4:30, difference 0.03 s. Pool rank 48."
+    },
+    {
+      "id": "billboard-0502-otis-redding-i-ve-been-loving-you-too-long-to-stop-now",
+      "role": "eval",
+      "artist": "Otis Redding",
+      "title": "I've Been Loving You Too Long (To Stop Now)",
+      "release": "Billboard Hot 100 entry 1965-07-03 (McGill Billboard id 0502); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0502/full.lab",
+      "beats": null,
+      "annotationDurationSec": 195.93,
+      "btcTraining": "not-known",
+      "complexity": "simple",
+      "search": [
+        "Otis Redding I've Been Loving You Too Long (To Stop Now) \"Provided to YouTube\"",
+        "Otis Redding - Topic I've Been Loving You Too Long (To Stop Now)"
+      ],
+      "uploadHint": "Chosen by the PR #31 search log, walked for the v2 batch (PR #33), rule amended-v1 (Q2, result 6, official artist channel, Provided to YouTube): 'Otis Redding' upload 'I've Been Loving You Too Long' (ZO3mNU_urjM), length 3:16; annotation 3:16, difference 0.07 s. Pool rank 50."
+    },
+    {
+      "id": "billboard-0018-daryl-hall-and-john-oates-kiss-on-my-list",
+      "role": "eval",
+      "artist": "Daryl Hall & John Oates",
+      "title": "Kiss On My List",
+      "release": "Billboard Hot 100 entry 1981-01-31 (McGill Billboard id 0018); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0018/full.lab",
+      "beats": null,
+      "annotationDurationSec": 231.34,
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "search": [
+        "Daryl Hall & John Oates Kiss On My List \"Provided to YouTube\"",
+        "Daryl Hall & John Oates - Topic Kiss On My List"
+      ],
+      "uploadHint": "Chosen by the PR #31 search log, walked for the v2 batch (PR #33), rule amended-v1 (Q1, result 5, official artist channel, Provided to YouTube): 'Daryl Hall & John Oates' upload 'Kiss on My List' (UceVGqkz9oM), length 3:53; annotation 3:51, difference 1.66 s. Pool rank 51."
+    },
+    {
+      "id": "billboard-0253-dion-love-came-to-me",
+      "role": "eval",
+      "artist": "Dion",
+      "title": "Love Came To Me",
+      "release": "Billboard Hot 100 entry 1962-12-22 (McGill Billboard id 0253); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0253/full.lab",
+      "beats": null,
+      "annotationDurationSec": 165.77,
+      "btcTraining": "not-known",
+      "complexity": "simple",
+      "search": [
+        "Dion Love Came To Me \"Provided to YouTube\"",
+        "Dion - Topic Love Came To Me"
+      ],
+      "uploadHint": "Chosen by the PR #31 search log, walked for the v2 batch (PR #33), rule amended-v1 (Q1, result 5, official artist channel, Provided to YouTube): 'Dion' upload 'Love Came to Me' (V0M4BeN_mrM), length 2:46; annotation 2:46, difference 0.23 s. Pool rank 53."
+    },
+    {
+      "id": "billboard-0747-tracy-chapman-baby-can-i-hold-you",
+      "role": "eval",
+      "artist": "Tracy Chapman",
+      "title": "Baby Can I Hold You",
+      "release": "Billboard Hot 100 entry 1989-01-14 (McGill Billboard id 0747); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0747/full.lab",
+      "beats": null,
+      "annotationDurationSec": 194.17,
+      "btcTraining": "not-known",
+      "complexity": "moderate",
+      "search": [
+        "Tracy Chapman Baby Can I Hold You \"Provided to YouTube\"",
+        "Tracy Chapman - Topic Baby Can I Hold You"
+      ],
+      "uploadHint": "Chosen by the PR #31 search log, walked for the v2 batch (PR #33), rule amended-v1 (Q1, result 3, official artist channel, Provided to YouTube): 'Tracy Chapman' upload 'Baby Can I Hold You (2015 Remaster)' (zd136WPHb60), length 3:13; annotation 3:14, difference 1.17 s. Pool rank 54."
+    },
+    {
+      "id": "billboard-0775-marc-cohn-walking-in-memphis",
+      "role": "eval",
+      "artist": "Marc Cohn",
+      "title": "Walking In Memphis",
+      "release": "Billboard Hot 100 entry 1991-08-17 (McGill Billboard id 0775); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0775/full.lab",
+      "beats": null,
+      "annotationDurationSec": 255.94,
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "search": [
+        "Marc Cohn Walking In Memphis \"Provided to YouTube\"",
+        "Marc Cohn - Topic Walking In Memphis"
+      ],
+      "uploadHint": "Chosen by the PR #31 search log, walked for the v2 batch (PR #33), rule amended-v1 (Q1, result 4, official artist channel, Provided to YouTube): 'Marc Cohn' upload 'Walking in Memphis' (yLFnE88fdoU), length 4:16; annotation 4:16, difference 0.06 s. Pool rank 55."
+    },
+    {
+      "id": "billboard-0214-ray-charles-night-time-is-the-right-time",
+      "role": "eval",
+      "artist": "Ray Charles",
+      "title": "(Night Time Is) The Right Time",
+      "release": "Billboard Hot 100 entry 1959-02-09 (McGill Billboard id 0214); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0214/full.lab",
+      "beats": null,
+      "annotationDurationSec": 204.77,
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "search": [
+        "Ray Charles (Night Time Is) The Right Time \"Provided to YouTube\"",
+        "Ray Charles - Topic (Night Time Is) The Right Time"
+      ],
+      "uploadHint": "Chosen by the PR #31 search log, walked for the v2 batch (PR #33), rule amended-v1 (Q1, result 6, official artist channel, Provided to YouTube): 'Ray Charles' upload 'The Right Time' (7eHTDfqavQg), length 3:25; annotation 3:25, difference 0.23 s. Pool rank 56."
+    },
+    {
+      "id": "billboard-1112-stephanie-mills-never-knew-love-like-this-before",
+      "role": "eval",
+      "artist": "Stephanie Mills",
+      "title": "Never Knew Love Like This Before",
+      "release": "Billboard Hot 100 entry 1980-12-06 (McGill Billboard id 1112); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/1112/full.lab",
+      "beats": null,
+      "annotationDurationSec": 324.5,
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "search": [
+        "Stephanie Mills Never Knew Love Like This Before \"Provided to YouTube\"",
+        "Stephanie Mills - Topic Never Knew Love Like This Before"
+      ],
+      "uploadHint": "Chosen by the PR #31 search log, walked for the v2 batch (PR #33), rule amended-v1 (Q1, result 3, Topic channel): 'Stephanie Mills - Topic' upload 'Never Knew Love Like This Before' (x-1fHv9IWqg), length 5:26; annotation 5:25, difference 1.50 s. Pool rank 57."
+    },
+    {
+      "id": "billboard-1289-the-la-s-there-she-goes",
+      "role": "eval",
+      "artist": "The La's",
+      "title": "There She Goes",
+      "release": "Billboard Hot 100 entry 1991-07-27 (McGill Billboard id 1289); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/1289/full.lab",
+      "beats": null,
+      "annotationDurationSec": 162.56,
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "search": [
+        "The La's There She Goes \"Provided to YouTube\"",
+        "The La's - Topic There She Goes"
+      ],
+      "uploadHint": "Chosen by the PR #31 search log, walked for the v2 batch (PR #33), rule amended-v1 (Q1, result 1, Topic channel): 'The La's - Topic' upload 'There She Goes' (7tE0v57RMJw), length 2:43; annotation 2:43, difference 0.44 s. Pool rank 62."
+    },
+    {
+      "id": "billboard-1286-a-taste-of-honey-sukiyaki",
+      "role": "eval",
+      "artist": "A Taste Of Honey",
+      "title": "Sukiyaki",
+      "release": "Billboard Hot 100 entry 1981-04-25 (McGill Billboard id 1286); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/1286/full.lab",
+      "beats": null,
+      "annotationDurationSec": 223.24,
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "search": [
+        "A Taste Of Honey Sukiyaki \"Provided to YouTube\"",
+        "A Taste Of Honey - Topic Sukiyaki"
+      ],
+      "uploadHint": "Chosen by the PR #31 search log, walked for the v2 batch (PR #33), rule amended-v1 (Q1, result 7, Topic channel): 'A Taste Of Honey - Topic' upload 'Sukiyaki (Remastered 2002)' (qoU1jksH8LE), length 3:44; annotation 3:43, difference 0.76 s. Pool rank 63."
+    },
+    {
+      "id": "billboard-1021-wilson-pickett-soul-dance-number-three",
+      "role": "eval",
+      "artist": "Wilson Pickett",
+      "title": "Soul Dance Number Three",
+      "release": "Billboard Hot 100 entry 1967-07-01 (McGill Billboard id 1021); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/1021/full.lab",
+      "beats": null,
+      "annotationDurationSec": 160.21,
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "search": [
+        "Wilson Pickett Soul Dance Number Three \"Provided to YouTube\"",
+        "Wilson Pickett - Topic Soul Dance Number Three"
+      ],
+      "uploadHint": "Chosen by the PR #31 search log, walked for the v2 batch (PR #33), rule amended-v1 (Q1, result 1, official artist channel, Provided to YouTube): 'Wilson Pickett' upload 'Soul Dance Number Three' (RhD6JUpsT-w), length 2:42; annotation 2:40, difference 1.79 s. Pool rank 64."
+    },
+    {
+      "id": "billboard-0381-focus-hocus-pocus",
+      "role": "eval",
+      "artist": "Focus",
+      "title": "Hocus Pocus",
+      "release": "Billboard Hot 100 entry 1973-03-31 (McGill Billboard id 0381); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0381/full.lab",
+      "beats": null,
+      "annotationDurationSec": 206.73,
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "search": [
+        "Focus Hocus Pocus \"Provided to YouTube\"",
+        "Focus - Topic Hocus Pocus"
+      ],
+      "uploadHint": "Chosen by the PR #31 search log, walked for the v2 batch (PR #33), rule amended-v1 (Q1, result 6, official artist channel, Provided to YouTube): 'Official Focus' upload 'Hocus Pocus (U.S. Single Version)' (zUdhMhbIHvM), length 3:25; annotation 3:27, difference 1.73 s. Pool rank 65."
+    },
+    {
+      "id": "billboard-0265-the-5th-dimension-last-night-i-didn-t-get-to-sleep-at-all",
+      "role": "eval",
+      "artist": "The 5th Dimension",
+      "title": "(Last Night) I Didn't Get To Sleep At All",
+      "release": "Billboard Hot 100 entry 1972-04-29 (McGill Billboard id 0265); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0265/full.lab",
+      "beats": null,
+      "annotationDurationSec": 192.39,
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "search": [
+        "The 5th Dimension (Last Night) I Didn't Get To Sleep At All \"Provided to YouTube\"",
+        "The 5th Dimension - Topic (Last Night) I Didn't Get To Sleep At All"
+      ],
+      "uploadHint": "Chosen by the PR #31 search log, walked for the v2 batch (PR #33), rule amended-v1 (Q1, result 2, official artist channel, Provided to YouTube): 'The 5th Dimension' upload '(Last Night) I Didn't Get To Sleep At All' (kWogzq0Sz0A), length 3:13; annotation 3:12, difference 0.61 s. Pool rank 66."
+    },
+    {
+      "id": "billboard-0580-the-falcons-i-found-a-love",
+      "role": "eval",
+      "artist": "The Falcons",
+      "title": "I Found A Love",
+      "release": "Billboard Hot 100 entry 1962-05-26 (McGill Billboard id 0580); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0580/full.lab",
+      "beats": null,
+      "annotationDurationSec": 178.68,
+      "btcTraining": "not-known",
+      "complexity": "simple",
+      "search": [
+        "The Falcons I Found A Love \"Provided to YouTube\"",
+        "The Falcons - Topic I Found A Love"
+      ],
+      "uploadHint": "Chosen by the PR #31 search log, walked for the v2 batch (PR #33), rule amended-v1 (Q2, result 8, Topic channel): 'Falcons - Topic' upload 'I Found a Love' (iDf4kyL5JTY), length 2:59; annotation 2:59, difference 0.32 s. Pool rank 67."
+    },
+    {
+      "id": "billboard-0947-simon-and-garfunkel-fakin-it",
+      "role": "eval",
+      "artist": "Simon & Garfunkel",
+      "title": "Fakin' It",
+      "release": "Billboard Hot 100 entry 1967-09-16 (McGill Billboard id 0947); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0947/full.lab",
+      "beats": null,
+      "annotationDurationSec": 199.34,
+      "btcTraining": "not-known",
+      "complexity": "simple",
+      "search": [
+        "Simon & Garfunkel Fakin' It \"Provided to YouTube\"",
+        "Simon & Garfunkel - Topic Fakin' It"
+      ],
+      "uploadHint": "Chosen by the PR #31 search log, walked for the v2 batch (PR #33), rule amended-v1 (Q1, result 1, official artist channel, Provided to YouTube): 'Simon & Garfunkel' upload 'Fakin' It' (Q_JunmMb1f0), length 3:18; annotation 3:19, difference 1.34 s. Pool rank 68."
+    },
+    {
+      "id": "billboard-0965-arthur-conley-sweet-soul-music",
+      "role": "eval",
+      "artist": "Arthur Conley",
+      "title": "Sweet Soul Music",
+      "release": "Billboard Hot 100 entry 1967-03-25 (McGill Billboard id 0965); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0965/full.lab",
+      "beats": null,
+      "annotationDurationSec": 143.08,
+      "btcTraining": "not-known",
+      "complexity": "simple",
+      "search": [
+        "Arthur Conley Sweet Soul Music \"Provided to YouTube\"",
+        "Arthur Conley - Topic Sweet Soul Music"
+      ],
+      "uploadHint": "Chosen by the PR #31 search log, walked for the v2 batch (PR #33), rule amended-v1 (Q1, result 8, Topic channel): 'Arthur Conley - Topic' upload 'Sweet Soul Music' (So9XIEhGrFw), length 2:23; annotation 2:23, difference 0.08 s. Pool rank 69."
+    },
+    {
+      "id": "billboard-1063-dion-this-little-girl",
+      "role": "eval",
+      "artist": "Dion",
+      "title": "This Little Girl",
+      "release": "Billboard Hot 100 entry 1963-06-08 (McGill Billboard id 1063); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/1063/full.lab",
+      "beats": null,
+      "annotationDurationSec": 158.43,
+      "btcTraining": "not-known",
+      "complexity": "moderate",
+      "search": [
+        "Dion This Little Girl \"Provided to YouTube\"",
+        "Dion - Topic This Little Girl"
+      ],
+      "uploadHint": "Chosen by the PR #31 search log, walked for the v2 batch (PR #33), rule amended-v1 (Q2, result 1, official artist channel, Provided to YouTube): 'Dion' upload 'This Little Girl' (X-STwMriWs4), length 2:37; annotation 2:38, difference 1.43 s. Pool rank 71."
+    },
+    {
+      "id": "billboard-0822-lavern-baker-i-cried-a-tear",
+      "role": "eval",
+      "artist": "LaVern Baker",
+      "title": "I Cried A Tear",
+      "release": "Billboard Hot 100 entry 1959-02-09 (McGill Billboard id 0822); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0822/full.lab",
+      "beats": null,
+      "annotationDurationSec": 156.24,
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "search": [
+        "LaVern Baker I Cried A Tear \"Provided to YouTube\"",
+        "LaVern Baker - Topic I Cried A Tear"
+      ],
+      "uploadHint": "Chosen by the PR #31 search log, walked for the v2 batch (PR #33), rule amended-v1 (Q1, result 1, Topic channel): 'Lavern Baker - Topic' upload 'I Cried a Tear' (gW3WO-AbGvI), length 2:36; annotation 2:36, difference 0.24 s. Pool rank 72."
+    },
+    {
+      "id": "billboard-1180-emerson-lake-and-palmer-lucky-man",
+      "role": "eval",
+      "artist": "Emerson, Lake & Palmer",
+      "title": "Lucky Man",
+      "release": "Billboard Hot 100 entry 1971-03-27 (McGill Billboard id 1180); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/1180/full.lab",
+      "beats": null,
+      "annotationDurationSec": 280.9,
+      "btcTraining": "not-known",
+      "complexity": "moderate",
+      "search": [
+        "Emerson, Lake & Palmer Lucky Man \"Provided to YouTube\"",
+        "Emerson, Lake & Palmer - Topic Lucky Man"
+      ],
+      "uploadHint": "Chosen by the PR #31 search log, walked for the v2 batch (PR #33), rule amended-v1 (Q1, result 2, official artist channel, Provided to YouTube): 'Emerson, Lake and Palmer' upload 'Lucky Man (2012 Stereo Mix)' (3ds55ii0wqc), length 4:40; annotation 4:41, difference 0.90 s. Pool rank 73."
+    },
+    {
+      "id": "billboard-0294-jerry-jeff-walker-mr-bojangles",
+      "role": "eval",
+      "artist": "Jerry Jeff Walker",
+      "title": "Mr. Bojangles",
+      "release": "Billboard Hot 100 entry 1968-08-24 (McGill Billboard id 0294); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0294/full.lab",
+      "beats": null,
+      "annotationDurationSec": 234.45,
+      "btcTraining": "not-known",
+      "complexity": "moderate",
+      "search": [
+        "Jerry Jeff Walker Mr. Bojangles \"Provided to YouTube\"",
+        "Jerry Jeff Walker - Topic Mr. Bojangles"
+      ],
+      "uploadHint": "Chosen by the PR #31 search log, walked for the v2 batch (PR #33), rule amended-v1 (Q1, result 1, official artist channel, Provided to YouTube): 'Jerry Jeff Walker' upload 'Mr. Bojangles' (R0dbM2KJnX4), length 3:55; annotation 3:54, difference 0.55 s. Pool rank 74."
+    },
+    {
+      "id": "billboard-0524-tina-turner-private-dancer",
+      "role": "eval",
+      "artist": "Tina Turner",
+      "title": "Private Dancer",
+      "release": "Billboard Hot 100 entry 1985-05-11 (McGill Billboard id 0524); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0524/full.lab",
+      "beats": null,
+      "annotationDurationSec": 433.61,
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "search": [
+        "Tina Turner Private Dancer \"Provided to YouTube\"",
+        "Tina Turner - Topic Private Dancer"
+      ],
+      "uploadHint": "Chosen by the PR #31 search log, walked for the v2 batch (PR #33), rule amended-v1 (Q1, result 1, official artist channel, Provided to YouTube): 'Tina Turner' upload 'Private Dancer (2015 Remaster)' (FCMsBpkFJHM), length 7:15; annotation 7:14, difference 1.39 s. Pool rank 75."
+    },
+    {
+      "id": "billboard-0314-james-brown-i-got-you-i-feel-good",
+      "role": "eval",
+      "artist": "James Brown",
+      "title": "I Got You (I Feel Good)",
+      "release": "Billboard Hot 100 entry 1965-11-27 (McGill Billboard id 0314); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0314/full.lab",
+      "beats": null,
+      "annotationDurationSec": 168.78,
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "search": [
+        "James Brown I Got You (I Feel Good) \"Provided to YouTube\"",
+        "James Brown - Topic I Got You (I Feel Good)"
+      ],
+      "uploadHint": "Chosen by the PR #31 search log, walked for the v2 batch (PR #33), rule amended-v1 (Q1, result 4, official artist channel, Provided to YouTube): 'James Brown' upload 'I Got You (I Feel Good)' (inNTZTINTtM), length 2:48; annotation 2:49, difference 0.78 s. Pool rank 76."
+    },
+    {
+      "id": "billboard-1106-young-mc-bust-a-move",
+      "role": "eval",
+      "artist": "Young MC",
+      "title": "Bust A Move",
+      "release": "Billboard Hot 100 entry 1990-04-07 (McGill Billboard id 1106); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/1106/full.lab",
+      "beats": null,
+      "annotationDurationSec": 265.24,
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "search": [
+        "Young MC Bust A Move \"Provided to YouTube\"",
+        "Young MC - Topic Bust A Move"
+      ],
+      "uploadHint": "Chosen by the PR #31 search log, walked for the v2 batch (PR #33), rule amended-v1 (Q1, result 1, official artist channel, Provided to YouTube): 'Young MC' upload 'Bust A Move' (R2oEk1OVn_A), length 4:25; annotation 4:25, difference 0.24 s. Pool rank 78."
+    },
+    {
+      "id": "billboard-0605-b-b-king-the-thrill-is-gone",
+      "role": "eval",
+      "artist": "B.B. King",
+      "title": "The Thrill Is Gone",
+      "release": "Billboard Hot 100 entry 1970-03-28 (McGill Billboard id 0605); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0605/full.lab",
+      "beats": null,
+      "annotationDurationSec": 243.51,
+      "btcTraining": "not-known",
+      "complexity": "simple",
+      "search": [
+        "B.B. King The Thrill Is Gone \"Provided to YouTube\"",
+        "B.B. King - Topic The Thrill Is Gone"
+      ],
+      "uploadHint": "Chosen by the PR #31 search log, walked for the v2 batch (PR #33), rule amended-v1 (Q1, result 3, official artist channel, Provided to YouTube): 'B.B. King' upload 'The Thrill Is Gone' (x2GjCbuQEQc), length 4:03; annotation 4:04, difference 0.51 s. Pool rank 79."
+    },
+    {
+      "id": "billboard-1201-commodores-three-times-a-lady",
+      "role": "eval",
+      "artist": "Commodores",
+      "title": "Three Times A Lady",
+      "release": "Billboard Hot 100 entry 1978-09-02 (McGill Billboard id 1201); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/1201/full.lab",
+      "beats": null,
+      "annotationDurationSec": 219.72,
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "search": [
+        "Commodores Three Times A Lady \"Provided to YouTube\"",
+        "Commodores - Topic Three Times A Lady"
+      ],
+      "uploadHint": "Chosen by the PR #31 search log, walked for the v2 batch (PR #33), rule amended-v1 (Q1, result 1, official artist channel, Provided to YouTube): 'The Commodores' upload 'Three Times A Lady' (h2IHexgN6Ns), length 3:38; annotation 3:40, difference 1.72 s. Pool rank 80."
+    },
+    {
+      "id": "billboard-1072-fats-domino-be-my-guest",
+      "role": "eval",
+      "artist": "Fats Domino",
+      "title": "Be My Guest",
+      "release": "Billboard Hot 100 entry 1959-11-16 (McGill Billboard id 1072); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/1072/full.lab",
+      "beats": null,
+      "annotationDurationSec": 135.92,
+      "btcTraining": "not-known",
+      "complexity": "moderate",
+      "search": [
+        "Fats Domino Be My Guest \"Provided to YouTube\"",
+        "Fats Domino - Topic Be My Guest"
+      ],
+      "uploadHint": "Chosen by the PR #31 search log, walked for the v2 batch (PR #33), rule amended-v1 (Q1, result 5, Topic channel): 'Fats Domino - Topic' upload 'Be My Guest (Remastered)' (lIWLtScRQtw), length 2:16; annotation 2:16, difference 0.08 s. Pool rank 81."
+    },
+    {
+      "id": "billboard-0385-wilson-phillips-hold-on",
+      "role": "eval",
+      "artist": "Wilson Phillips",
+      "title": "Hold On",
+      "release": "Billboard Hot 100 entry 1990-04-14 (McGill Billboard id 0385); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0385/full.lab",
+      "beats": null,
+      "annotationDurationSec": 221.36,
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "search": [
+        "Wilson Phillips Hold On \"Provided to YouTube\"",
+        "Wilson Phillips - Topic Hold On"
+      ],
+      "uploadHint": "Chosen by the PR #31 search log, walked for the v2 batch (PR #33), rule amended-v1 (Q1, result 5, official artist channel, Provided to YouTube): 'Wilson Phillips' upload 'Hold On' (sVkFo6cFegQ), length 3:41; annotation 3:41, difference 0.36 s. Pool rank 82."
+    },
+    {
+      "id": "billboard-0559-dolly-parton-baby-i-m-burnin",
+      "role": "eval",
+      "artist": "Dolly Parton",
+      "title": "Baby I'm Burnin'",
+      "release": "Billboard Hot 100 entry 1979-01-27 (McGill Billboard id 0559); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0559/full.lab",
+      "beats": null,
+      "annotationDurationSec": 158.48,
+      "btcTraining": "not-known",
+      "complexity": "simple",
+      "search": [
+        "Dolly Parton Baby I'm Burnin' \"Provided to YouTube\"",
+        "Dolly Parton - Topic Baby I'm Burnin'"
+      ],
+      "uploadHint": "Chosen by the PR #31 search log, walked for the v2 batch (PR #33), rule amended-v1 (Q1, result 1, official artist channel, Provided to YouTube): 'Dolly Parton' upload 'Baby I'm Burnin'' (pl0q1x7nRf8), length 2:37; annotation 2:38, difference 1.48 s. Pool rank 83."
+    },
+    {
+      "id": "billboard-1033-the-byrds-goin-back",
+      "role": "eval",
+      "artist": "The Byrds",
+      "title": "Goin' Back",
+      "release": "Billboard Hot 100 entry 1967-11-18 (McGill Billboard id 1033); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/1033/full.lab",
+      "beats": null,
+      "annotationDurationSec": 207.96,
+      "btcTraining": "not-known",
+      "complexity": "moderate",
+      "search": [
+        "The Byrds Goin' Back \"Provided to YouTube\"",
+        "The Byrds - Topic Goin' Back"
+      ],
+      "uploadHint": "Chosen by the PR #31 search log, walked for the v2 batch (PR #33), rule amended-v1 (Q1, result 4, Topic channel): 'THE BYRDS - Topic' upload 'Goin' Back (Single Version)' (b56R_kc0ENY), length 3:27; annotation 3:28, difference 0.96 s. Pool rank 84."
+    },
+    {
+      "id": "billboard-0468-the-temptations-ain-t-too-proud-to-beg",
+      "role": "eval",
+      "artist": "The Temptations",
+      "title": "Ain't Too Proud To Beg",
+      "release": "Billboard Hot 100 entry 1966-08-20 (McGill Billboard id 0468); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0468/full.lab",
+      "beats": null,
+      "annotationDurationSec": 154.34,
+      "btcTraining": "not-known",
+      "complexity": "simple",
+      "search": [
+        "The Temptations Ain't Too Proud To Beg \"Provided to YouTube\"",
+        "The Temptations - Topic Ain't Too Proud To Beg"
+      ],
+      "uploadHint": "Chosen by the PR #31 search log, walked for the v2 batch (PR #33), rule amended-v1 (Q1, result 1, official artist channel, Provided to YouTube): 'The Temptations' upload 'Ain't Too Proud To Beg' (_ObVQPBD0Uw), length 2:34; annotation 2:34, difference 0.34 s. Pool rank 85."
+    },
+    {
+      "id": "billboard-0696-brenda-lee-too-many-rivers",
+      "role": "eval",
+      "artist": "Brenda Lee",
+      "title": "Too Many Rivers",
+      "release": "Billboard Hot 100 entry 1965-06-05 (McGill Billboard id 0696); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0696/full.lab",
+      "beats": null,
+      "annotationDurationSec": 171.68,
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "search": [
+        "Brenda Lee Too Many Rivers \"Provided to YouTube\"",
+        "Brenda Lee - Topic Too Many Rivers"
+      ],
+      "uploadHint": "Chosen by the PR #31 search log, walked for the v2 batch (PR #33), rule amended-v1 (Q1, result 3, official artist channel, Provided to YouTube): 'Brenda Lee' upload 'Too Many Rivers' (Mpc8P_mpD2I), length 2:52; annotation 2:52, difference 0.32 s. Pool rank 86."
+    },
+    {
+      "id": "billboard-0944-dolly-parton-starting-over-again",
+      "role": "eval",
+      "artist": "Dolly Parton",
+      "title": "Starting Over Again",
+      "release": "Billboard Hot 100 entry 1980-05-17 (McGill Billboard id 0944); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0944/full.lab",
+      "beats": null,
+      "annotationDurationSec": 238.24,
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "search": [
+        "Dolly Parton Starting Over Again \"Provided to YouTube\"",
+        "Dolly Parton - Topic Starting Over Again"
+      ],
+      "uploadHint": "Chosen by the PR #31 search log, walked for the v2 batch (PR #33), rule amended-v1 (Q1, result 1, official artist channel, Provided to YouTube): 'Dolly Parton' upload 'Starting over Again' (c7ML0V29L1c), length 3:59; annotation 3:58, difference 0.76 s. Pool rank 88."
+    },
+    {
+      "id": "billboard-0315-redbone-come-and-get-your-love",
+      "role": "eval",
+      "artist": "Redbone",
+      "title": "Come And Get Your Love",
+      "release": "Billboard Hot 100 entry 1974-02-16 (McGill Billboard id 0315); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0315/full.lab",
+      "beats": null,
+      "annotationDurationSec": 214.34,
+      "btcTraining": "not-known",
+      "complexity": "moderate",
+      "search": [
+        "Redbone Come And Get Your Love \"Provided to YouTube\"",
+        "Redbone - Topic Come And Get Your Love"
+      ],
+      "uploadHint": "Chosen by the PR #31 search log, walked for the v2 batch (PR #33), rule amended-v1 (Q1, result 4, official artist channel, Provided to YouTube): 'Redbone' upload 'Come and Get Your Love' (6E188kxCs1w), length 3:33; annotation 3:34, difference 1.34 s. Pool rank 90."
+    },
+    {
+      "id": "billboard-0126-willie-nelson-blue-eyes-crying-in-the-rain",
+      "role": "eval",
+      "artist": "Willie Nelson",
+      "title": "Blue Eyes Crying In The Rain",
+      "release": "Billboard Hot 100 entry 1975-11-01 (McGill Billboard id 0126); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0126/full.lab",
+      "beats": null,
+      "annotationDurationSec": 140.56,
+      "btcTraining": "not-known",
+      "complexity": "simple",
+      "search": [
+        "Willie Nelson Blue Eyes Crying In The Rain \"Provided to YouTube\"",
+        "Willie Nelson - Topic Blue Eyes Crying In The Rain"
+      ],
+      "uploadHint": "Chosen by the PR #31 search log, walked for the v2 batch (PR #33), rule amended-v1 (Q1, result 11, official artist channel, Provided to YouTube): 'Willie Nelson' upload 'Blue Eyes Crying In The Rain' (eCXf_zEDWXg), length 2:21; annotation 2:21, difference 0.44 s. Pool rank 92."
+    }
+  ],
+  "v2": {
+    "protocol": "PR #33",
+    "pool": "docs/annotation-heldout-v1-pool.json",
+    "searchLog": "docs/annotation-heldout-v1-search-log.json",
+    "uploadRule": "amended-v1",
+    "startRank": 33,
+    "stopRank": 92,
+    "searchedFromStart": 60,
+    "skipped": [
+      {
+        "rank": 39,
+        "id": "0167",
+        "reason": "no qualifying upload in the first 15 results of Q1 and Q2"
+      },
+      {
+        "rank": 42,
+        "id": "0077",
+        "reason": "no qualifying upload in the first 15 results of Q1 and Q2"
+      },
+      {
+        "rank": 47,
+        "id": "0608",
+        "reason": "no qualifying upload in the first 15 results of Q1 and Q2"
+      },
+      {
+        "rank": 49,
+        "id": "0397",
+        "reason": "no qualifying upload in the first 15 results of Q1 and Q2"
+      },
+      {
+        "rank": 52,
+        "id": "0147",
+        "reason": "no qualifying upload in the first 15 results of Q1 and Q2"
+      },
+      {
+        "rank": 58,
+        "id": "1032",
+        "reason": "no qualifying upload in the first 15 results of Q1 and Q2"
+      },
+      {
+        "rank": 59,
+        "id": "0735",
+        "reason": "no qualifying upload in the first 15 results of Q1 and Q2"
+      },
+      {
+        "rank": 60,
+        "id": "0071",
+        "reason": "no qualifying upload in the first 15 results of Q1 and Q2"
+      },
+      {
+        "rank": 61,
+        "id": "0958",
+        "reason": "no qualifying upload in the first 15 results of Q1 and Q2"
+      },
+      {
+        "rank": 70,
+        "id": "0900",
+        "reason": "no qualifying upload in the first 15 results of Q1 and Q2"
+      },
+      {
+        "rank": 77,
+        "id": "0582",
+        "reason": "no qualifying upload in the first 15 results of Q1 and Q2"
+      },
+      {
+        "rank": 87,
+        "id": "0672",
+        "reason": "no qualifying upload in the first 15 results of Q1 and Q2"
+      },
+      {
+        "rank": 89,
+        "id": "0187",
+        "reason": "no qualifying upload in the first 15 results of Q1 and Q2"
+      },
+      {
+        "rank": 91,
+        "id": "0549",
+        "reason": "no qualifying upload in the first 15 results of Q1 and Q2"
+      }
+    ],
+    "sizeRule": {
+      "k": 13,
+      "trials": 25,
+      "minSongs": 15,
+      "assurance": 0.95,
+      "a": 14,
+      "b": 13,
+      "n": 46,
+      "probability": 0.9555488162303237,
+      "rule": "smallest N with P(X >= 15) >= 0.95 for X ~ BetaBinomial(N, 1 + k, 1 + 25 - k): a uniform prior updated by v1's 25 selected songs, of which k entered PR #31's primary mean under PR #32's evaluator (count only, never score values); exact sum of log-gamma terms. Planning for the count condition only, assuming v2's songs behave like v1's; not an assurance that VGT-7 closes, and the half-width condition is not modelled."
+    }
+  }
+}

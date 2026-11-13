@@ -7,10 +7,15 @@
 //        [--uploads-out docs/annotation-heldout-v1-uploads.json] [--rule amended-v1|topic-only-v1]
 //   node scripts/heldout-songs.mjs amend-log [--log docs/annotation-heldout-v1-search-log.json] [--pool ...]
 //   node scripts/heldout-songs.mjs diff [--log ...] [--pool ...] [--out docs/annotation-heldout-v1-selection-diff.json]
+//   node scripts/heldout-songs.mjs list-v2 --eligible-k <k> [--start-rank 33] [--pool ...] [--log ...]
+//        [--declared-at YYYY-MM-DD] [--out docs/annotation-eval-songs-heldout-v2.json]
+//        [--uploads-out docs/annotation-heldout-v2-uploads.json]
 // titles: the UsPop2002 title list BTC trained on (rule 1). pool: the ordered pool with every
 // exclusion. list: walks the pool with the search log and writes the song list and uploads
 // (default rule amended-v1, the PR #31 amendment). amend-log: adds the amended-v1 decision to every
 // log entry (original decisions unchanged). diff: the selection under both rules side by side.
+// list-v2: the second held-out batch (PR #33) from the same pool and log, walked from the start rank
+// under amended-v1 (recomputed from the raw results) to N songs, N from the size rule for k.
 // Bundles src/eval/heldout-*.ts in memory with esbuild; reads and writes local files only.
 import * as esbuild from 'esbuild';
 import { createHash } from 'node:crypto';
@@ -30,14 +35,14 @@ export const USPOP_SOURCE = {
 export const LAB_ARCHIVE_SHA256 = '78c07c6a7cc10622228146f14820b05e94e09dd6eb211c3c5e93048560f39831';
 export const INDEX_SHA256 = 'fc39435098814f1a4f1dd5c95c72aff399b648b78f33a59682924dfb9b5280fb';
 
-const USAGE = 'usage: node scripts/heldout-songs.mjs titles|pool|list [options] (see the header of this file)';
+const USAGE = 'usage: node scripts/heldout-songs.mjs titles|pool|list|amend-log|diff|list-v2 [options] (see the header of this file)';
 
 export function parseArgs(argv) {
   const [cmd, ...rest] = argv;
   if (!cmd || cmd === '--help' || cmd === '-h') return { help: true };
-  if (!['titles', 'pool', 'list', 'amend-log', 'diff'].includes(cmd)) throw new Error(`unknown step: ${cmd}\n${USAGE}`);
+  if (!['titles', 'pool', 'list', 'amend-log', 'diff', 'list-v2'].includes(cmd)) throw new Error(`unknown step: ${cmd}\n${USAGE}`);
   const out = { cmd };
-  const keys = { '--tree': 'tree', '--out': 'out', '--index': 'index', '--labs': 'labs', '--archive': 'archive', '--log': 'log', '--pool': 'pool', '--declared-at': 'declaredAt', '--uploads-out': 'uploadsOut', '--songs': 'songs', '--titles': 'titles', '--rule': 'rule' };
+  const keys = { '--tree': 'tree', '--out': 'out', '--index': 'index', '--labs': 'labs', '--archive': 'archive', '--log': 'log', '--pool': 'pool', '--declared-at': 'declaredAt', '--uploads-out': 'uploadsOut', '--songs': 'songs', '--titles': 'titles', '--rule': 'rule', '--start-rank': 'startRank', '--eligible-k': 'eligibleK' };
   for (let i = 0; i < rest.length; i++) {
     const a = rest[i];
     const eq = a.indexOf('=');
@@ -48,9 +53,14 @@ export function parseArgs(argv) {
     if (!value) throw new Error(`${flag} needs a value`);
     out[key] = value;
   }
-  const need = { titles: ['tree'], pool: ['index', 'labs'], list: [], 'amend-log': [], diff: [] }[cmd];
+  const need = { titles: ['tree'], pool: ['index', 'labs'], list: [], 'amend-log': [], diff: [], 'list-v2': ['eligibleK'] }[cmd];
   if (out.rule && !['amended-v1', 'topic-only-v1'].includes(out.rule)) throw new Error(`unknown rule: ${out.rule}`);
-  for (const k of need) if (!out[k]) throw new Error(`${cmd} needs --${k}\n${USAGE}`);
+  for (const k of need) if (!out[k]) throw new Error(`${cmd} needs --${k === 'eligibleK' ? 'eligible-k' : k}\n${USAGE}`);
+  for (const k of ['startRank', 'eligibleK']) {
+    if (out[k] === undefined) continue;
+    if (!/^\d+$/.test(out[k])) throw new Error(`--${k === 'eligibleK' ? 'eligible-k' : 'start-rank'} must be a whole number, got ${out[k]}`);
+    out[k] = Number(out[k]);
+  }
   return out;
 }
 
@@ -58,7 +68,7 @@ async function loadModules() {
   const built = await esbuild.build({
     absWorkingDir: root,
     stdin: {
-      contents: "export * from './src/eval/heldout-draw.ts'; export * from './src/eval/heldout-uploads.ts'; export * from './src/eval/heldout-list.ts'; export { parseSongList, parseUploads } from './src/eval/annotations.ts';",
+      contents: "export * from './src/eval/heldout-draw.ts'; export * from './src/eval/heldout-uploads.ts'; export * from './src/eval/heldout-list.ts'; export * from './src/eval/heldout-v2.ts'; export { parseSongList, parseUploads } from './src/eval/annotations.ts';",
       resolveDir: root,
       loader: 'ts',
     },
@@ -236,6 +246,25 @@ async function list(m, args) {
   console.log(uploadsFile);
 }
 
+async function listV2(m, args) {
+  const size = m.heldoutV2Size(args.eligibleK);
+  const declaredAt = args.declaredAt ?? new Date().toISOString().slice(0, 10);
+  const log = JSON.parse(readFileSync(logFile(args), 'utf8'));
+  const r = m.buildHeldoutV2List({ order: readPool(m, args), log, dataset: billboardDataset(m, args), declaredAt, size, startRank: args.startRank ?? m.V2_START_RANK });
+  m.parseSongList(r.list);
+  m.parseUploads(r.uploads);
+  const listFile = args.out ?? doc('annotation-eval-songs-heldout-v2.json');
+  const uploadsFile = args.uploadsOut ?? doc('annotation-heldout-v2-uploads.json');
+  await writeFile(listFile, json(r.list), 'utf8');
+  await writeFile(
+    uploadsFile,
+    json({ $comment: `Uploads of the v2 held-out batch (PR #33): docs/annotation-heldout-v1-search-log.json walked from rank ${r.startRank} under rule ${r.rule}; copy into the charts folder as uploads.json.`, ...r.uploads }),
+    'utf8',
+  );
+  console.log(`${listFile}: rule ${r.rule}, k ${size.k}, N ${size.n} (P ${size.probability.toFixed(4)}), start rank ${r.startRank}, stop rank ${r.stopRank}, ${r.chosen.length} songs; skipped ${r.skipped.length}`);
+  console.log(uploadsFile);
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) {
@@ -243,7 +272,7 @@ async function main() {
     return 0;
   }
   const m = await loadModules();
-  await { titles, pool, list, 'amend-log': amendLogCmd, diff }[args.cmd](m, args);
+  await { titles, pool, list, 'amend-log': amendLogCmd, diff, 'list-v2': listV2 }[args.cmd](m, args);
   return 0;
 }
 
