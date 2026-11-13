@@ -193,6 +193,38 @@ describe('chance-level screen: V0 cases with known truth (VGT-7, PR #32)', () =>
     expect(a.excluded?.reason).not.toMatch(/start third|middle third|whole span/);
   });
 
+  it('passes a doubled-tempo grid through a half-rate grid when the landmarks sit on one parity (Amendment 1)', () => {
+    // Estimate beats every 0.25 s (twice the 0.5 s annotated tempo); landmarks on every other estimate beat only.
+    const dbl = grid(1, 190, 0.25, 0.005);
+    const lm = dbl.filter((_, k) => k % 24 === 0).map((t) => t - 0.15); // about 10 per third: too few to pass at 80% chance
+    const s = chanceScreen(lm, dbl, 0.15, 1, 0.1);
+    expect(s.gridAlpha).toBeCloseTo(0.05 / 3, 12);
+    expect(s.grids.map((g) => g.grid)).toEqual(['G0', 'G1', 'G2']);
+    expect(s.grids[0].windows[1].chance).toBeCloseTo(0.8, 1);
+    expect(s.grids[1].windows[1].chance).toBeCloseTo(0.4, 1);
+    expect(s.grids[1].medianBeatIntervalSec).toBeCloseTo(0.5, 1);
+    expect(s.grids[0].passed).toBe(false);
+    expect(s.grids[1].passed).toBe(true);
+    expect(s.grids[2].windows.every((w) => w.matched === 0)).toBe(true);
+    expect(s.passed).toBe(true);
+    expect(s.windows).toBe(s.grids[0].windows);
+  });
+
+  it('keeps random-phase landmarks failing on all three grids, with per-grid diagnostics (Amendment 1)', () => {
+    const r = rng(2);
+    const lm = Array.from({ length: 48 }, () => 5 + r() * 180).sort((x, y) => x - y);
+    const a = alignAnnotation(changesInput(grid(1, 190, 0.64), lm, { estimateFirstDownbeatSec: null }));
+    expect(a.chance!.grids).toHaveLength(3);
+    for (const g of a.chance!.grids) {
+      expect(g.windows).toHaveLength(4);
+      expect(g.passed).toBe(false);
+      for (const w of g.windows) expect(w.insufficient).toBe(Math.pow(w.chance, w.landmarks) > 0.05 / 3);
+    }
+    expect(a.chance!.grids[1].beats + a.chance!.grids[2].beats).toBe(a.chance!.grids[0].beats);
+    expect(a.excluded?.code).toBe('near-chance');
+    expect(a.excluded?.reason).toMatch(/no half-rate grid passed$/);
+  });
+
   it('records the screen whichever exclusion is primary, and keeps landmarks-disagree and duration first', () => {
     const dur = alignAnnotation(beatsInput(est, est, { mediaDurationSec: 203 }));
     expect(dur.excluded?.code).toBe('duration-mismatch');

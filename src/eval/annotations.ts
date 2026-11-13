@@ -371,7 +371,7 @@ export interface ChanceWindow {
   chance: number;
   /** P(Binomial(landmarks, chance) ≥ matched). */
   p: number;
-  /** Even matched = landmarks cannot pass (chance^landmarks > alpha). */
+  /** Even matched = landmarks cannot pass (chance^landmarks > the per-grid alpha). */
   insufficient: boolean;
   passed: boolean;
 }
@@ -383,13 +383,30 @@ export interface ChanceWindow {
  * calibrated false-acceptance rate after the offset search (measured by scripts/align-validation.mjs).
  */
 export interface ChanceScreen {
+  /** Overall level; each grid is tested at alpha / 3 (Amendment 1). */
   alpha: number;
+  gridAlpha: number;
   tolSec: number;
   /** Median interval of the estimate beats. */
   medianBeatIntervalSec: number;
   /** Regular-grid chance min(1, 2 × tol / median beat interval), recorded next to the union chance. */
   gridChance: number;
+  /** G0's windows (all estimate beats), the same as grids[0].windows. */
   windows: ChanceWindow[];
+  /** G0 = all estimate beats, G1 = even-index beats, G2 = odd-index beats (time order). */
+  grids: ChanceGrid[];
+  /** At least one grid passed. */
+  passed: boolean;
+}
+
+/** One beat grid of the chance-level screen (PR #32, Amendment 1: half-rate beat grids). */
+export interface ChanceGrid {
+  grid: 'G0' | 'G1' | 'G2';
+  beats: number;
+  medianBeatIntervalSec: number;
+  gridChance: number;
+  windows: ChanceWindow[];
+  /** All four windows have p ≤ gridAlpha. */
   passed: boolean;
 }
 
@@ -672,29 +689,37 @@ function thirdsOf(landmarks: number[]): { part: AlignSegmentCheck['part']; fromS
 /**
  * The chance-level screen at a given map (media = offsetSec + rate × annotation time): the whole
  * landmark span and the start / middle / end thirds, each passing when P(Binomial(n, chance) ≥ k)
- * ≤ alpha, with chance the union coverage of the beat windows in the mapped window. The song passes
- * only when all four windows pass (an intersection: no multiplicity correction). Windows are never
+ * ≤ alpha / 3, with chance the union coverage of the beat windows in the mapped window. Three
+ * grids are tested at the same map (PR #32, Amendment 1): G0 = all estimate beats, G1 / G2 = the
+ * even- / odd-index estimate beats (a grid at twice the beat interval, for estimates at double the
+ * annotated tempo). A grid passes when all four windows pass (an intersection: no multiplicity
+ * correction across windows); the song passes when at least one grid passes. Windows are never
  * merged; a window that cannot pass even with every landmark on a beat is flagged insufficient.
  */
 export function chanceScreen(landmarksIn: number[], beatsIn: number[], offsetSec: number, rate: number, tolSec: number, alpha = CHANCE_ALPHA): ChanceScreen {
   const landmarks = [...landmarksIn].sort((a, b) => a - b);
   const beats = [...beatsIn].sort((a, b) => a - b);
-  const medianBeatIntervalSec = beats.length > 1 ? median(beats.slice(1).map((b, i) => b - beats[i])) : NaN;
-  const gridChance = Number.isFinite(medianBeatIntervalSec) && medianBeatIntervalSec > 0 ? Math.min(1, (2 * tolSec) / medianBeatIntervalSec) : 1;
+  const gridAlpha = alpha / 3;
   const m = (t: number) => offsetSec + rate * t;
-  const window = (part: ChanceWindow['part'], fromSec: number, toSec: number, inPart: number[]): ChanceWindow => {
-    const matched = inPart.filter((l) => Math.abs(nearestResidual(beats, m(l))) <= tolSec + 1e-9).length;
-    const mediaFromSec = Math.min(m(fromSec), m(toSec));
-    const mediaToSec = Math.max(m(fromSec), m(toSec));
-    const chance = beatWindowCoverage(beats, tolSec, mediaFromSec, mediaToSec);
-    const p = binomialUpperTail(inPart.length, matched, chance);
-    const insufficient = Math.pow(chance, inPart.length) > alpha;
-    return { part, fromSec, toSec, mediaFromSec, mediaToSec, landmarks: inPart.length, matched, chance, p, insufficient, passed: p <= alpha };
+  const thirds = landmarks.length ? thirdsOf(landmarks) : [];
+  const testGrid = (grid: ChanceGrid['grid'], gb: number[]): ChanceGrid => {
+    const medianBeatIntervalSec = gb.length > 1 ? median(gb.slice(1).map((b, i) => b - gb[i])) : NaN;
+    const gridChance = Number.isFinite(medianBeatIntervalSec) && medianBeatIntervalSec > 0 ? Math.min(1, (2 * tolSec) / medianBeatIntervalSec) : 1;
+    const window = (part: ChanceWindow['part'], fromSec: number, toSec: number, inPart: number[]): ChanceWindow => {
+      const matched = inPart.filter((l) => Math.abs(nearestResidual(gb, m(l))) <= tolSec + 1e-9).length;
+      const mediaFromSec = Math.min(m(fromSec), m(toSec));
+      const mediaToSec = Math.max(m(fromSec), m(toSec));
+      const chance = beatWindowCoverage(gb, tolSec, mediaFromSec, mediaToSec);
+      const p = binomialUpperTail(inPart.length, matched, chance);
+      const insufficient = Math.pow(chance, inPart.length) > gridAlpha;
+      return { part, fromSec, toSec, mediaFromSec, mediaToSec, landmarks: inPart.length, matched, chance, p, insufficient, passed: p <= gridAlpha };
+    };
+    const windows = landmarks.length ? [window('span', landmarks[0], landmarks[landmarks.length - 1], landmarks), ...thirds.map((t) => window(t.part, t.fromSec, t.toSec, t.inPart))] : [];
+    return { grid, beats: gb.length, medianBeatIntervalSec, gridChance, windows, passed: windows.length > 0 && windows.every((w) => w.passed) };
   };
-  const windows = landmarks.length
-    ? [window('span', landmarks[0], landmarks[landmarks.length - 1], landmarks), ...thirdsOf(landmarks).map((t) => window(t.part, t.fromSec, t.toSec, t.inPart))]
-    : [];
-  return { alpha, tolSec, medianBeatIntervalSec, gridChance, windows, passed: windows.length > 0 && windows.every((w) => w.passed) };
+  const grids = [testGrid('G0', beats), testGrid('G1', beats.filter((_, k) => k % 2 === 0)), testGrid('G2', beats.filter((_, k) => k % 2 === 1))];
+  const g0 = grids[0];
+  return { alpha, gridAlpha, tolSec, medianBeatIntervalSec: g0.medianBeatIntervalSec, gridChance: g0.gridChance, windows: g0.windows, grids, passed: grids.some((g) => g.passed) };
 }
 
 /**
@@ -985,14 +1010,14 @@ export function alignAnnotation(input: AlignInput, options?: Partial<AlignOption
     result.excluded = { code: 'landmarks-disagree', reason: `only ${Math.round(chosen.matchedFraction * 100)}% of landmarks fall on an estimated beat` };
   else {
     const weak = result.segments.find((s) => s.landmarks === 0 || s.matched / s.landmarks < o.minMatchFraction || s.matched < 4);
-    const failing = result.chance.windows.filter((w) => !w.passed);
+    const failing = result.chance.passed ? [] : result.chance.windows.filter((w) => !w.passed);
     if (weak) result.excluded = { code: 'landmarks-disagree', reason: `${weak.part} third: ${weak.matched}/${weak.landmarks} landmarks on an estimated beat` };
     else if (failing.length)
       result.excluded = {
         code: 'near-chance',
-        reason: `landmarks on a beat not clearly above chance (p > ${result.chance.alpha}): ${failing
+        reason: `landmarks on a beat not clearly above chance (p > ${result.chance.alpha} / 3 per grid): ${failing
           .map((w) => `${w.part === 'span' ? 'whole span' : `${w.part} third`} ${w.matched}/${w.landmarks} (chance ${Math.round(w.chance * 100)}%, p ${w.p.toPrecision(2)}${w.insufficient ? ', too few landmarks to pass at this chance' : ''})`)
-          .join('; ')}`,
+          .join('; ')}; no half-rate grid passed`,
       };
     else if (result.driftSec !== null && result.driftSec > o.driftLimitSec)
       result.excluded = { code: 'drift', reason: rateNote ?? `local offsets differ by ${Math.round(result.driftSec * 1000)} ms across the song${rate !== 1 ? ' after the fitted speed difference' : ''}` };
