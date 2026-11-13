@@ -2,12 +2,14 @@
 //   npm run paired-eval -- --maps <maps.json> --annotations <dir> --baseline <charts dir> --candidate <charts dir>
 //     [--out <result.json>] [--subset-field btcTraining=not-known] [--groups <groups.json>] [--songs <list.json>]…
 // Only the songs of the maps file are read and scored; each with its frozen offsetSec/rate/mediaDurationSec
-// and the evaluator's unchanged scoreSong. Song lists (default: every docs/annotation-eval-songs*.json)
-// are used only to find each song's annotation files, read exactly as eval-annotations reads them.
+// and the evaluator's unchanged scoreSong. Song lists are used only to find each song's annotation files,
+// read exactly as eval-annotations reads them: a maps entry's songList (repository-relative) for that song,
+// otherwise the --songs lists, otherwise the two DEV lists (docs/annotation-eval-songs.json and
+// docs/annotation-eval-songs-heldout-v1.json). A held-out TEST list is read only when named.
 // Local files only (no network).
 import * as esbuild from 'esbuild';
 import { createHash } from 'node:crypto';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -16,11 +18,11 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const USAGE =
   'usage: npm run paired-eval -- --maps <maps.json> --annotations <dir> --baseline <charts dir> --candidate <charts dir> [--out <result.json>] [--subset-field field=value] [--groups <groups.json>] [--songs <list.json>]…';
 
-export function defaultSongLists() {
-  return readdirSync(path.join(root, 'docs'))
-    .filter((f) => /^annotation-eval-songs.*\.json$/.test(f))
-    .sort()
-    .map((f) => path.join(root, 'docs', f));
+/** Key a song list is named by: repository-relative inside the repository, absolute outside it. */
+export function listKey(file) {
+  const abs = path.resolve(root, file);
+  const rel = path.relative(root, abs);
+  return rel && !rel.startsWith('..') && !path.isAbsolute(rel) ? rel.split(path.sep).join('/') : abs;
 }
 
 export function parseArgs(argv) {
@@ -37,7 +39,6 @@ export function parseArgs(argv) {
     i++;
   }
   for (const k of ['maps', 'annotations', 'baseline', 'candidate']) if (!out[k]) throw new Error(`--${k} is required\n${USAGE}`);
-  if (!out.songs.length) out.songs = defaultSongLists();
   return out;
 }
 
@@ -82,7 +83,9 @@ export function fileIo(args) {
 export async function run(args, m) {
   const mapsText = readFileSync(args.maps, 'utf8');
   const maps = m.parseMaps(JSON.parse(mapsText));
-  const lists = args.songs.map((f) => m.parseSongList(readJson(f)));
+  for (const s of maps.songs) if (s.songList) s.songList = listKey(s.songList);
+  const { files, fallback } = m.songListsToLoad(maps, args.songs.map((f) => listKey(path.resolve(f))));
+  const lists = files.map((file) => ({ file, list: m.parseSongList(readJson(path.resolve(root, file))) }));
   const groups = args.groups ? m.parseGroups(readJson(args.groups), maps) : undefined;
   const subset = args.subset ? m.parseSubset(args.subset) : undefined;
   const inputs = {
@@ -91,10 +94,10 @@ export async function run(args, m) {
     annotations: path.resolve(args.annotations),
     baseline: path.resolve(args.baseline),
     candidate: path.resolve(args.candidate),
-    songLists: args.songs.map((f) => path.resolve(f)).join(', '),
+    songLists: files.join(', '),
     groups: args.groups ? path.resolve(args.groups) : null,
   };
-  return m.pairedEvaluate(maps, lists, fileIo(args), { subset, groups, inputs });
+  return m.pairedEvaluate(maps, lists, fileIo(args), { fallbackLists: fallback, subset, groups, inputs });
 }
 
 async function main() {

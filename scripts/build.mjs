@@ -73,7 +73,7 @@ const options = {
   target: 'chrome116',
   sourcemap: 'linked',
   // onnxruntime-web's bundle references import.meta.url; wasmPaths is set explicitly instead.
-  define: buildDefine(flags, dump ? audioDumpInfo(root) : null),
+  define: buildDefine(flags, dump ? audioDumpInfo(root, path.join(dist, 'models')) : null),
   ...(dump ? { plugins: [audioDumpPlugin(root)] } : {}),
   minify: false,
   logLevel: 'info',

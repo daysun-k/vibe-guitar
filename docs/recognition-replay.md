@@ -28,8 +28,9 @@ named `… [audio dump, dev]`. It is the normal extension except that listen.ts'
   schedules (after the current task, so after listen.ts has sent the `auto-chart` message) one POST to
   `http://127.0.0.1:8791/capture`: each segment's raw 22.05 kHz little-endian Float32 samples with its
   unrounded `startSec`, plus the recording key and metadata, session duration and coverage, the chart
-  exactly as sent, the build commit (and whether the tree had local changes), the packaged model sha256
-  values and a capture time. A failed POST is caught and logged (`audio dump: POST failed`); the chart
+  exactly as sent, the build commit (and whether the tree had local changes), the sha256 of the model
+  files actually packaged into `dist-dump/models/` (hashed after the build copied them, not the
+  manifest's expected values) and a capture time. A failed POST is caught and logged (`audio dump: POST failed`); the chart
   path never waits for it.
 
 The default build defines `__AUDIO_DUMP__` false and does not bundle these modules at all, so `dist/` is
@@ -71,8 +72,10 @@ starts, audio, mel/CQT features and beat logits as a session filled with irregul
 Runtime: onnxruntime-node (CPU) with `models/` by default; `--runtime web` uses onnxruntime-web WASM in
 Node (1 thread), closer to the browser. Output: `<out>/<youtubeId>.json` (the chart, the shape
 `eval-annotations` and `paired-eval` read) and `<out>/replay-manifest.json` (config, git commit and
-dirty flag, runtime, model sha256 values, per-song capture id, segments, audio seconds, timings, and a
-warning when a capture was made with other model files).
+dirty flag, runtime, model sha256 values, per-song capture id, segments, audio seconds, timings). Replay
+hashes the model files it loads and compares them with the hashes the capture recorded; every file whose
+bytes differ, or that the capture does not name, is printed as a `WARNING` and listed in the manifest
+(`modelMismatch`), because such a replay does not run the live model bytes.
 
 `--config` is `{ "label"?: string, "recognizer": RecognizerOptions }`. Accepted today:
 `recognizer.vocabulary` (`full` | `simple` | `majmin`) and `recognizer.decode.changePenalty`
@@ -97,19 +100,26 @@ trusting any candidate comparison.
 ```
 npm run paired-eval -- --maps maps.json --annotations <annotations dir> \
   --baseline /tmp/vg-replay/baseline --candidate /tmp/vg-replay/cand-a \
-  --subset-field btcTraining=not-known [--groups groups.json] [--songs docs/annotation-eval-songs.json]… --out result.json
+  --subset-field btcTraining=not-known [--groups groups.json] [--songs <list.json>]… --out result.json
 ```
 
 `maps.json` (written before any candidate is scored):
 
 ```
 { "schema": "vibe-guitar-paired-maps/1",
-  "songs": [ { "id", "dataset", "youtubeId", "offsetSec", "rate", "mediaDurationSec", "btcTraining", "groups": [] } ] }
+  "songs": [ { "id", "dataset", "youtubeId", "offsetSec", "rate", "mediaDurationSec", "btcTraining", "groups": [], "songList"? } ] }
 ```
 
-Only map songs are read. Each song's annotation is found through the song lists (default: every
-`docs/annotation-eval-songs*.json`; the id must mean the same files in every list and the dataset must
-match the map) and parsed with the evaluator's `parseLab`/`parseBeats`. Both arms are scored with the
+The frozen recognition maps (`docs/recognition-dev-maps.json`, schema
+`vibe-guitar-recognition-dev-maps/1`, and later `vibe-guitar-recognition-*-maps/1` sets) are accepted
+as they are; extra fields are ignored.
+
+Only map songs are read. Each song's annotation is found through a song list: the entry's `songList`
+(repository-relative path) and only that list; for an entry without one, the `--songs` lists, or else the
+two DEV lists `docs/annotation-eval-songs.json` and `docs/annotation-eval-songs-heldout-v1.json`. A
+held-out TEST list such as `docs/annotation-eval-songs-heldout-v2.json` is read only when a maps entry or
+`--songs` names it. The id must mean the same files in every list used and the dataset must match the
+map. Annotations are parsed with the evaluator's `parseLab`/`parseBeats`. Both arms are scored with the
 unchanged `scoreSong(segs, annotationBeats, chart, offsetSec, mediaDurationSec, 1, rate)`; a chart's own
 beats are never used for the map. Baseline and candidate must have identical coverage and the same
 evaluated seconds per metric (within 1e-6 s): otherwise the run stops with an error.
@@ -117,11 +127,14 @@ evaluated seconds per metric (within 1e-6 s): otherwise the run stops with an er
 Per song: majmin, root and sevenths for both arms and the delta (candidate − baseline), and chord-change
 diagnostics inside the region both the mapped annotation and the chart cover: changes of the
 majmin-reduced label (a chord outside majmin keeps its own symbol), matched one-to-one within ±250 ms;
-predicted and annotated change counts, precision, recall, F. Aggregates (all songs, and the subset):
+predicted and annotated change counts, precision, recall, F, and their deltas. Aggregates (all songs,
+and the subset):
 song means of each metric for both arms, mean deltas, a paired percentile bootstrap 95% interval of the
 mean majmin delta (10 000 resamples over songs, mulberry32 seed 7007, `bootstrapMeanCi` from
 `src/eval/song-mean.ts`), leave-one-song-out mean majmin deltas (min and max, with the song left out),
-the worst single-song majmin delta, and mean deltas per group (map `groups` plus `--groups`
+the worst single-song majmin delta, song-mean boundary precision, recall and F of both arms with their
+paired deltas (over the songs where the rate is defined in both arms; the precision delta is the
+protocol's flicker guard: not lower by more than 2.0 pp), and mean deltas per group (map `groups` plus `--groups`
 `{ "<group>": [songId…] }`, whose ids must be in the maps). The result JSON (`--out`; non-finite numbers
 written as null) and a short text summary in percentage points.
 

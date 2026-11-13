@@ -4,7 +4,7 @@ import { RecordingCache } from '../src/extension/dump/audio-dump';
 import type { ModelRunner } from '../src/recognize/runner';
 import { analyzeClosedSegments, ListeningSession, segmentBeatLogits, type Segment } from '../src/recognize/session';
 import { compareParity } from '../src/replay/parity';
-import { feedSession, parseReplayConfig } from '../src/replay/replay';
+import { feedSession, modelHashMismatches, parseReplayConfig } from '../src/replay/replay';
 import { liveLikeSession } from './replay-helpers';
 
 const fakeBeatRunner: ModelRunner = {
@@ -53,6 +53,17 @@ describe('offline replay feeding', () => {
     ], null);
     expect(s.segments).toHaveLength(2);
     expect(segs.map((g: Segment) => g.startSec)).toEqual([0, 1.5]);
+  });
+});
+
+describe('replay model hashes', () => {
+  it('flags loaded model files whose bytes differ from, or are missing in, the capture record', () => {
+    const loaded = { 'beat.onnx': 'aa', 'chords.onnx': 'bb', 'meta.json': 'cc' };
+    expect(modelHashMismatches({ 'beat.onnx': 'aa', 'chords.onnx': 'bb', 'meta.json': 'cc', 'extra.onnx': 'dd' }, loaded)).toEqual([]);
+    expect(modelHashMismatches({ 'beat.onnx': 'aa', 'chords.onnx': 'XX' }, loaded)).toEqual([
+      { file: 'chords.onnx', recorded: 'XX', loaded: 'bb' },
+      { file: 'meta.json', recorded: null, loaded: 'cc' },
+    ]);
   });
 });
 

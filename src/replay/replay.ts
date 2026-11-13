@@ -119,3 +119,20 @@ export async function replayCapture(meta: Pick<CaptureMeta, 'recordingKey' | 're
   const chart = buildAutoChart({ recording: { ...meta.recording }, segments: analyses, tool, durationSec: session.durationSec });
   return { chart, analysedSegments: analyses.length, ms: { feed: Math.round(t1 - t0), analyze: Math.round(now() - t1) } };
 }
+
+export interface ModelHashMismatch {
+  file: string;
+  /** Hash the capture recorded (null: the capture names no hash for this file). */
+  recorded: string | null;
+  loaded: string;
+}
+
+/**
+ * Model files replay loaded whose bytes differ from what the capture's build packaged (or that the
+ * capture does not name). Empty means the replay runs the same model files as the live analysis.
+ */
+export function modelHashMismatches(recorded: Record<string, string>, loaded: Record<string, string>): ModelHashMismatch[] {
+  return Object.entries(loaded)
+    .filter(([file, hash]) => recorded[file] !== hash)
+    .map(([file, hash]) => ({ file, recorded: recorded[file] ?? null, loaded: hash }));
+}

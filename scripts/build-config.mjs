@@ -4,6 +4,7 @@
 // The default build defines both flags false and adds no plugin, so dist/ is byte-identical to a
 // build without these flags (the dump hooks are not even bundled: see audioDumpPlugin).
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
@@ -14,8 +15,12 @@ export function buildFlags(argv) {
   return { probe, dump, watch: argv.includes('--watch'), outDir: probe ? 'dist-probe' : dump ? 'dist-dump' : 'dist' };
 }
 
-/** Commit and packaged model hashes recorded in every capture of the dump build. */
-export function audioDumpInfo(root) {
+/**
+ * Commit and packaged model hashes recorded in every capture of the dump build. The hashes are of
+ * the bytes in packagedModelsDir (the build output's models/ folder, after scripts/build.mjs copied
+ * them), not the manifest's expected values, so a capture names the models it actually ran.
+ */
+export function audioDumpInfo(root, packagedModelsDir) {
   const git = (...a) => execFileSync('git', a, { cwd: root, encoding: 'utf8' }).trim();
   let commit = 'unknown';
   let dirty = true;
@@ -26,7 +31,9 @@ export function audioDumpInfo(root) {
     // Not a git checkout: recorded as unknown and dirty.
   }
   const manifest = JSON.parse(readFileSync(path.join(root, 'scripts/models.manifest.json'), 'utf8'));
-  const models = Object.fromEntries(manifest.files.filter((m) => m.packaged).map((m) => [m.file, m.sha256]));
+  const models = Object.fromEntries(
+    manifest.files.filter((m) => m.packaged).map((m) => [m.file, createHash('sha256').update(readFileSync(path.join(packagedModelsDir, m.file))).digest('hex')]),
+  );
   return { commit, dirty, models };
 }
 

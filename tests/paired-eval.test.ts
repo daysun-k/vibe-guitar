@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { Chart } from '../src/chart/types';
 import { evaluateSongs, parseSongList, SONG_LIST_SCHEMA, type SongList } from '../src/eval/annotations';
 import { bootstrapMeanCi } from '../src/eval/song-mean';
-import { aggregate, matchChanges, PAIRED_MAPS_SCHEMA, pairedEvaluate, parseGroups, parseMaps, type PairedIo, type PairedMaps } from '../src/eval/paired';
+import { readFileSync } from 'node:fs';
+import { aggregate, DEFAULT_SONG_LISTS, matchChanges, PAIRED_MAPS_SCHEMA, pairedEvaluate, pairedSummary, parseGroups, parseMaps, songListsToLoad, type PairedIo, type PairedMaps } from '../src/eval/paired';
 
 function autoChart(events: [number, string][], beats: number[], cover: [number, number][] = [[0, 200]]): Chart {
   return {
@@ -48,6 +49,7 @@ function list(): SongList {
   });
 }
 
+const named = () => [{ file: 'test-list.json', list: list() }];
 const fx = fixture();
 const files: Record<string, string> = { 'iso/a.lab': fx.lab, 'iso/a.txt': fx.beatsTxt, 'iso/b.lab': fx.lab, 'iso/c.lab': fx.lab };
 const ids = { a: 'aaaaaaaaaaa', b: 'bbbbbbbbbbb', c: 'ccccccccccc' } as const;
@@ -67,7 +69,7 @@ const charts = (c: Chart) => Object.fromEntries(Object.values(ids).map((y) => [y
 
 describe('paired frozen-map scorer', () => {
   it('the same chart in both arms gives zero deltas', () => {
-    const r = pairedEvaluate(maps(), [list()], io(charts(fx.chart), charts(fx.chart)), { subset: { field: 'btcTraining', value: 'not-known' } });
+    const r = pairedEvaluate(maps(), named(), io(charts(fx.chart), charts(fx.chart)), { subset: { field: 'btcTraining', value: 'not-known' } });
     expect(r.songs).toHaveLength(3);
     for (const s of r.songs) expect(s.delta).toEqual({ majmin: 0, root: 0, sevenths: 0 });
     expect(r.all.meanDelta.majmin).toBe(0);
@@ -80,7 +82,7 @@ describe('paired frozen-map scorer', () => {
 
   it('scores a worse candidate with a paired delta and boundary diagnostics', () => {
     const worse = fixture(0.14, 4).chart;
-    const r = pairedEvaluate(maps(), [list()], io(charts(fx.chart), { ...charts(fx.chart), [ids.b]: worse }));
+    const r = pairedEvaluate(maps(), named(), io(charts(fx.chart), { ...charts(fx.chart), [ids.b]: worse }));
     const b = r.songs.find((s) => s.id === 'b')!;
     expect(b.delta.majmin).toBeLessThan(0);
     expect(r.all.largestLoss?.id).toBe('b');
@@ -91,21 +93,21 @@ describe('paired frozen-map scorer', () => {
   it('throws when evaluated seconds or coverage differ between the arms', () => {
     // Without coverage the evaluator falls back to the event span, so the evaluated seconds differ.
     const noCov = (end: number) => autoChart([[0, 'N'], [2, 'C'], [end, 'G']], [], []);
-    expect(() => pairedEvaluate(maps(), [list()], io(charts(noCov(100)), charts(noCov(150))))).toThrow(/evaluated majmin seconds differ/);
+    expect(() => pairedEvaluate(maps(), named(), io(charts(noCov(100)), charts(noCov(150))))).toThrow(/evaluated majmin seconds differ/);
     const shorter = autoChart(fx.chart.events.map((e) => [e.startSec, e.chord]), fx.chart.timing.beatTimes!, [[0, 150]]);
-    expect(() => pairedEvaluate(maps(), [list()], io(charts(fx.chart), charts(shorter)))).toThrow(/coverage differ/);
+    expect(() => pairedEvaluate(maps(), named(), io(charts(fx.chart), charts(shorter)))).toThrow(/coverage differ/);
   });
 
   it('accepts only map songs: groups with unknown ids and songs missing from the lists are errors', () => {
     expect(() => parseGroups({ g: ['a', 'zzz'] }, maps())).toThrow(/not in the maps file: zzz/);
     const m = maps();
     const extra = parseMaps({ ...m, songs: [...m.songs, { ...m.songs[0], id: 'nope' }] });
-    expect(() => pairedEvaluate(extra, [list()], io(charts(fx.chart), charts(fx.chart)))).toThrow(/nope is in no song list/);
+    expect(() => pairedEvaluate(extra, named(), io(charts(fx.chart), charts(fx.chart)))).toThrow(/nope is in no song list/);
     expect(() => parseMaps({ ...m, songs: [m.songs[0], m.songs[0]] })).toThrow(/duplicate/);
   });
 
   it('the bootstrap interval is deterministic for a fixed seed', () => {
-    const r = pairedEvaluate(maps(), [list()], io(charts(fx.chart), { [ids.a]: fixture(0.14, 3).chart, [ids.b]: fixture(0.14, 5).chart, [ids.c]: fx.chart }));
+    const r = pairedEvaluate(maps(), named(), io(charts(fx.chart), { [ids.a]: fixture(0.14, 3).chart, [ids.b]: fixture(0.14, 5).chart, [ids.c]: fx.chart }));
     const again = aggregate(r.songs);
     expect(again.majminDeltaCi).toEqual(r.all.majminDeltaCi);
     expect(again.majminDeltaCi).toMatchObject({ resamples: 10000, seed: 7007, prng: 'mulberry32' });
@@ -126,13 +128,54 @@ describe('paired frozen-map scorer', () => {
       schema: PAIRED_MAPS_SCHEMA,
       songs: scored.map((s) => ({ id: s.id, dataset: s.dataset, youtubeId: s.youtubeId, offsetSec: s.alignment!.offsetSec, rate: s.alignment!.rate, mediaDurationSec: s.mediaDurationSec, btcTraining: s.btcTraining, groups: [] })),
     });
-    const r = pairedEvaluate(frozen, [l], io(charts3, charts3));
+    const r = pairedEvaluate(frozen, [{ file: 'test-list.json', list: l }], io(charts3, charts3));
     for (const s of scored) {
       const p = r.songs.find((x) => x.id === s.id)!;
       const c = s.score!.comparison;
       expect([p.baseline.majmin, p.baseline.root, p.baseline.sevenths]).toEqual([c.majmin.score, c.root.score, c.sevenths.score]);
       expect(p.baseline.evaluatedSec.majmin).toBe(c.majmin.evaluatedSec);
     }
+  });
+
+  it('reports song-mean boundary precision and recall with paired deltas (the flicker guard)', () => {
+    // Candidate flickers: an extra change in the middle of every chord on song c (same chord labels otherwise).
+    const flicker = autoChart(
+      fx.chart.events.flatMap((e) => (e.chord === 'N' ? [[e.startSec, e.chord] as [number, string]] : [[e.startSec, e.chord] as [number, string], [e.startSec + 1, 'E'] as [number, string]])),
+      fx.chart.timing.beatTimes!,
+    );
+    const r = pairedEvaluate(maps(), named(), io(charts(fx.chart), { ...charts(fx.chart), [ids.c]: flicker }));
+    const c = r.songs.find((s) => s.id === 'c')!;
+    expect(c.baseline.boundaries).toMatchObject({ precision: 1, recall: 1 });
+    expect(c.candidate.boundaries.precision).toBeLessThan(0.6);
+    expect(c.candidate.boundaries.recall).toBe(1);
+    expect(c.boundaryDelta.precision).toBeCloseTo(c.candidate.boundaries.precision - 1, 12);
+    const b = r.all.boundaries;
+    expect(b.precision.n).toBe(3);
+    expect(b.precision.baseline).toBe(1);
+    expect(b.precision.candidate).toBeCloseTo((2 + c.candidate.boundaries.precision) / 3, 12);
+    expect(b.precision.delta).toBeCloseTo(c.boundaryDelta.precision / 3, 12);
+    expect(b.recall).toMatchObject({ n: 3, baseline: 1, candidate: 1, delta: 0 });
+    expect(b.f.delta).toBeLessThan(0);
+    const text = pairedSummary(r);
+    expect(text).toMatch(/precision 100\.0 → \d+\.\d \(Δ -\d+\.\d\d\)/);
+    expect(text).toMatch(/recall 100\.0 → 100\.0 \(Δ \+0\.00\)/);
+    // Same chart in both arms: zero boundary deltas.
+    expect(pairedEvaluate(maps(), named(), io(charts(fx.chart), charts(fx.chart))).all.boundaries.precision.delta).toBe(0);
+  });
+
+  it('reads only the song list each map entry names, else the two DEV lists', () => {
+    const m = maps();
+    const withList = parseMaps({ ...m, songs: m.songs.map((s) => ({ ...s, songList: s.id === 'a' ? 'other.json' : 'test-list.json' })) });
+    // a names a list that has no song a: an error, even though the default list has it.
+    const other = { file: 'other.json', list: { ...list(), songs: list().songs.filter((s) => s.id !== 'a') } };
+    expect(() => pairedEvaluate(withList, [...named(), other], io(charts(fx.chart), charts(fx.chart)))).toThrow(/a is in no song list \(other\.json\)/);
+    expect(songListsToLoad(withList, [])).toEqual({ files: ['other.json', 'test-list.json'], fallback: [] });
+    expect(songListsToLoad(m, [])).toEqual({ files: DEFAULT_SONG_LISTS, fallback: DEFAULT_SONG_LISTS });
+    expect(DEFAULT_SONG_LISTS.some((f) => /heldout-v2/.test(f))).toBe(false);
+    expect(songListsToLoad(m, ['x.json']).files).toEqual(['x.json']);
+    // The committed DEV maps parse and name only the two DEV lists.
+    const dev = parseMaps(JSON.parse(readFileSync('docs/recognition-dev-maps.json', 'utf8')));
+    expect(songListsToLoad(dev, []).files.sort()).toEqual([...DEFAULT_SONG_LISTS].sort());
   });
 
   it('matches chord changes one-to-one within the window', () => {

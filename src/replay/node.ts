@@ -10,7 +10,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import type { BtcMeta } from '../recognize/chords';
 import { MODEL_FILES, ortRunner, type ModelRunner } from '../recognize/runner';
-import { parseReplayConfig, replayCapture, type ReplayModels } from './replay';
+import { modelHashMismatches, parseReplayConfig, replayCapture, type ReplayModels } from './replay';
 import { readSegments, selectCaptures } from './store';
 
 export const REPLAY_MANIFEST_SCHEMA = 'vibe-guitar-replay-run/1';
@@ -75,10 +75,11 @@ async function main(): Promise<void> {
     const segments = readSegments(c);
     const r = await replayCapture(c.meta, segments, models, config.recognizer, tool);
     writeFileSync(path.join(outDir, `${c.key}.json`), `${JSON.stringify(r.chart, null, 2)}\n`);
-    const modelMismatch = Object.entries(c.meta.models).filter(([f, h]) => f in modelSha && modelSha[f] !== h).map(([f]) => f);
+    const modelMismatch = modelHashMismatches(c.meta.models ?? {}, modelSha);
     const audioSec = segments.reduce((s, g) => s + g.samples.length, 0) / c.meta.sampleRate;
     songs.push({ key: c.key, captureId: c.captureId, captureBuild: c.meta.build, segments: segments.length, analysedSegments: r.analysedSegments, audioSec, events: r.chart.events.length, ms: { ...r.ms, total: Date.now() - t0 }, modelMismatch });
-    console.log(`${c.key} ${c.captureId}: ${segments.length} segments, ${audioSec.toFixed(1)} s, ${r.chart.events.length} events, ${Date.now() - t0} ms${modelMismatch.length ? `; WARNING capture used other models: ${modelMismatch.join(', ')}` : ''}`);
+    console.log(`${c.key} ${c.captureId}: ${segments.length} segments, ${audioSec.toFixed(1)} s, ${r.chart.events.length} events, ${Date.now() - t0} ms`);
+    for (const x of modelMismatch) console.warn(`WARNING ${c.key}: ${x.file} loaded ${x.loaded.slice(0, 12)}, capture recorded ${x.recorded ? x.recorded.slice(0, 12) : 'no hash'}: the replay does not run the live model bytes`);
   }
   const manifest = {
     schema: REPLAY_MANIFEST_SCHEMA,

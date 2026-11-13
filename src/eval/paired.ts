@@ -24,6 +24,10 @@ import {
 import { bootstrapMeanCi, BOOTSTRAP_RESAMPLES, BOOTSTRAP_SEED, CI_LEVEL } from './song-mean';
 
 export const PAIRED_MAPS_SCHEMA = 'vibe-guitar-paired-maps/1';
+/** Also accepted: the frozen recognition maps (docs/recognition-dev-maps.json and later sets). */
+const MAPS_SCHEMA_RE = /^vibe-guitar-(paired|recognition-[a-z0-9-]+)-maps\/1$/;
+/** Song lists used when neither the map entry nor the caller names one: the two DEV lists (never a held-out TEST list). */
+export const DEFAULT_SONG_LISTS = ['docs/annotation-eval-songs.json', 'docs/annotation-eval-songs-heldout-v1.json'];
 export const PAIRED_RESULT_SCHEMA = 'vibe-guitar-paired-eval/1';
 /** Chord-change matching window for the boundary diagnostics. */
 export const BOUNDARY_WINDOW_SEC = 0.25;
@@ -40,6 +44,8 @@ export interface MapEntry {
   mediaDurationSec: number | null;
   btcTraining: string;
   groups: string[];
+  /** Song list (repository-relative path) that holds this song; only that list is used for it. */
+  songList?: string;
 }
 
 export interface PairedMaps {
@@ -51,7 +57,8 @@ const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object
 const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 
 export function parseMaps(v: unknown): PairedMaps {
-  if (!isObj(v) || v.schema !== PAIRED_MAPS_SCHEMA || !Array.isArray(v.songs)) throw new EvalInputError(`maps: expected { schema: "${PAIRED_MAPS_SCHEMA}", songs: [...] }`);
+  if (!isObj(v) || typeof v.schema !== 'string' || !MAPS_SCHEMA_RE.test(v.schema) || !Array.isArray(v.songs))
+    throw new EvalInputError(`maps: expected { schema: "${PAIRED_MAPS_SCHEMA}" (or vibe-guitar-recognition-*-maps/1), songs: [...] }`);
   const ids = new Set<string>();
   for (const s of v.songs as unknown[]) {
     if (!isObj(s) || typeof s.id !== 'string' || typeof s.dataset !== 'string') throw new EvalInputError('maps: every song needs id and dataset');
@@ -62,6 +69,7 @@ export function parseMaps(v: unknown): PairedMaps {
     if (s.mediaDurationSec !== null && !(finite(s.mediaDurationSec) && s.mediaDurationSec > 0)) throw new EvalInputError(`maps: ${s.id} needs mediaDurationSec (seconds or null)`);
     if (typeof s.btcTraining !== 'string') throw new EvalInputError(`maps: ${s.id} needs btcTraining`);
     if (!Array.isArray(s.groups) || !s.groups.every((g) => typeof g === 'string')) throw new EvalInputError(`maps: ${s.id} needs groups (an array of strings)`);
+    if (s.songList !== undefined && (typeof s.songList !== 'string' || !s.songList)) throw new EvalInputError(`maps: ${s.id} has a bad songList`);
   }
   return v as unknown as PairedMaps;
 }
@@ -89,12 +97,32 @@ export function parseSubset(spec: string): { field: keyof MapEntry; value: strin
   return { field, value: spec.slice(eq + 1) };
 }
 
-/** Song-list entries for the map songs (one id must not mean two different annotations). */
-export function lookupSongs(lists: SongList[], maps: PairedMaps): Map<string, { song: SongEntry; list: SongList }> {
+/** A loaded song list and the key it is named by (repository-relative path, or absolute outside the repository). */
+export interface NamedSongList {
+  file: string;
+  list: SongList;
+}
+
+/**
+ * The song lists paired-eval must load: each entry's songList, plus (when some entry names none)
+ * the caller's lists or else DEFAULT_SONG_LISTS. A held-out TEST list is read only when named.
+ */
+export function songListsToLoad(maps: PairedMaps, callerLists: string[]): { files: string[]; fallback: string[] } {
+  const fallback = maps.songs.some((s) => !s.songList) ? (callerLists.length ? callerLists : DEFAULT_SONG_LISTS) : [];
+  return { files: [...new Set([...maps.songs.flatMap((s) => (s.songList ? [s.songList] : [])), ...fallback])], fallback };
+}
+
+/**
+ * Song-list entries for the map songs: an entry with songList is looked up only in that list,
+ * one without in the fallback lists (one id must not mean two different annotations).
+ */
+export function lookupSongs(lists: NamedSongList[], maps: PairedMaps, fallback: string[] = lists.map((l) => l.file)): Map<string, { song: SongEntry; list: SongList }> {
   const out = new Map<string, { song: SongEntry; list: SongList }>();
   for (const m of maps.songs) {
-    const hits = lists.flatMap((list) => list.songs.filter((s) => s.id === m.id).map((song) => ({ song, list })));
-    if (!hits.length) throw new EvalInputError(`maps: ${m.id} is in no song list`);
+    const files = m.songList ? [m.songList] : fallback;
+    for (const f of files) if (!lists.some((l) => l.file === f)) throw new EvalInputError(`maps: song list ${f} for ${m.id} is not loaded`);
+    const hits = lists.filter((l) => files.includes(l.file)).flatMap(({ list }) => list.songs.filter((s) => s.id === m.id).map((song) => ({ song, list })));
+    if (!hits.length) throw new EvalInputError(`maps: ${m.id} is in no song list (${files.join(', ')})`);
     const key = (h: { song: SongEntry; list: SongList }) => `${h.list.datasets[h.song.dataset].folder}/${h.song.chords}|${h.song.beats}`;
     if (new Set(hits.map(key)).size > 1) throw new EvalInputError(`maps: ${m.id} has different annotations in different song lists`);
     if (hits[0].song.dataset !== m.dataset) throw new EvalInputError(`maps: ${m.id} dataset ${m.dataset} differs from the song list (${hits[0].song.dataset})`);
@@ -137,6 +165,20 @@ export interface PairedSong {
   candidate: ArmScore;
   /** candidate − baseline (NaN when a metric has nothing to evaluate). */
   delta: Record<Reduction, number>;
+  /** candidate − baseline boundary precision, recall and F (NaN when undefined in an arm). */
+  boundaryDelta: Record<BoundaryRate, number>;
+}
+
+export type BoundaryRate = 'precision' | 'recall' | 'f';
+const BOUNDARY_RATES: BoundaryRate[] = ['precision', 'recall', 'f'];
+
+/** Song means of one boundary rate over the songs where it is defined in both arms (so the delta is paired). */
+export interface BoundaryMean {
+  n: number;
+  baseline: number;
+  candidate: number;
+  /** candidate − baseline over the same songs (the flicker guard reads this for precision). */
+  delta: number;
 }
 
 /** Majmin-reduced label; a chord outside the reduction keeps its own symbol, so changes into and out of it count. */
@@ -226,7 +268,8 @@ export function scorePairedSong(m: MapEntry, entry: { song: SongEntry; list: Son
   const baseline = armScore(sb, boundaryStats(segs, base, m.offsetSec, m.mediaDurationSec, m.rate));
   const candidate = armScore(sc, boundaryStats(segs, cand, m.offsetSec, m.mediaDurationSec, m.rate));
   const delta = Object.fromEntries(METRICS.map((k) => [k, candidate[k] - baseline[k]])) as Record<Reduction, number>;
-  return { id: m.id, dataset: m.dataset, youtubeId: m.youtubeId, btcTraining: m.btcTraining, groups: m.groups, baseline, candidate, delta };
+  const boundaryDelta = Object.fromEntries(BOUNDARY_RATES.map((k) => [k, candidate.boundaries[k] - baseline.boundaries[k]])) as Record<BoundaryRate, number>;
+  return { id: m.id, dataset: m.dataset, youtubeId: m.youtubeId, btcTraining: m.btcTraining, groups: m.groups, baseline, candidate, delta, boundaryDelta };
 }
 
 const mean = (xs: number[]): number => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : NaN);
@@ -243,7 +286,15 @@ export interface PairedAggregate {
   /** Mean majmin delta with each song left out in turn. */
   leaveOneOut: { min: number; minWithout: string; max: number; maxWithout: string } | null;
   largestLoss: { id: string; majminDelta: number } | null;
-  boundaries: { baselineF: number; candidateF: number; baselinePredicted: number; candidatePredicted: number; annotated: number };
+  /** Song-mean boundary precision, recall and F of both arms and their paired deltas, plus change counts. */
+  boundaries: Record<BoundaryRate, BoundaryMean> & { baselinePredicted: number; candidatePredicted: number; annotated: number };
+}
+
+export function boundaryMean(rows: PairedSong[], k: BoundaryRate): BoundaryMean {
+  const both = rows.filter((r) => Number.isFinite(r.baseline.boundaries[k]) && Number.isFinite(r.candidate.boundaries[k]));
+  const baseline = mean(both.map((r) => r.baseline.boundaries[k]));
+  const candidate = mean(both.map((r) => r.candidate.boundaries[k]));
+  return { n: both.length, baseline, candidate, delta: candidate - baseline };
 }
 
 export function aggregate(rows: PairedSong[], resamples = BOOTSTRAP_RESAMPLES, seed = BOOTSTRAP_SEED): PairedAggregate {
@@ -268,8 +319,9 @@ export function aggregate(rows: PairedSong[], resamples = BOOTSTRAP_RESAMPLES, s
     leaveOneOut,
     largestLoss: worst ? { id: worst.id, majminDelta: worst.delta.majmin } : null,
     boundaries: {
-      baselineF: mean(finiteOf(rows.map((r) => r.baseline.boundaries.f))),
-      candidateF: mean(finiteOf(rows.map((r) => r.candidate.boundaries.f))),
+      precision: boundaryMean(rows, 'precision'),
+      recall: boundaryMean(rows, 'recall'),
+      f: boundaryMean(rows, 'f'),
       baselinePredicted: rows.reduce((s, r) => s + r.baseline.boundaries.predicted, 0),
       candidatePredicted: rows.reduce((s, r) => s + r.candidate.boundaries.predicted, 0),
       annotated: rows.reduce((s, r) => s + r.baseline.boundaries.annotated, 0),
@@ -290,11 +342,11 @@ export interface PairedResult {
 
 export function pairedEvaluate(
   maps: PairedMaps,
-  lists: SongList[],
+  lists: NamedSongList[],
   io: PairedIo,
-  opts: { subset?: { field: keyof MapEntry; value: string }; groups?: Record<string, string[]>; inputs?: Record<string, string | null>; now?: Date } = {},
+  opts: { fallbackLists?: string[]; subset?: { field: keyof MapEntry; value: string }; groups?: Record<string, string[]>; inputs?: Record<string, string | null>; now?: Date } = {},
 ): PairedResult {
-  const entries = lookupSongs(lists, maps);
+  const entries = lookupSongs(lists, maps, opts.fallbackLists);
   const songs = maps.songs.map((m) => scorePairedSong(m, entries.get(m.id)!, io));
   const groupIds = new Map<string, Set<string>>();
   for (const s of songs) for (const g of s.groups) (groupIds.get(g) ?? groupIds.set(g, new Set()).get(g)!).add(s.id);
@@ -328,7 +380,10 @@ function aggregateLines(name: string, a: PairedAggregate): string[] {
   ];
   if (a.leaveOneOut) lines.push(`  leave-one-out mean Δ majmin: min ${pp(a.leaveOneOut.min)} (without ${a.leaveOneOut.minWithout}), max ${pp(a.leaveOneOut.max)} (without ${a.leaveOneOut.maxWithout})`);
   if (a.largestLoss) lines.push(`  worst single-song majmin Δ: ${a.largestLoss.id} ${pp(a.largestLoss.majminDelta)}`);
-  lines.push(`  boundaries ±${BOUNDARY_WINDOW_SEC * 1000} ms: F ${pct(a.boundaries.baselineF)} → ${pct(a.boundaries.candidateF)}; changes predicted ${a.boundaries.baselinePredicted} → ${a.boundaries.candidatePredicted} (annotated ${a.boundaries.annotated})`);
+  const b = a.boundaries;
+  const rate = (name: string, m: BoundaryMean) => `${name} ${pct(m.baseline)} → ${pct(m.candidate)} (Δ ${pp(m.delta)})`;
+  lines.push(`  boundaries ±${BOUNDARY_WINDOW_SEC * 1000} ms, song means: ${rate('precision', b.precision)}, ${rate('recall', b.recall)}, ${rate('F', b.f)} over ${b.precision.n} songs`);
+  lines.push(`  changes predicted ${b.baselinePredicted} → ${b.candidatePredicted} (annotated ${b.annotated})`);
   return lines;
 }
 

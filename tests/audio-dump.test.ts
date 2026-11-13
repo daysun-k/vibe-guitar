@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import * as esbuild from 'esbuild';
+import { createHash } from 'node:crypto';
 import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -11,7 +12,7 @@ import { analyzeClosedSegments, type Segment } from '../src/recognize/session';
 import { liveLikeSession, testAudio } from './replay-helpers';
 import { CAPTURE_SCHEMA, captureFolderName, decodeCaptureBody, encodeCaptureBody, samplesFromBytes, type CaptureMeta, type CaptureSegment } from '../src/replay/capture';
 // @ts-expect-error plain .mjs without types
-import { audioDumpPlugin, buildDefine, buildFlags } from '../scripts/build-config.mjs';
+import { audioDumpInfo, audioDumpPlugin, buildDefine, buildFlags } from '../scripts/build-config.mjs';
 // @ts-expect-error plain .mjs without types
 import { createReceiver, isInsideRepo, parseArgs, saveCapture } from '../scripts/audio-dump-receiver.mjs';
 
@@ -194,6 +195,21 @@ describe('build flags', () => {
     expect(buildDefine(d, info).__AUDIO_DUMP__).toBe('true');
     expect(JSON.parse(buildDefine(d, info).__AUDIO_DUMP_INFO__)).toEqual(info);
     expect(() => buildFlags(['--audio-dump', '--latency-probe'])).toThrow();
+  });
+
+  it('records the sha256 of the model bytes actually packaged, not the manifest values', () => {
+    const manifest = JSON.parse(readFileSync(path.join(root, 'scripts/models.manifest.json'), 'utf8'));
+    const packaged = manifest.files.filter((m: { packaged: boolean }) => m.packaged);
+    const dir = mkdtempSync(path.join(tmpdir(), 'vg-models-'));
+    for (const m of packaged) writeFileSync(path.join(dir, m.file), `fake bytes of ${m.file}`);
+    const got = audioDumpInfo(root, dir);
+    expect(Object.keys(got.models).sort()).toEqual(packaged.map((m: { file: string }) => m.file).sort());
+    for (const m of packaged) {
+      expect(got.models[m.file]).toBe(createHash('sha256').update(`fake bytes of ${m.file}`).digest('hex'));
+      expect(got.models[m.file]).not.toBe(m.sha256);
+    }
+    expect(got.commit).toMatch(/^[0-9a-f]{40}$/);
+    expect(() => audioDumpInfo(root, path.join(dir, 'missing'))).toThrow();
   });
 
   it('bundles the dump hooks into offscreen.js only with the plugin', async () => {
