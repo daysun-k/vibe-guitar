@@ -78,7 +78,8 @@ export function heldoutPurpose(rule: UploadRule): string {
 
 const BRANCH_TEXT = { topic: 'Topic channel', 'official-artist': 'official artist channel, Provided to YouTube' } as const;
 
-function songEntry(s: RankedSong, d: UploadDecision, rule: UploadRule): SongEntry {
+/** One song-list entry for a chosen upload; `search` names the walk that chose it in the upload hint. */
+export function songEntry(s: RankedSong, d: UploadDecision, rule: UploadRule, search = 'the PR #31 search'): SongEntry {
   const c = d.chosen!;
   const q = searchQueries(s.artist, s.title);
   const branch = c.branch ? `, ${BRANCH_TEXT[c.branch]}` : '';
@@ -95,7 +96,7 @@ function songEntry(s: RankedSong, d: UploadDecision, rule: UploadRule): SongEntr
     btcTraining: 'not-known',
     complexity: s.complexity!,
     search: [q.Q1, q.Q2],
-    uploadHint: `Chosen by the PR #31 search, rule ${rule} (${c.query}, result ${c.rank}${branch}): '${c.channel}' upload '${c.title}' (${c.videoId}), length ${c.lengthText}; annotation ${mmss(s.annotationDurationSec)}, difference ${c.diffSec!.toFixed(2)} s. Pool rank ${s.rank}.`,
+    uploadHint: `Chosen by ${search}, rule ${rule} (${c.query}, result ${c.rank}${branch}): '${c.channel}' upload '${c.title}' (${c.videoId}), length ${c.lengthText}; annotation ${mmss(s.annotationDurationSec)}, difference ${c.diffSec!.toFixed(2)} s. Pool rank ${s.rank}.`,
   };
 }
 
