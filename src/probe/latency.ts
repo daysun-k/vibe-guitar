@@ -347,17 +347,20 @@ export function analyzeProbeDump(dump: ProbeDump): ProbeReport {
       if (atStart(m)) startResiduals.push(m.residualSec);
     }
     // Drift: residual against time within each continuous segment, so a seek or pause
-    // (a new segment, re-anchored) does not look like drift.
+    // (a new segment, re-anchored) does not look like drift. Both axes are centered per
+    // segment, so segments of different lengths do not bias the pooled within-segment slope.
     const sx: number[] = [];
     const sy: number[] = [];
     s.segments.forEach((seg, si) => {
       const inSeg = main.filter((m) => m.segment === si);
       if (inSeg.length < 2) return;
       const mr = median(inSeg.map((m) => m.residualSec));
-      for (const m of inSeg) {
-        sx.push(m.placedSec - seg.startSec);
+      const xs = inSeg.map((m) => m.placedSec - seg.startSec);
+      const mx = xs.reduce((a, b) => a + b, 0) / xs.length;
+      inSeg.forEach((m, i) => {
+        sx.push(xs[i] - mx);
         sy.push(m.residualSec - mr);
-      }
+      });
     });
     driftX.push(...sx);
     driftY.push(...sy);

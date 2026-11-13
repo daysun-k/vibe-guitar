@@ -141,6 +141,29 @@ describe('matching and statistics', () => {
     expect(r.driftSecPerMin).toBeCloseTo(0.03, 3);
     expect(r.pass.drift).toBe(false);
   });
+
+  it('pools drift across segments of different lengths without bias (seek back included)', () => {
+    // Review s13-r1 counterexample: an 11 ms/min within-segment drift was reported as
+    // 9.7 ms/min and passed the 10 ms/min target when only the residuals were centered.
+    const ranges: [number, number][] = [[0, 14], [14, 40], [33.5, 59.5]];
+    const segments = ranges.map(([startSec, endSec]) => ({
+      startSec,
+      endSec,
+      onsetsSec: clicks
+        .filter((c) => c.kind === 'main' && c.timeSec >= startSec && c.timeSec < endSec)
+        .map((c) => c.timeSec + 0.03 + (c.timeSec - startSec) * (0.011 / 60)),
+    }));
+    const dump: ProbeDump = {
+      tool: 'vibe-guitar latency probe',
+      version: 1,
+      createdAt: 'x',
+      sessions: [{ sessionId: 'm', captureSampleRate: 48000, latencyUsedSec: 0.05, clicks, segments }],
+    };
+    const r = analyzeProbeDump(dump);
+    expect(r.driftSecPerMin).toBeCloseTo(0.011, 4);
+    expect(r.sessions[0].driftSecPerMin).toBeCloseTo(0.011, 4);
+    expect(r.pass.drift).toBe(false);
+  });
 });
 
 /**
