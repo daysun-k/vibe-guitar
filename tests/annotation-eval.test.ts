@@ -15,6 +15,7 @@ import {
   evaluateSongs,
   harteToSymbol,
   impliedDownbeats,
+  nearestResidual,
   parseBeats,
   parseLab,
   parseSongList,
@@ -414,7 +415,38 @@ describe('alignment: bounded rate and offset choice (VGT-7)', () => {
     expect(fitted).toBe(0);
   });
 
+  it('keeps every rate-1 run as a candidate when the song rate is rejected (VGT-7 re-scoring)', () => {
+    // Drift (0.1%) with tempo wander and every third chord change anticipated by an eighth note:
+    // the rate fails the above-chance held-out test. Refining a run's offset can then lower its
+    // hits; such a run must stay a candidate (as before rates were fitted) instead of being
+    // dropped by a second near-best filter, which hid an ambiguous alias pair.
+    const ann: number[] = [];
+    for (let t = 0.3; t < 280; t += 0.52 + 0.012 * Math.sin((2 * Math.PI * t) / 97)) ann.push(t);
+    const media = ann.map((t, k) => 0.14 + 1.001 * t + 0.008 * Math.sin(k * 1.3));
+    const lm = ann.filter((_, k) => k % 4 === 0).map((t, k) => (k % 3 === 0 ? t - 0.26 : t));
+    const a = alignAnnotation(alignInput(media, lm, { method: 'chord-boundaries', downbeatLandmarks: lm, annotationDurationSec: 285, mediaDurationSec: 285 }));
+    expect(a.rateFit?.accepted).toBe(false);
+    const tol = 0.1;
+    const hits: number[] = [];
+    for (let k = -400; k <= 400; k++) hits.push(lm.filter((l) => Math.abs(nearestResidual(media, l + k * 0.005)) <= tol + 1e-9).length);
+    const threshold = Math.max(...hits) * 0.95;
+    const runs: number[] = [];
+    for (let i = 0; i < hits.length; ) {
+      if (hits[i] < threshold) {
+        i++;
+        continue;
+      }
+      let j = i;
+      while (j + 1 < hits.length && hits[j + 1] >= threshold) j++;
+      runs.push(((i + j) / 2 - 400) * 0.005);
+      i = j + 1;
+    }
+    const missing = runs.filter((r) => !a.candidates.some((c) => Math.abs(c.offsetSec - r) <= tol));
+    expect(missing).toEqual([]);
+  });
+
   it('applies the near-0 rule only when the nearest other candidate is more than 2 × nearZeroSec away', () => {
+
     // Bars of 8 estimate beats; chord changes on every bar. True offset 0.53 s (below) / 0.57 s (above).
     const below = grid(1, 190, 0.38, 0.005);
     const changesBelow = grid(1, 185, 8 * 0.38).map((t) => t - 0.53);
@@ -681,6 +713,15 @@ describe('evaluateSongs', () => {
     expect(html).toContain('학습에 없는 곡');
     expect(html).toContain('채점하지 않은 곡');
     expect(html).toContain('<details>');
+  });
+
+  it('renders every exclusion code in Korean, including ambiguous (VGT-7 re-scoring crash)', () => {
+    const songs = res.songs.map((r) =>
+      r.id === 'b' ? { ...r, status: 'excluded' as const, score: undefined, reason: 'offset not determined', alignment: { ...r.alignment!, ambiguous: true, excluded: { code: 'ambiguous' as const, reason: 'offset not determined' } } } : r,
+    );
+    const html = renderAnnotationReport({ ...res, songs });
+    expect(html).toContain('시차를 하나로 정할 수 없어요');
+    expect(html).not.toContain('undefined');
   });
 });
 
