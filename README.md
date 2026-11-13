@@ -424,8 +424,10 @@ npm run eval-annotations -- --annotations <annotations> --charts <charts> [--out
 writes `<charts>/annotation-eval.json` and a self-contained Korean `annotation-eval.html`. One time map
 per song (an offset plus a speed difference of at most 0.2%) is frozen before scoring, from annotation
 beats (or annotation chord changes when a dataset has no beats, marked weak) against the chart's Beat
-This! beats. A speed difference is used only with 30+ landmarks and when it fits clearly better on
-held-out parts of the song (5 contiguous folds: +5 points, 80%+ on beats, no third worse). Songs whose
+This! beats. A speed difference is used only with 30+ landmarks, when it gains 5+ points on all
+landmarks, and when one held-out test per song confirms it (5 contiguous folds: +5 points, 80%+ on
+beats after removing the share random landmarks would reach on that beat grid, no third worse). Beat
+phases are found at each fixed rate, so a rejected rate leaves the rate-1 candidates. Songs whose
 start / middle / end offsets still differ by more than 0.1 s after the map, whose upload length differs
 by more than 2 s, whose length ratio shows another playback speed, or whose offset bar phase cannot
 single out (candidates one beat or one bar apart) are excluded with a reason.

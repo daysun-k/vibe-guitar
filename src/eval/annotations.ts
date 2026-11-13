@@ -345,6 +345,8 @@ export interface RateFit {
   heldOutGain: number;
   /** Pooled held-out share of landmarks on a beat with the fitted rate. */
   heldOutMatched: number;
+  /** Share a landmark at a random time would reach (2 × tolerance / estimate beat period, at most 1). */
+  chanceMatched: number;
   /** Held-out gain per temporal third (start, middle, end). */
   thirdGains: number[];
   accepted: boolean;
@@ -524,14 +526,15 @@ function bestFit(landmarks: number[], beats: number[], p: number, tol: number, c
 }
 
 /**
- * Out-of-sample test of a fitted rate for one beat-phase candidate: the landmarks are split into
- * RATE_FIT_FOLDS contiguous temporal folds; for each fold, the best rate-1 map and the best map over
- * all rates are fitted on the other folds (offsets limited to the candidate's window) and both are
+ * Out-of-sample test of a fitted rate for the song: the landmarks are split into RATE_FIT_FOLDS
+ * contiguous temporal folds; for each fold, the best rate-1 map and the best map over all rates
+ * are fitted on the other folds (offsets limited to `cs`, one beat period wide) and both are
  * evaluated on the held-out fold. The rate passes only with a pooled held-out gain of at least
- * RATE_FIT_MIN_GAIN, pooled held-out matching of at least RATE_MIN_FRACTION, and no negative
- * aggregate gain in any temporal third.
+ * RATE_FIT_MIN_GAIN, pooled held-out matching of at least RATE_MIN_FRACTION above chance (the share
+ * random landmarks would reach on this beat grid: dense beats make most landmarks "match"), and no
+ * negative aggregate gain in any temporal third.
  */
-function crossValidateRate(landmarks: number[], beats: number[], p: number, tol: number, cs: number[], rates: number[], center: number, rate: number): RateFit {
+function crossValidateRate(landmarks: number[], beats: number[], p: number, tol: number, cs: number[], rates: number[], center: number, rate: number, chance: number): RateFit {
   const n = landmarks.length;
   const first = landmarks[0];
   const span = landmarks[n - 1] - first;
@@ -558,8 +561,9 @@ function crossValidateRate(landmarks: number[], beats: number[], p: number, tol:
   const heldOutGain = (heldR - held1) / n;
   const heldOutMatched = heldR / n;
   const thirdGains = gains.map((g) => g / n);
-  const accepted = heldOutGain >= RATE_FIT_MIN_GAIN - 1e-12 && heldOutMatched >= RATE_MIN_FRACTION - 1e-12 && gains.every((g) => g >= 0);
-  return { rate, heldOutGain, heldOutMatched, thirdGains, accepted };
+  const aboveChance = chance < 1 ? (heldOutMatched - chance) / (1 - chance) : 0;
+  const accepted = heldOutGain >= RATE_FIT_MIN_GAIN - 1e-12 && aboveChance >= RATE_MIN_FRACTION - 1e-12 && gains.every((g) => g >= 0);
+  return { rate, heldOutGain, heldOutMatched, chanceMatched: chance, thirdGains, accepted };
 }
 
 /**
@@ -568,8 +572,10 @@ function crossValidateRate(landmarks: number[], beats: number[], p: number, tol:
  * bounded rate (media = offsetSec + rate × annotation time): the same recording on another transfer
  * can run slightly faster or slower, which a single offset turns into drift at the song's ends and
  * into a biased offset search. Offsets are scanned at the middle of the landmark span (so offset and
- * rate are decorrelated) together with rates up to ±RATE_FIT_MAX; a rate other than 1 is kept only
- * with at least RATE_MIN_LANDMARKS landmarks and when it passes a held-out test (crossValidateRate).
+ * rate are decorrelated) together with rates up to ±RATE_FIT_MAX; a rate other than 1 is used only
+ * with at least RATE_MIN_LANDMARKS landmarks, when it gains RATE_FIT_MIN_GAIN on all landmarks, and
+ * when it passes one held-out test for the song (crossValidateRate). Beat phases are found at each
+ * fixed rate; a rejected rate leaves exactly the rate-1 phases.
  *
  * Beats repeat, so maps one beat apart score almost the same; each such beat phase is a candidate.
  * A candidate within nearZeroSec of 0 (same master: little lead-in difference) is taken without
@@ -615,68 +621,54 @@ export function alignAnnotation(input: AlignInput, options?: Partial<AlignOption
   const pivot = (first + last) / 2;
   const rates = landmarks.length >= RATE_MIN_LANDMARKS ? rateGrid((last - first) / 2, o.tolSec) : [1];
 
-  // 1. Score every offset at the pivot: rate 1, and the best over all rates (the profile that
-  // finds beat phases). Group near-best offsets into runs (one per beat phase).
+  // 1. Score every offset at the pivot for every rate. A beat phase is a run of near-best offsets
+  // at one fixed rate: at rate 1 exactly as before rates were fitted, and at each other rate
+  // relative to that rate's own best. (A maximum over rates would let rejected rate hypotheses
+  // bridge phases that rate 1 keeps apart.)
   const steps = Math.round(o.maxShiftSec / o.stepSec);
   const cOf = (k: number) => (k - steps) * o.stepSec;
-  const hits1: number[] = [];
-  const profile: number[] = [];
-  for (let k = 0; k <= 2 * steps; k++) {
-    const h1 = countMapped(landmarks, beats, cOf(k), 1, pivot, o.tolSec);
-    let hp = h1;
-    for (let q = 1; q < rates.length; q++) hp = Math.max(hp, countMapped(landmarks, beats, cOf(k), rates[q], pivot, o.tolSec));
-    hits1.push(h1);
-    profile.push(hp);
-  }
-  const best = Math.max(...profile);
-  const threshold = best * o.tieRatio;
-  const runs: [number, number][] = [];
-  for (let i = 0; i < profile.length; ) {
-    if (profile[i] < threshold) {
-      i++;
-      continue;
+  const hitsBy = rates.map((r) => {
+    const row: number[] = [];
+    for (let k = 0; k <= 2 * steps; k++) row.push(countMapped(landmarks, beats, cOf(k), r, pivot, o.tolSec));
+    return row;
+  });
+  const runsOf = (row: number[]): [number, number][] => {
+    const threshold = Math.max(...row) * o.tieRatio;
+    const out: [number, number][] = [];
+    for (let i = 0; i < row.length; ) {
+      if (row[i] < threshold) {
+        i++;
+        continue;
+      }
+      let j = i;
+      while (j + 1 < row.length && row[j + 1] >= threshold) j++;
+      out.push([i, j]);
+      i = j + 1;
     }
-    let j = i;
-    while (j + 1 < profile.length && profile[j + 1] >= threshold) j++;
-    runs.push([i, j]);
-    i = j + 1;
-  }
+    return out;
+  };
 
-  // 2. One map per run: rate 1 at the top of the run's rate-1 plateau, or a fitted rate when it
-  // passes the held-out test. Then the offset is refined by the median residual.
+  // 2. Candidates. Each rate-1 run gives a rate-1 map at the top of its plateau. Each beat phase
+  // found at another rate is tried once: the best (offset, rate) in that run's window must gain
+  // RATE_FIT_MIN_GAIN over the best rate-1 map in the same window on all landmarks and pass the
+  // held-out test; an accepted map is a candidate, a rejected one adds nothing (the rate-1 runs
+  // cover that phase). Offsets are then refined by the median residual.
   const down = impliedDownbeats(beats, input.estimateFirstDownbeatSec, input.estimateBeatsPerBar);
   const downLandmarks = [...input.downbeatLandmarks].sort((a, b) => a - b);
   const padSteps = Math.max(1, Math.round(o.tolSec / o.stepSec));
   type Built = AlignCandidate & { c: number; fit: RateFit | null; hits: number };
-  const built: Built[] = runs.map(([i, j]) => {
-    let top = i;
-    for (let k = i; k <= j; k++) if (hits1[k] > hits1[top]) top = k;
-    let topEnd = top;
-    while (topEnd + 1 <= j && hits1[topEnd + 1] === hits1[top]) topEnd++;
-    let c = cOf((top + topEnd) / 2);
-    let r = 1;
-    let fit: RateFit | null = null;
-    if (rates.length > 1) {
-      const window: number[] = [];
-      for (let k = Math.max(0, i - padSteps); k <= Math.min(2 * steps, j + padSteps); k++) window.push(cOf(k));
-      const full = bestFit(landmarks, beats, pivot, o.tolSec, window, rates, c);
-      if (full.r !== 1) {
-        fit = crossValidateRate(landmarks, beats, pivot, o.tolSec, window, rates, c, full.r);
-        if (fit.accepted) {
-          c = full.c;
-          r = full.r;
-        }
-      }
-    }
+  const build = (c0: number, r0: number, fit: RateFit | null): Built => {
+    let c = c0;
+    let r = r0;
     if (r !== 1) {
       // Refine an accepted rate off the grid: least squares of the matched residuals on time.
       const pts = landmarks.map((t) => [t - pivot, nearestResidual(beats, mapAt(t, c, r, pivot))]).filter(([, e]) => Math.abs(e) <= o.tolSec + 1e-9);
       const n = pts.length;
-      const mx = pts.reduce((s, [x]) => s + x, 0) / n;
-      const my = pts.reduce((s, [, y]) => s + y, 0) / n;
-      const sxx = pts.reduce((s, [x]) => s + (x - mx) ** 2, 0);
+      const mx = pts.reduce((sum, [x]) => sum + x, 0) / n;
+      const my = pts.reduce((sum, [, y]) => sum + y, 0) / n;
+      const sxx = pts.reduce((sum, [x]) => sum + (x - mx) ** 2, 0);
       if (n >= 2 && sxx > 0) {
-        const slope = pts.reduce((s, [x, y]) => s + (x - mx) * (y - my), 0) / sxx;
+        const slope = pts.reduce((sum, [x, y]) => sum + (x - mx) * (y - my), 0) / sxx;
         const r2 = Math.min(1 + RATE_FIT_MAX, Math.max(1 - RATE_FIT_MAX, r + slope));
         const c2 = c + my - slope * mx;
         if (countMapped(landmarks, beats, c2, r2, pivot, o.tolSec) >= countMapped(landmarks, beats, c, r, pivot, o.tolSec)) {
@@ -692,7 +684,61 @@ export function alignAnnotation(input: AlignInput, options?: Partial<AlignOption
     const barScore =
       down && downLandmarks.length >= 4 ? downLandmarks.filter((l) => Math.abs(nearestResidual(down, offsetSec + r * l)) <= o.tolSec + 1e-9).length / downLandmarks.length : null;
     return { offsetSec, rate: r, matchedFraction: hits / landmarks.length, barScore, c, fit, hits };
+  };
+  const built: Built[] = runsOf(hitsBy[0]).map(([i, j]) => {
+    let top = i;
+    for (let k = i; k <= j; k++) if (hitsBy[0][k] > hitsBy[0][top]) top = k;
+    let topEnd = top;
+    while (topEnd + 1 <= j && hitsBy[0][topEnd + 1] === hitsBy[0][top]) topEnd++;
+    return build(cOf((top + topEnd) / 2), 1, null);
   });
+  let songFit: RateFit | null = null;
+  if (rates.length > 1) {
+    // One held-out test per song: a speed difference belongs to the recording pair, not to a beat
+    // phase, and one test keeps the chance of a false acceptance from growing with the number of
+    // phases. Its offset window spans one estimate beat period (plus the tolerance) around the best
+    // offset over all rates, so the fits on the training folds can take any beat phase and the
+    // window does not carry the held-out folds' preferred phase into them.
+    let kBest = 0;
+    let top = -1;
+    for (const row of hitsBy)
+      for (let k = 0; k < row.length; k++)
+        if (row[k] > top) {
+          top = row[k];
+          kBest = k;
+        }
+    const period = median(beats.slice(1).map((b, i) => b - beats[i]));
+    const half = Math.round((period / 2 + o.tolSec) / o.stepSec);
+    const window: number[] = [];
+    for (let k = Math.max(0, kBest - half); k <= Math.min(2 * steps, kBest + half); k++) window.push(cOf(k));
+    const center = cOf(kBest);
+    const full = bestFit(landmarks, beats, pivot, o.tolSec, window, rates, center);
+    const one = bestFit(landmarks, beats, pivot, o.tolSec, window, [1], center);
+    if (full.r !== 1 && full.hits - one.hits >= RATE_FIT_MIN_GAIN * landmarks.length - 1e-9) {
+      const chance = Math.min(1, (2 * o.tolSec) / period);
+      songFit = crossValidateRate(landmarks, beats, pivot, o.tolSec, window, rates, center, full.r, chance);
+      if (songFit.accepted) {
+        // Every beat phase found at a rate other than 1 gets its own fitted map.
+        const rateRuns: { i: number; j: number; peak: number; center: number }[] = [];
+        for (let q = 1; q < rates.length; q++)
+          for (const [i, j] of runsOf(hitsBy[q])) {
+            let t = i;
+            for (let k = i; k <= j; k++) if (hitsBy[q][k] > hitsBy[q][t]) t = k;
+            rateRuns.push({ i, j, peak: hitsBy[q][t], center: cOf(t) });
+          }
+        rateRuns.sort((x, y) => y.peak - x.peak);
+        const tried: number[] = [];
+        for (const run of rateRuns) {
+          if (tried.some((t) => Math.abs(t - run.center) <= o.tolSec)) continue;
+          tried.push(run.center);
+          const w: number[] = [];
+          for (let k = Math.max(0, run.i - padSteps); k <= Math.min(2 * steps, run.j + padSteps); k++) w.push(cOf(k));
+          const f = bestFit(landmarks, beats, pivot, o.tolSec, w, rates, run.center);
+          if (f.r !== 1) built.push(build(f.c, f.r, songFit));
+        }
+      }
+    }
+  }
   // A rate-1 refit can fall below the near-best threshold; keep only near-best maps. Runs that
   // refine to maps within the matching tolerance of each other are one beat phase (landmarks
   // cannot tell them apart): keep the one with more hits.
@@ -736,8 +782,8 @@ export function alignAnnotation(input: AlignInput, options?: Partial<AlignOption
   const strip = (b: Built): AlignCandidate => ({ offsetSec: b.offsetSec, rate: b.rate, matchedFraction: b.matchedFraction, barScore: b.barScore });
   const offsetSec = chosen.offsetSec;
   const rate = chosen.rate;
-  const result: Alignment = { ...base, offsetSec, rate, rateFit: chosen.fit, matchedFraction: chosen.matchedFraction, candidates: ordered.map(strip), ambiguous, warnings };
-  if (chosen.fit?.accepted) warnings.push(`speed difference ${((rate - 1) * 100).toFixed(3)}% fitted (held-out gain ${Math.round(chosen.fit.heldOutGain * 100)} points)`);
+  const result: Alignment = { ...base, offsetSec, rate, rateFit: songFit, matchedFraction: chosen.matchedFraction, candidates: ordered.map(strip), ambiguous, warnings };
+  if (rate !== 1 && songFit) warnings.push(`speed difference ${((rate - 1) * 100).toFixed(3)}% fitted (held-out gain ${Math.round(songFit.heldOutGain * 100)} points)`);
 
   // 4. Start / middle / end checks on the residuals after the map.
   const third = (last - first) / 3;

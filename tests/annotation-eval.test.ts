@@ -381,10 +381,36 @@ describe('alignment: bounded rate and offset choice (VGT-7)', () => {
       for (const [beats, lm] of cases) {
         const a = alignAnnotation(alignInput(beats, lm, { method: 'chord-boundaries', downbeatLandmarks: lm, estimateFirstDownbeatSec: null }));
         runs++;
-        if (a.rate !== 1) fitted++;
+        if (a.rate !== 1 || a.candidates.some((c) => c.rate !== 1)) fitted++;
       }
     }
     expect(runs).toBe(48);
+    expect(fitted).toBe(0);
+  });
+
+  it('keeps separate rate-1 beat phases when no rate is accepted (review vgt7-s1-r1 F1)', () => {
+    // Beats every 0.21 s leave rate-1 phases 0.01 s apart; a maximum over rejected rates bridged
+    // them into one candidate, so an undetermined offset was scored.
+    const beats = Array.from({ length: 899 }, (_, k) => 1 + k * 0.21);
+    const lm = Array.from({ length: 214 }, (_, k) => 1 + k * 0.84 - 0.33);
+    const a = alignAnnotation(alignInput(beats, lm, { method: 'chord-boundaries', downbeatLandmarks: lm, estimateFirstDownbeatSec: null }));
+    expect(a.rate).toBe(1);
+    expect(a.candidates.length).toBeGreaterThan(1);
+    expect(a.excluded?.code).toBe('ambiguous');
+  });
+
+  it('fits no rate to random landmarks on dense beats, where chance matching is high (seeds 1-40)', () => {
+    // Doubled beats every 0.32 s with a 0.1 s tolerance: a random landmark matches 62.5% of the
+    // time, so a chance configuration can reach 80% on every fold (2 of 160 random cases of the
+    // fixed-seed generator above did before the held-out share was measured above chance).
+    const doubled = grid(1, 200, 0.32, 0.008);
+    let fitted = 0;
+    for (let seed = 1; seed <= 40; seed++) {
+      const rand = rng(1000 + seed);
+      const random = Array.from({ length: 80 }, () => 1 + rand() * 198).sort((x, y) => x - y);
+      const a = alignAnnotation(alignInput(doubled, random, { method: 'chord-boundaries', downbeatLandmarks: random, estimateFirstDownbeatSec: null }));
+      if (a.rate !== 1 || a.candidates.some((c) => c.rate !== 1)) fitted++;
+    }
     expect(fitted).toBe(0);
   });
 
