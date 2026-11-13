@@ -258,6 +258,9 @@ describe('held-out list builder', () => {
     expect(s.search).toEqual(['Artist 0 Title 0 "Provided to YouTube"', 'Artist 0 - Topic Title 0']);
     expect(s.release).not.toMatch(/album/i);
     expect(s.uploadHint).toContain('v0000000100');
+    expect(s.uploadHint).toContain('annotation 3:20,');
+    const late = buildHeldoutList({ order: order.map((o) => ({ ...o, annotationDurationSec: 179.98 })), log: { schema: SEARCH_LOG_SCHEMA, entries: order.slice(0, 25).map((o) => { const e = entry(o, true); e.queries[0].results[0].lengthText = '3:00'; return e; }) }, dataset, declaredAt: 'x' });
+    expect(late.list.songs[0].uploadHint).toContain('annotation 3:00,');
     expect(s.id).toBe(heldoutSongId(order[0]));
     expect(parseSongList(r.list).songs).toHaveLength(25);
     expect(parseUploads(r.uploads)).toEqual(r.uploads);
@@ -312,5 +315,39 @@ describe('heldout-songs script', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe('committed held-out list (VGT-7, PR #31)', () => {
+  const read = (f: string) => JSON.parse(readFileSync(f, 'utf8'));
+
+  it('is exactly what the frozen rules give for the committed pool and search log', () => {
+    const pool = read('docs/annotation-heldout-v1-pool.json');
+    const log = read('docs/annotation-heldout-v1-search-log.json');
+    const existing = parseSongList(read('docs/annotation-eval-songs.json'));
+    const order: RankedSong[] = pool.order.map((s: RankedSong & { id: string; ids: string[] }) => ({ ...s, id: Number(s.id), ids: s.ids.map(Number) }));
+    const list = parseSongList(read('docs/annotation-eval-songs-heldout-v1.json'));
+    const r = buildHeldoutList({ order, log, dataset: existing.datasets['billboard-2.0.1-lab'], declaredAt: list.declaredAt });
+    expect(list).toEqual(r.list);
+    const { $comment, ...uploads } = read('docs/annotation-heldout-v1-uploads.json');
+    expect($comment).toMatch(/PR #31/);
+    expect(parseUploads(uploads)).toEqual(r.uploads);
+    expect(log.stoppedAtRank).toBe(log.entries.length);
+    expect(log.chosen).toBe(25);
+  });
+
+  it('has 25 held-out eval songs with known annotations and no overlap with the earlier list', () => {
+    const list = parseSongList(read('docs/annotation-eval-songs-heldout-v1.json'));
+    const existing = parseSongList(read('docs/annotation-eval-songs.json'));
+    expect(list.songs).toHaveLength(25);
+    for (const s of list.songs) {
+      expect(s.role).toBe('eval');
+      expect(s.btcTraining).toBe('not-known');
+      expect(s.annotationDurationSec).toBeGreaterThan(60);
+      expect(s.chords).toMatch(/^McGill-Billboard\/\d{4}\/full\.lab$/);
+    }
+    const seen = new Set(existing.songs.map((s) => s.chords));
+    expect(list.songs.filter((s) => seen.has(s.chords))).toEqual([]);
+    expect(new Set(list.songs.map((s) => s.id)).size).toBe(25);
   });
 });

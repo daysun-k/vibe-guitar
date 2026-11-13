@@ -1,0 +1,472 @@
+{
+  "schema": "vibe-guitar-annotation-eval-songs/1",
+  "declaredAt": "2026-11-13",
+  "purpose": "Predeclared before any result (VGT-7, PR #31): 25 held-out evaluation songs drawn by a fixed seed from McGill Billboard 2.0.1 songs with no known BTC training-song overlap, for scoring Vibe Guitar auto charts against public, time-aligned chord annotations. Pool: one song per normalized (artist, title), canonical entry = lowest id; excluded in order: a title in BTC's UsPop2002 annotation list, an Isophonics or Robbie Williams artist, a song already on docs/annotation-eval-songs.json, fewer than 12 chord changes. Order: sha256(\"vgt7-billboard-heldout-v1:\" + 4-digit id) ascending, ties by id; the ordered pool is docs/annotation-heldout-v1-pool.json. Upload search: two frozen YouTube queries per song read to 15 results; a result qualifies on a matching \"<artist> - Topic\" channel, a matching cleaned title, none of the excluded words and a length within 2 s of annotationDurationSec; smallest difference, then Q1, then rank; songs without one are skipped and the walk stops at 25 (docs/annotation-heldout-v1-search-log.json). Complexity rule (from the annotation, N and X ignored): complex when >= 20 distinct labels or >= 40% of chord time is not a plain major/minor triad; simple when <= 10 labels and < 20%; otherwise moderate. Primary analysis: unweighted mean of per-song majmin WCSR with a percentile bootstrap 95% interval over songs. Results never change the list: no redraw, no replacement.",
+  "datasets": {
+    "billboard-2.0.1-lab": {
+      "name": "McGill Billboard 2.0 (2.0.1 LAB files; chords only, no beats)",
+      "page": "https://ddmal.ca/research/The_McGill_Billboard_Project_(Chord_Analysis_Dataset)/",
+      "downloads": [
+        "https://www.dropbox.com/s/ep41gwy28vo3wxy/billboard-2.0.1-lab.tar.gz?dl=1",
+        "https://www.dropbox.com/s/o0olz0uwl9z9stb/billboard-2.0-index.csv?dl=1"
+      ],
+      "folder": "billboard-2.0.1-lab",
+      "licence": "CC0",
+      "licenceQuote": "we have made them available legally under a CC0 license, but we ask that users follow scholarly norms in any public-facing work based on upon these data by citing the following ISMIR paper",
+      "attribution": "John Ashley Burgoyne, Jonathan Wild, and Ichiro Fujinaga, 'An Expert Ground Truth Set for Audio Chord Recognition and Music Analysis', in Proceedings of the 12th International Society for Music Information Retrieval Conference (Miami, FL, 2011), pp. 633-38.",
+      "btcTraining": "Not listed in the BTC README. The chosen songs were also checked against the UsPop2002 annotation list BTC used (github.com/tmc323/Chord-Annotations, uspopLabels, 195 songs): no title match. Two Billboard candidates that are in that list (Michael Jackson 'Beat It', Billy Joel 'Just the Way You Are') were left out."
+    }
+  },
+  "songs": [
+    {
+      "id": "billboard-1190-dr-hook-only-sixteen",
+      "role": "eval",
+      "artist": "Dr. Hook",
+      "title": "Only Sixteen",
+      "release": "Billboard Hot 100 entry 1976-01-24 (McGill Billboard id 1190); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/1190/full.lab",
+      "beats": null,
+      "annotationDurationSec": 166.27,
+      "btcTraining": "not-known",
+      "complexity": "simple",
+      "search": [
+        "Dr. Hook Only Sixteen \"Provided to YouTube\"",
+        "Dr. Hook - Topic Only Sixteen"
+      ],
+      "uploadHint": "Chosen by the frozen PR #31 search (Q1, result 2): 'Dr. Hook - Topic' upload 'Only Sixteen (Remastered)' (FUr7lC3631Q), length 2:46; annotation 2:46, difference 0.27 s. Pool rank 5."
+    },
+    {
+      "id": "billboard-0571-gary-u-s-bonds-quarter-to-three",
+      "role": "eval",
+      "artist": "Gary U.S. Bonds",
+      "title": "Quarter To Three",
+      "release": "Billboard Hot 100 entry 1961-05-29 (McGill Billboard id 0571); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0571/full.lab",
+      "beats": null,
+      "annotationDurationSec": 150.54,
+      "btcTraining": "not-known",
+      "complexity": "simple",
+      "search": [
+        "Gary U.S. Bonds Quarter To Three \"Provided to YouTube\"",
+        "Gary U.S. Bonds - Topic Quarter To Three"
+      ],
+      "uploadHint": "Chosen by the frozen PR #31 search (Q1, result 5): 'Gary U.S. Bonds - Topic' upload 'Quarter To Three' (YF69PoyXskY), length 2:31; annotation 2:31, difference 0.46 s. Pool rank 18."
+    },
+    {
+      "id": "billboard-0674-the-fireballs-sugar-shack",
+      "role": "eval",
+      "artist": "The Fireballs",
+      "title": "Sugar Shack",
+      "release": "Billboard Hot 100 entry 1963-12-14 (McGill Billboard id 0674); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0674/full.lab",
+      "beats": null,
+      "annotationDurationSec": 123.85,
+      "btcTraining": "not-known",
+      "complexity": "moderate",
+      "search": [
+        "The Fireballs Sugar Shack \"Provided to YouTube\"",
+        "The Fireballs - Topic Sugar Shack"
+      ],
+      "uploadHint": "Chosen by the frozen PR #31 search (Q1, result 1): 'the Fireballs - Topic' upload 'Sugar Shack' (5szXUpJi6kA), length 2:02; annotation 2:04, difference 1.85 s. Pool rank 19."
+    },
+    {
+      "id": "billboard-1145-tevin-campbell-tell-me-what-you-want-me-to-do",
+      "role": "eval",
+      "artist": "Tevin Campbell",
+      "title": "Tell Me What You Want Me To Do",
+      "release": "Billboard Hot 100 entry 1991-11-16 (McGill Billboard id 1145); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/1145/full.lab",
+      "beats": null,
+      "annotationDurationSec": 257.59,
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "search": [
+        "Tevin Campbell Tell Me What You Want Me To Do \"Provided to YouTube\"",
+        "Tevin Campbell - Topic Tell Me What You Want Me To Do"
+      ],
+      "uploadHint": "Chosen by the frozen PR #31 search (Q1, result 1): 'Tevin Campbell - Topic' upload 'Tell Me What You Want Me to Do' (LpMlZCXPYRQ), length 4:17; annotation 4:18, difference 0.59 s. Pool rank 25."
+    },
+    {
+      "id": "billboard-0577-canned-heat-let-s-work-together",
+      "role": "eval",
+      "artist": "Canned Heat",
+      "title": "Let's Work Together",
+      "release": "Billboard Hot 100 entry 1970-10-10 (McGill Billboard id 0577); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0577/full.lab",
+      "beats": null,
+      "annotationDurationSec": 169.9,
+      "btcTraining": "not-known",
+      "complexity": "moderate",
+      "search": [
+        "Canned Heat Let's Work Together \"Provided to YouTube\"",
+        "Canned Heat - Topic Let's Work Together"
+      ],
+      "uploadHint": "Chosen by the frozen PR #31 search (Q1, result 3): 'Canned Heat - Topic' upload 'Let's Work Together' (L5O0rPsfFmM), length 2:50; annotation 2:50, difference 0.10 s. Pool rank 27."
+    },
+    {
+      "id": "billboard-1170-blue-cheer-summertime-blues",
+      "role": "eval",
+      "artist": "Blue Cheer",
+      "title": "Summertime Blues",
+      "release": "Billboard Hot 100 entry 1968-05-25 (McGill Billboard id 1170); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/1170/full.lab",
+      "beats": null,
+      "annotationDurationSec": 226.19,
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "search": [
+        "Blue Cheer Summertime Blues \"Provided to YouTube\"",
+        "Blue Cheer - Topic Summertime Blues"
+      ],
+      "uploadHint": "Chosen by the frozen PR #31 search (Q1, result 12): 'Blue Cheer - Topic' upload 'Summertime Blues' (6un_fi7F_1w), length 3:47; annotation 3:46, difference 0.81 s. Pool rank 31."
+    },
+    {
+      "id": "billboard-0261-iron-butterfly-in-a-gadda-da-vida",
+      "role": "eval",
+      "artist": "Iron Butterfly",
+      "title": "In-A-Gadda-Da-Vida",
+      "release": "Billboard Hot 100 entry 1968-11-02 (McGill Billboard id 0261); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0261/full.lab",
+      "beats": null,
+      "annotationDurationSec": 174.48,
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "search": [
+        "Iron Butterfly In-A-Gadda-Da-Vida \"Provided to YouTube\"",
+        "Iron Butterfly - Topic In-A-Gadda-Da-Vida"
+      ],
+      "uploadHint": "Chosen by the frozen PR #31 search (Q1, result 1): 'Iron Butterfly - Topic' upload 'In-A-Gadda-Da-Vida (Single Version)' (XugIsZbTFy0), length 2:54; annotation 2:54, difference 0.48 s. Pool rank 32."
+    },
+    {
+      "id": "billboard-0026-the-chiffons-sweet-talkin-guy",
+      "role": "eval",
+      "artist": "The Chiffons",
+      "title": "Sweet Talkin' Guy",
+      "release": "Billboard Hot 100 entry 1966-05-07 (McGill Billboard id 0026); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0026/full.lab",
+      "beats": null,
+      "annotationDurationSec": 148.39,
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "search": [
+        "The Chiffons Sweet Talkin' Guy \"Provided to YouTube\"",
+        "The Chiffons - Topic Sweet Talkin' Guy"
+      ],
+      "uploadHint": "Chosen by the frozen PR #31 search (Q1, result 1): 'The Chiffons - Topic' upload 'Sweet Talkin' Guy' (UAPaGi7HuKo), length 2:27; annotation 2:28, difference 1.39 s. Pool rank 35."
+    },
+    {
+      "id": "billboard-0112-gladys-knight-and-the-pips-letter-full-of-tears",
+      "role": "eval",
+      "artist": "Gladys Knight & The Pips",
+      "title": "Letter Full Of Tears",
+      "release": "Billboard Hot 100 entry 1962-01-27 (McGill Billboard id 0112); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0112/full.lab",
+      "beats": null,
+      "annotationDurationSec": 165.69,
+      "btcTraining": "not-known",
+      "complexity": "simple",
+      "search": [
+        "Gladys Knight & The Pips Letter Full Of Tears \"Provided to YouTube\"",
+        "Gladys Knight & The Pips - Topic Letter Full Of Tears"
+      ],
+      "uploadHint": "Chosen by the frozen PR #31 search (Q1, result 3): 'Gladys Knight & The Pips - Topic' upload 'Letter Full of Tears' (OI9pyee5DIU), length 2:45; annotation 2:46, difference 0.69 s. Pool rank 36."
+    },
+    {
+      "id": "billboard-0762-grand-funk-railroad-walk-like-a-man",
+      "role": "eval",
+      "artist": "Grand Funk Railroad",
+      "title": "Walk Like A Man",
+      "release": "Billboard Hot 100 entry 1973-12-08 (McGill Billboard id 0762); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0762/full.lab",
+      "beats": null,
+      "annotationDurationSec": 245.24,
+      "btcTraining": "not-known",
+      "complexity": "simple",
+      "search": [
+        "Grand Funk Railroad Walk Like A Man \"Provided to YouTube\"",
+        "Grand Funk Railroad - Topic Walk Like A Man"
+      ],
+      "uploadHint": "Chosen by the frozen PR #31 search (Q1, result 1): 'Grand Funk Railroad - Topic' upload 'Walk Like A Man (You Can Call Me Your Man) (Remastered 1999)' (j6C4b7wzZVo), length 4:06; annotation 4:05, difference 0.76 s. Pool rank 37."
+    },
+    {
+      "id": "billboard-0054-j-frank-wilson-and-the-cavaliers-last-kiss",
+      "role": "eval",
+      "artist": "J. Frank Wilson & The Cavaliers",
+      "title": "Last Kiss",
+      "release": "Billboard Hot 100 entry 1964-09-05 (McGill Billboard id 0054); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0054/full.lab",
+      "beats": null,
+      "annotationDurationSec": 147.7,
+      "btcTraining": "not-known",
+      "complexity": "simple",
+      "search": [
+        "J. Frank Wilson & The Cavaliers Last Kiss \"Provided to YouTube\"",
+        "J. Frank Wilson & The Cavaliers - Topic Last Kiss"
+      ],
+      "uploadHint": "Chosen by the frozen PR #31 search (Q1, result 3): 'J. Frank Wilson & The Cavaliers - Topic' upload 'Last Kiss' (0PhOf9myHQM), length 2:28; annotation 2:28, difference 0.30 s. Pool rank 41."
+    },
+    {
+      "id": "billboard-1112-stephanie-mills-never-knew-love-like-this-before",
+      "role": "eval",
+      "artist": "Stephanie Mills",
+      "title": "Never Knew Love Like This Before",
+      "release": "Billboard Hot 100 entry 1980-12-06 (McGill Billboard id 1112); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/1112/full.lab",
+      "beats": null,
+      "annotationDurationSec": 324.5,
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "search": [
+        "Stephanie Mills Never Knew Love Like This Before \"Provided to YouTube\"",
+        "Stephanie Mills - Topic Never Knew Love Like This Before"
+      ],
+      "uploadHint": "Chosen by the frozen PR #31 search (Q1, result 3): 'Stephanie Mills - Topic' upload 'Never Knew Love Like This Before' (x-1fHv9IWqg), length 5:26; annotation 5:25, difference 1.50 s. Pool rank 57."
+    },
+    {
+      "id": "billboard-1289-the-la-s-there-she-goes",
+      "role": "eval",
+      "artist": "The La's",
+      "title": "There She Goes",
+      "release": "Billboard Hot 100 entry 1991-07-27 (McGill Billboard id 1289); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/1289/full.lab",
+      "beats": null,
+      "annotationDurationSec": 162.56,
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "search": [
+        "The La's There She Goes \"Provided to YouTube\"",
+        "The La's - Topic There She Goes"
+      ],
+      "uploadHint": "Chosen by the frozen PR #31 search (Q1, result 1): 'The La's - Topic' upload 'There She Goes' (7tE0v57RMJw), length 2:43; annotation 2:43, difference 0.44 s. Pool rank 62."
+    },
+    {
+      "id": "billboard-1286-a-taste-of-honey-sukiyaki",
+      "role": "eval",
+      "artist": "A Taste Of Honey",
+      "title": "Sukiyaki",
+      "release": "Billboard Hot 100 entry 1981-04-25 (McGill Billboard id 1286); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/1286/full.lab",
+      "beats": null,
+      "annotationDurationSec": 223.24,
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "search": [
+        "A Taste Of Honey Sukiyaki \"Provided to YouTube\"",
+        "A Taste Of Honey - Topic Sukiyaki"
+      ],
+      "uploadHint": "Chosen by the frozen PR #31 search (Q1, result 7): 'A Taste Of Honey - Topic' upload 'Sukiyaki (Remastered 2002)' (qoU1jksH8LE), length 3:44; annotation 3:43, difference 0.76 s. Pool rank 63."
+    },
+    {
+      "id": "billboard-0580-the-falcons-i-found-a-love",
+      "role": "eval",
+      "artist": "The Falcons",
+      "title": "I Found A Love",
+      "release": "Billboard Hot 100 entry 1962-05-26 (McGill Billboard id 0580); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0580/full.lab",
+      "beats": null,
+      "annotationDurationSec": 178.68,
+      "btcTraining": "not-known",
+      "complexity": "simple",
+      "search": [
+        "The Falcons I Found A Love \"Provided to YouTube\"",
+        "The Falcons - Topic I Found A Love"
+      ],
+      "uploadHint": "Chosen by the frozen PR #31 search (Q2, result 8): 'Falcons - Topic' upload 'I Found a Love' (iDf4kyL5JTY), length 2:59; annotation 2:59, difference 0.32 s. Pool rank 67."
+    },
+    {
+      "id": "billboard-0965-arthur-conley-sweet-soul-music",
+      "role": "eval",
+      "artist": "Arthur Conley",
+      "title": "Sweet Soul Music",
+      "release": "Billboard Hot 100 entry 1967-03-25 (McGill Billboard id 0965); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0965/full.lab",
+      "beats": null,
+      "annotationDurationSec": 143.08,
+      "btcTraining": "not-known",
+      "complexity": "simple",
+      "search": [
+        "Arthur Conley Sweet Soul Music \"Provided to YouTube\"",
+        "Arthur Conley - Topic Sweet Soul Music"
+      ],
+      "uploadHint": "Chosen by the frozen PR #31 search (Q1, result 8): 'Arthur Conley - Topic' upload 'Sweet Soul Music' (So9XIEhGrFw), length 2:23; annotation 2:23, difference 0.08 s. Pool rank 69."
+    },
+    {
+      "id": "billboard-0822-lavern-baker-i-cried-a-tear",
+      "role": "eval",
+      "artist": "LaVern Baker",
+      "title": "I Cried A Tear",
+      "release": "Billboard Hot 100 entry 1959-02-09 (McGill Billboard id 0822); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0822/full.lab",
+      "beats": null,
+      "annotationDurationSec": 156.24,
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "search": [
+        "LaVern Baker I Cried A Tear \"Provided to YouTube\"",
+        "LaVern Baker - Topic I Cried A Tear"
+      ],
+      "uploadHint": "Chosen by the frozen PR #31 search (Q1, result 1): 'Lavern Baker - Topic' upload 'I Cried a Tear' (gW3WO-AbGvI), length 2:36; annotation 2:36, difference 0.24 s. Pool rank 72."
+    },
+    {
+      "id": "billboard-1072-fats-domino-be-my-guest",
+      "role": "eval",
+      "artist": "Fats Domino",
+      "title": "Be My Guest",
+      "release": "Billboard Hot 100 entry 1959-11-16 (McGill Billboard id 1072); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/1072/full.lab",
+      "beats": null,
+      "annotationDurationSec": 135.92,
+      "btcTraining": "not-known",
+      "complexity": "moderate",
+      "search": [
+        "Fats Domino Be My Guest \"Provided to YouTube\"",
+        "Fats Domino - Topic Be My Guest"
+      ],
+      "uploadHint": "Chosen by the frozen PR #31 search (Q1, result 5): 'Fats Domino - Topic' upload 'Be My Guest (Remastered)' (lIWLtScRQtw), length 2:16; annotation 2:16, difference 0.08 s. Pool rank 81."
+    },
+    {
+      "id": "billboard-1033-the-byrds-goin-back",
+      "role": "eval",
+      "artist": "The Byrds",
+      "title": "Goin' Back",
+      "release": "Billboard Hot 100 entry 1967-11-18 (McGill Billboard id 1033); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/1033/full.lab",
+      "beats": null,
+      "annotationDurationSec": 207.96,
+      "btcTraining": "not-known",
+      "complexity": "moderate",
+      "search": [
+        "The Byrds Goin' Back \"Provided to YouTube\"",
+        "The Byrds - Topic Goin' Back"
+      ],
+      "uploadHint": "Chosen by the frozen PR #31 search (Q1, result 4): 'THE BYRDS - Topic' upload 'Goin' Back (Single Version)' (b56R_kc0ENY), length 3:27; annotation 3:28, difference 0.96 s. Pool rank 84."
+    },
+    {
+      "id": "billboard-1287-johnny-horton-johnny-reb",
+      "role": "eval",
+      "artist": "Johnny Horton",
+      "title": "Johnny Reb",
+      "release": "Billboard Hot 100 entry 1959-08-24 (McGill Billboard id 1287); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/1287/full.lab",
+      "beats": null,
+      "annotationDurationSec": 141.44,
+      "btcTraining": "not-known",
+      "complexity": "simple",
+      "search": [
+        "Johnny Horton Johnny Reb \"Provided to YouTube\"",
+        "Johnny Horton - Topic Johnny Reb"
+      ],
+      "uploadHint": "Chosen by the frozen PR #31 search (Q1, result 1): 'Johnny Horton - Topic' upload 'Johnny Reb (Album Version)' (eZDoceYPmD0), length 2:21; annotation 2:21, difference 0.44 s. Pool rank 104."
+    },
+    {
+      "id": "billboard-0074-martha-and-the-vandellas-nowhere-to-run",
+      "role": "eval",
+      "artist": "Martha & The Vandellas",
+      "title": "Nowhere To Run",
+      "release": "Billboard Hot 100 entry 1965-03-27 (McGill Billboard id 0074); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0074/full.lab",
+      "beats": null,
+      "annotationDurationSec": 178.78,
+      "btcTraining": "not-known",
+      "complexity": "moderate",
+      "search": [
+        "Martha & The Vandellas Nowhere To Run \"Provided to YouTube\"",
+        "Martha & The Vandellas - Topic Nowhere To Run"
+      ],
+      "uploadHint": "Chosen by the frozen PR #31 search (Q1, result 10): 'Martha - Topic' upload 'Nowhere to Run' (r83UttkZMcM), length 3:00; annotation 2:59, difference 1.22 s. Pool rank 118."
+    },
+    {
+      "id": "billboard-0607-carl-carlton-everlasting-love",
+      "role": "eval",
+      "artist": "Carl Carlton",
+      "title": "Everlasting Love",
+      "release": "Billboard Hot 100 entry 1974-12-21 (McGill Billboard id 0607); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0607/full.lab",
+      "beats": null,
+      "annotationDurationSec": 155.04,
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "search": [
+        "Carl Carlton Everlasting Love \"Provided to YouTube\"",
+        "Carl Carlton - Topic Everlasting Love"
+      ],
+      "uploadHint": "Chosen by the frozen PR #31 search (Q1, result 1): 'Carl Carlton - Topic' upload 'Everlasting Love' (SqT1y5Qi6l0), length 2:34; annotation 2:35, difference 1.04 s. Pool rank 128."
+    },
+    {
+      "id": "billboard-0811-jermaine-jackson-let-s-get-serious",
+      "role": "eval",
+      "artist": "Jermaine Jackson",
+      "title": "Let's Get Serious",
+      "release": "Billboard Hot 100 entry 1980-08-30 (McGill Billboard id 0811); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0811/full.lab",
+      "beats": null,
+      "annotationDurationSec": 216.37,
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "search": [
+        "Jermaine Jackson Let's Get Serious \"Provided to YouTube\"",
+        "Jermaine Jackson - Topic Let's Get Serious"
+      ],
+      "uploadHint": "Chosen by the frozen PR #31 search (Q1, result 2): 'Jermaine Jackson - Topic' upload 'Let's Get Serious (Single Version)' (MeqSNQ9uiHI), length 3:35; annotation 3:36, difference 1.37 s. Pool rank 129."
+    },
+    {
+      "id": "billboard-0814-marty-robbins-big-iron",
+      "role": "eval",
+      "artist": "Marty Robbins",
+      "title": "Big Iron",
+      "release": "Billboard Hot 100 entry 1960-03-21 (McGill Billboard id 0814); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0814/full.lab",
+      "beats": null,
+      "annotationDurationSec": 236.93,
+      "btcTraining": "not-known",
+      "complexity": "simple",
+      "search": [
+        "Marty Robbins Big Iron \"Provided to YouTube\"",
+        "Marty Robbins - Topic Big Iron"
+      ],
+      "uploadHint": "Chosen by the frozen PR #31 search (Q1, result 8): 'Marty Robbins - Topic' upload 'Big Iron (Album Version)' (QMcxZ9gfCZE), length 3:57; annotation 3:57, difference 0.07 s. Pool rank 130."
+    },
+    {
+      "id": "billboard-0134-the-electric-prunes-i-had-too-much-to-dream-last-night",
+      "role": "eval",
+      "artist": "The Electric Prunes",
+      "title": "I Had Too Much To Dream (Last Night)",
+      "release": "Billboard Hot 100 entry 1967-01-07 (McGill Billboard id 0134); the dataset does not record the CD used.",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0134/full.lab",
+      "beats": null,
+      "annotationDurationSec": 179.98,
+      "btcTraining": "not-known",
+      "complexity": "simple",
+      "search": [
+        "The Electric Prunes I Had Too Much To Dream (Last Night) \"Provided to YouTube\"",
+        "The Electric Prunes - Topic I Had Too Much To Dream (Last Night)"
+      ],
+      "uploadHint": "Chosen by the frozen PR #31 search (Q1, result 3): 'THE ELECTRIC PRUNES - Topic' upload 'I Had Too Much to Dream (Last Night)' (xAmKKpFj1uw), length 3:00; annotation 3:00, difference 0.02 s. Pool rank 136."
+    }
+  ]
+}
