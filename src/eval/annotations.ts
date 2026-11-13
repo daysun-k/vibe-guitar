@@ -547,14 +547,19 @@ export interface SongScore {
 
 /** Annotation segments → a reference chart in media time (events at segment starts). */
 export function annotationChart(segs: AnnotationSegment[], offsetSec: number, beats: number[] | null, mediaDurationSec: number | null, stripBass = false): Chart {
-  const events = segs.map((s) => {
-    const m = harteToSymbol(s.label);
-    const chord = m.kind === 'chord' ? (stripBass ? withoutBass(m.symbol) : m.symbol) : m.kind === 'N' ? 'N' : 'X';
-    return { startSec: s.startSec + offsetSec, chord, confidence: 1, source: 'manual' as const };
-  });
   const span = chordSpan(segs);
   const end = mediaDurationSec ?? Infinity;
-  const coverage: CoverageRange[] = span ? [{ fromSec: Math.max(0, span.fromSec + offsetSec), toSec: Math.min(end, span.toSec + offsetSec) }] : [];
+  const from = span ? Math.max(0, span.fromSec + offsetSec) : 0;
+  // A negative offset can move the first chords before 0 s, where coverage starts. compareCharts
+  // drops events that start before coverage, so the chord still sounding at the coverage start
+  // moves to it (earlier ones that ended before it are dropped).
+  const shifted = segs.map((s) => {
+    const m = harteToSymbol(s.label);
+    const chord = m.kind === 'chord' ? (stripBass ? withoutBass(m.symbol) : m.symbol) : m.kind === 'N' ? 'N' : 'X';
+    return { startSec: Math.max(from, s.startSec + offsetSec), chord, confidence: 1, source: 'manual' as const };
+  });
+  const events = shifted.filter((e, i) => !(e.startSec === from && shifted[i + 1]?.startSec === from));
+  const coverage: CoverageRange[] = span ? [{ fromSec: from, toSec: Math.min(end, span.toSec + offsetSec) }] : [];
   // The last segment ends the coverage; an extra event closes the final chord at its end.
   const lastEnd = Math.max(...segs.map((s) => s.endSec)) + offsetSec;
   events.push({ startSec: lastEnd, chord: 'N', confidence: 1, source: 'manual' });

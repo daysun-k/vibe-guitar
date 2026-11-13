@@ -321,6 +321,18 @@ describe('scoring', () => {
     const s = scoreSong(SEGS, null, partial, off, 30);
     expect(s.notCoveredSec).toBeCloseTo(12);
   });
+
+  it('keeps the chord sounding at 0 s when a negative offset moves it earlier (review s14-r1 R1)', () => {
+    // C 0-10 s, G 10-20 s, offset -0.1 s; the auto chart is wrong (F) until 9.9 s, then right.
+    const segs = parseLab('0 10 C:maj\n10 20 G:maj\n');
+    const wrongThenRight = autoChart([[0, 'F'], [9.9, 'G']], [], [0, 19.9]);
+    const s = scoreSong(segs, null, wrongThenRight, -0.1, null);
+    for (const k of ['majmin', 'root', 'sevenths'] as const) {
+      expect(s.comparison[k].evaluatedSec).toBeCloseTo(19.9, 5);
+      expect(s.comparison[k].score).toBeCloseTo(10 / 19.9, 5);
+      expect(s.excludedSec[k]).toBeCloseTo(0, 5);
+    }
+  });
 });
 
 // ---------------------------------------------------------------- evaluateSongs and the report
