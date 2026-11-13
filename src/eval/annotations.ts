@@ -365,8 +365,14 @@ export interface Alignment {
   landmarks: number;
   /** Near-tie offsets (usually one beat apart); the chosen one is first. */
   candidates: AlignCandidate[];
-  /** True when more than one candidate survives the near-0 rule and bar phase; such songs are excluded. */
+  /**
+   * True when the offset is not determined: more than one candidate survives the near-0 rule and
+   * bar phase, or the near-0 candidate that stands apart is clearly contradicted by bar phase
+   * (barConflict). Such songs are excluded unless a structural check excludes them first.
+   */
   ambiguous: boolean;
+  /** The near-0 candidate stood apart but was not bar-eligible while bar phase was available (VGT-7 rule 4). */
+  barConflict: boolean;
   segments: AlignSegmentCheck[];
   driftSec: number | null;
   /** Coarse check: first estimate beat − first chord, last estimate beat − last chord end. */
@@ -580,9 +586,11 @@ function crossValidateRate(landmarks: number[], beats: number[], p: number, tol:
  * Beats repeat, so maps one beat apart score almost the same; each such beat phase is a candidate.
  * A candidate within nearZeroSec of 0 (same master: little lead-in difference) is taken without
  * bar phase only when the nearest other candidate is more than 2 × nearZeroSec away; closer
- * spacing puts some candidate near 0 whatever the true offset. Otherwise bar phase (annotation
- * downbeats against downbeats implied by the chart's first downbeat and bar length) decides, and
- * when more than one candidate survives the song is ambiguous and excluded. The map is then
+ * spacing puts some candidate near 0 whatever the true offset. Even then, when bar phase is
+ * available and clearly contradicts it (the near-0 candidate is not bar-eligible), the two clues
+ * disagree and only chord predictions could settle it, so the song is ambiguous. Otherwise bar
+ * phase (annotation downbeats against downbeats implied by the chart's first downbeat and bar
+ * length) decides, and when more than one candidate survives the song is ambiguous and excluded. The map is then
  * checked separately in the first, middle and last third of the song (residual drift after the
  * map), PR #25's length-ratio speed test runs unchanged, and the upload length is compared with
  * the annotation's.
@@ -606,6 +614,7 @@ export function alignAnnotation(input: AlignInput, options?: Partial<AlignOption
     landmarks: landmarks.length,
     candidates: [],
     ambiguous: false,
+    barConflict: false,
     segments: [],
     driftSec: null,
     coarse,
@@ -753,14 +762,17 @@ export function alignAnnotation(input: AlignInput, options?: Partial<AlignOption
     if ((!compareAgain || b.hits >= bestHits * o.tieRatio) && !kept.some((k) => Math.abs(k.c - b.c) <= o.tolSec)) kept.push(b);
 
   // 3. Choose. The near-0 rule takes a candidate within nearZeroSec only when it stands apart
-  // (nearest other candidate more than 2 × nearZeroSec away); bar phase then only warns, since a
-  // misplaced first downbeat or a meter change shifts the implied downbeats. Otherwise keep the
-  // candidates with the best bar phase; more than one left (bar phase unavailable, or whole bars
-  // apart) is ambiguous.
+  // (nearest other candidate more than 2 × nearZeroSec away). Bar phase does not override it, since
+  // a misplaced first downbeat, a meter change or (with chord boundaries) syncopated changes shift
+  // the implied downbeats; but when bar phase is available and the near-0 candidate is not
+  // bar-eligible, the two clues clearly disagree and the offset is not determined (rule 4: abstain,
+  // never switch). Otherwise keep the candidates with the best bar phase; more than one left (bar
+  // phase unavailable, or whole bars apart) is ambiguous.
   kept.sort((a, b) => Math.abs(a.offsetSec) - Math.abs(b.offsetSec));
   const warnings: string[] = [];
   let chosen = kept[0];
   let ambiguous = false;
+  let barConflict = false;
   let survivors = 1;
   if (kept.length > 1) {
     const bar = kept.every((k) => k.barScore !== null) ? Math.max(...kept.map((k) => k.barScore!)) : null;
@@ -768,7 +780,14 @@ export function alignAnnotation(input: AlignInput, options?: Partial<AlignOption
     const gap = Math.min(...kept.slice(1).map((k) => Math.abs(k.offsetSec - chosen.offsetSec)));
     const nearZero = Math.abs(chosen.offsetSec) <= o.nearZeroSec;
     if (nearZero && gap > 2 * o.nearZeroSec) {
-      if (!eligible.includes(chosen)) warnings.push(`bar phase prefers offset ${eligible[0].offsetSec.toFixed(3)} s; kept the one near 0`);
+      if (bar !== null && !eligible.includes(chosen)) {
+        const best = eligible.reduce((x, y) => (y.barScore! > x.barScore! ? y : x));
+        barConflict = true;
+        ambiguous = true;
+        warnings.push(
+          `bar phase contradicts the candidate near 0: offset ${best.offsetSec.toFixed(3)} s has bar score ${best.barScore!.toFixed(2)}, the one near 0 (${chosen.offsetSec.toFixed(3)} s) ${chosen.barScore!.toFixed(2)}; offset not determined`,
+        );
+      } else if (!eligible.includes(chosen)) warnings.push(`bar phase prefers offset ${eligible[0].offsetSec.toFixed(3)} s; kept the one near 0`);
     } else {
       if (nearZero) warnings.push(`candidates ${gap.toFixed(2)} s apart: a candidate near 0 is expected by chance, so bar phase decides`);
       chosen = eligible[0];
@@ -794,7 +813,7 @@ export function alignAnnotation(input: AlignInput, options?: Partial<AlignOption
   const strip = (b: Built): AlignCandidate => ({ offsetSec: b.offsetSec, rate: b.rate, matchedFraction: b.matchedFraction, barScore: b.barScore });
   const offsetSec = chosen.offsetSec;
   const rate = chosen.rate;
-  const result: Alignment = { ...base, offsetSec, rate, rateFit: songFit, matchedFraction: chosen.matchedFraction, candidates: ordered.map(strip), ambiguous, warnings };
+  const result: Alignment = { ...base, offsetSec, rate, rateFit: songFit, matchedFraction: chosen.matchedFraction, candidates: ordered.map(strip), ambiguous, barConflict, warnings };
   if (rate !== 1 && songFit) warnings.push(`speed difference ${((rate - 1) * 100).toFixed(3)}% fitted (held-out gain ${Math.round(songFit.heldOutGain * 100)} points)`);
 
   // 4. Start / middle / end checks on the residuals after the map.
@@ -848,6 +867,8 @@ export function alignAnnotation(input: AlignInput, options?: Partial<AlignOption
       result.excluded = { code: 'drift', reason: rateNote ?? `local offsets differ by ${Math.round(result.driftSec * 1000)} ms across the song${rate !== 1 ? ' after the fitted speed difference' : ''}` };
     else if (chosen.pinned)
       result.excluded = { code: 'drift', reason: `speed difference ${((rate - 1) * 100).toFixed(3)}% is pinned at the RATE_FIT_MAX bound (${RATE_FIT_MAX * 100}%): the upload may run at another speed` };
+    else if (barConflict)
+      result.excluded = { code: 'ambiguous', reason: 'offset not determined: the candidate near 0 stands apart but bar phase clearly prefers another one' };
     else if (ambiguous)
       result.excluded = { code: 'ambiguous', reason: `offset not determined: ${survivors} candidates remain after the near-0 rule and bar phase` };
   }
