@@ -120,6 +120,15 @@ export class ListeningController {
     return this.placer.idleReason;
   }
 
+  /** Read-only views for the dev latency probe (src/extension/probe/probe-offscreen.ts). */
+  get currentSession(): ListeningSession | null {
+    return this.session;
+  }
+
+  get currentIdleReason(): string | null {
+    return this.idleReason;
+  }
+
   private readonly sessionFor = (key: string): ListeningSession | null => (this.session?.key === key ? this.session : null);
 
   private drain(): void {

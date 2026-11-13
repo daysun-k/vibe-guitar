@@ -6,6 +6,7 @@ import type { AutoChartSavedMessage, CaptureStartMessage, CaptureStatusMessage, 
 import { handleChartWrite, serviceWorkerChartStore } from './storage';
 import { reinjectContentScripts } from './reinject';
 import { LyricsService } from './lyrics-service';
+import { installLatencyProbeBackground } from './probe/probe-background';
 
 const OFFSCREEN_URL = 'offscreen.html';
 
@@ -68,8 +69,9 @@ async function sendToOffscreen(msg: CaptureStartMessage): Promise<void> {
   throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
-async function startCapture(tab: chrome.tabs.Tab): Promise<void> {
-  if (tab.id === undefined) return;
+/** Returns the error message when capture could not start (also broadcast), else null. */
+async function startCapture(tab: chrome.tabs.Tab): Promise<string | null> {
+  if (tab.id === undefined) return 'no tab id';
   const status: CaptureStatusMessage = { type: 'capture-status', state: 'starting', tabId: tab.id, url: tab.url };
   broadcast(status);
   try {
@@ -78,11 +80,16 @@ async function startCapture(tab: chrome.tabs.Tab): Promise<void> {
     await ensureOffscreen();
     const start: CaptureStartMessage = { type: 'capture-start', target: 'offscreen', streamId, tabId: tab.id, url: tab.url };
     await sendToOffscreen(start);
+    return null;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     broadcast({ type: 'capture-status', state: 'error', tabId: tab.id, url: tab.url, error: msg });
+    return msg;
   }
 }
+
+// Dev latency probe (VGT-7): false in the production build, so esbuild drops this branch.
+if (__LATENCY_PROBE__) installLatencyProbeBackground(startCapture);
 
 chrome.action.onClicked.addListener((tab) => {
   // sidePanel.open must run synchronously inside the user gesture.

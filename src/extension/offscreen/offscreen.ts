@@ -6,6 +6,7 @@
 import { chromaFromDbSpectrum, rms } from '../../audio/chroma';
 import type { CaptureStatsMessage, ExtensionMessage } from '../messages';
 import { ListeningController } from './listen';
+import { installLatencyProbe } from '../probe/probe-offscreen';
 
 const SILENCE_RMS = 1e-4;
 const REPORT_MS = 100;
@@ -30,6 +31,9 @@ const listener = new ListeningController(
   // AudioContext time and wall clock read together: maps player reports to sample time.
   () => (ctx ? { ctxTime: ctx.currentTime, epochMs: Date.now() } : null),
 );
+
+// Dev latency probe (VGT-7): false in the production build, so esbuild drops this branch.
+if (__LATENCY_PROBE__) installLatencyProbe(listener, () => ({ ctx, tabId }));
 
 async function stop(reason?: string): Promise<void> {
   if (timer) clearInterval(timer);

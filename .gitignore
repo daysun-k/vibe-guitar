@@ -5,3 +5,4 @@ dist/
 .env*
 models/
 bench-out/
+dist-probe/
