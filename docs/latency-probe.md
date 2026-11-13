@@ -2,7 +2,8 @@
 
 Listening mode places each captured tab-audio block on the song timeline with `AudioPlacer`
 (`src/recognize/placement.ts`): the player position at the block's AudioContext time minus
-`CAPTURE_LATENCY_SEC` (`src/extension/offscreen/listen.ts`, a 50 ms guess). This probe measures the
+`CAPTURE_LATENCY_SEC` (`src/extension/offscreen/listen.ts`; 128 ms since the 2026-11-13 measurement
+below, a 50 ms guess before). This probe measures the
 error of that placement with a click track, through the production path, and suggests the constant.
 
 **What it measures:** the time between the media element's `currentTime` clock and the captured audio,
@@ -89,3 +90,27 @@ start of a song, separate from the constant, and it grows when the constant grow
    (`--json` for machine-readable output).
 8. Changing the constant is a separate change in `src/extension/offscreen/listen.ts`; re-run the probe with
    the new build to confirm |median| ≤ 10 ms.
+
+## Measurements
+
+### 2026-11-13, Aside on the Mac mini (main 5e5b7b1, constant 0.050 s)
+
+Three sessions of the full plan (pause, seek back, 1.5x stretch), one toolbar click; later sessions
+restarted capture without a click.
+
+| | Result | Target |
+| --- | --- | --- |
+| Complete runs | 3 of 3, no missing click, 0 clicks stored from the 1.5x stretch | all |
+| Fit (even clicks, 33) | median residual 77.8 ms | |
+| Validation (odd clicks, 33) | median 80.5 ms before, 2.7 ms after correction | within 10 ms |
+| Validation \|residual\| p95 | 53.0 ms (max 60.7 ms) | 50 ms (missed) |
+| Drift inside continuous segments | 0.0 ms/min | within 10 ms/min |
+| 0 s start segment extra delay | -4.9 ms | |
+
+Suggested and adopted: `CAPTURE_LATENCY_SEC = 0.050 + 0.0778 = 0.128 s`.
+
+The p95 miss does not come from the constant. Residuals are flat inside each continuous segment
+(no drift), but the segment medians differ by up to about 80 ms (for example 17.0, 80.5 and 82.5 ms
+in one session; 68.0, 30.0 and 41.8 ms in another): every new anchor after a play, pause or seek
+lands with its own offset. Reducing that per-anchor jitter is a separate follow-up.
+
