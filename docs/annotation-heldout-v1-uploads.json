@@ -1,10 +1,70 @@
 {
-  "$comment": "Uploads chosen by the frozen PR #31 search (docs/annotation-heldout-v1-search-log.json); copy into the charts folder as uploads.json.",
+  "$comment": "Uploads chosen by the PR #31 search under rule amended-v1 (docs/annotation-heldout-v1-search-log.json); copy into the charts folder as uploads.json.",
+  "billboard-1020-the-dramatics-hey-you-get-off-my-mountain": {
+    "youtubeId": "QW4PD_q1VaI",
+    "durationSec": 211,
+    "channel": "thedramaticschannel",
+    "uploadTitle": "Hey You! Get Off My Mountain"
+  },
   "billboard-1190-dr-hook-only-sixteen": {
     "youtubeId": "FUr7lC3631Q",
     "durationSec": 166,
     "channel": "Dr. Hook - Topic",
     "uploadTitle": "Only Sixteen (Remastered)"
+  },
+  "billboard-0591-eagles-the-long-run": {
+    "youtubeId": "f6liGUpVuP8",
+    "durationSec": 222,
+    "channel": "Eagles",
+    "uploadTitle": "The Long Run (2013 Remaster)"
+  },
+  "billboard-0542-wham-wake-me-up-before-you-go-go": {
+    "youtubeId": "17t7SEsoKfE",
+    "durationSec": 233,
+    "channel": "WHAM!",
+    "uploadTitle": "Wake Me Up Before You Go-Go (Remastered)"
+  },
+  "billboard-0891-the-who-happy-jack": {
+    "youtubeId": "_64CuYwlmT4",
+    "durationSec": 132,
+    "channel": "TheWho",
+    "uploadTitle": "Happy Jack"
+  },
+  "billboard-0046-the-staple-singers-i-ll-take-you-there": {
+    "youtubeId": "ZRFz8I72bTA",
+    "durationSec": 195,
+    "channel": "The Staple Singers",
+    "uploadTitle": "I'll Take You There"
+  },
+  "billboard-1232-bonnie-pointer-heaven-must-have-sent-you": {
+    "youtubeId": "owiYwYdjgM8",
+    "durationSec": 215,
+    "channel": "BonniePointer",
+    "uploadTitle": "Heaven Must Have Sent You"
+  },
+  "billboard-1126-genesis-invisible-touch": {
+    "youtubeId": "MHSGsIPMQIo",
+    "durationSec": 209,
+    "channel": "Genesis",
+    "uploadTitle": "Invisible Touch (2007 Remaster)"
+  },
+  "billboard-0330-the-5th-dimension-go-where-you-wanna-go": {
+    "youtubeId": "242bVcCcB5A",
+    "durationSec": 145,
+    "channel": "The 5th Dimension",
+    "uploadTitle": "Go Where You Wanna Go (Digitally Remastered 1997)"
+  },
+  "billboard-0010-billy-joel-an-innocent-man": {
+    "youtubeId": "zx9-3On46-c",
+    "durationSec": 318,
+    "channel": "Billy Joel",
+    "uploadTitle": "An Innocent Man"
+  },
+  "billboard-0879-run-d-m-c-walk-this-way": {
+    "youtubeId": "dLB0P8nT2w8",
+    "durationSec": 311,
+    "channel": "Run DMC",
+    "uploadTitle": "Walk This Way"
   },
   "billboard-0571-gary-u-s-bonds-quarter-to-three": {
     "youtubeId": "YF69PoyXskY",
@@ -18,17 +78,65 @@
     "channel": "the Fireballs - Topic",
     "uploadTitle": "Sugar Shack"
   },
+  "billboard-0864-oak-ridge-boys-elvira": {
+    "youtubeId": "2mgxsXu3D9A",
+    "durationSec": 162,
+    "channel": "The Oak Ridge Boys",
+    "uploadTitle": "Elvira"
+  },
+  "billboard-0159-elvis-presley-little-sister": {
+    "youtubeId": "KM4JZBqjQqA",
+    "durationSec": 152,
+    "channel": "Elvis Presley",
+    "uploadTitle": "Little Sister"
+  },
+  "billboard-0094-the-rolling-stones-wild-horses": {
+    "youtubeId": "1PxuYrGEVow",
+    "durationSec": 345,
+    "channel": "The Rolling Stones",
+    "uploadTitle": "Wild Horses"
+  },
+  "billboard-0578-anita-baker-giving-you-the-best-that-i-got": {
+    "youtubeId": "GNDuWcLI5fg",
+    "durationSec": 261,
+    "channel": "Anita Baker",
+    "uploadTitle": "Giving You the Best That I Got"
+  },
+  "billboard-0162-brenda-lee-sweet-nothin-s": {
+    "youtubeId": "y5mznY_WPFw",
+    "durationSec": 146,
+    "channel": "Brenda Lee",
+    "uploadTitle": "Sweet Nothin's"
+  },
   "billboard-1145-tevin-campbell-tell-me-what-you-want-me-to-do": {
     "youtubeId": "LpMlZCXPYRQ",
     "durationSec": 257,
     "channel": "Tevin Campbell - Topic",
     "uploadTitle": "Tell Me What You Want Me to Do"
   },
+  "billboard-0393-genesis-misunderstanding": {
+    "youtubeId": "tVQHWKfzYEM",
+    "durationSec": 194,
+    "channel": "Genesis",
+    "uploadTitle": "Misunderstanding (Platinum Collection Version)"
+  },
   "billboard-0577-canned-heat-let-s-work-together": {
     "youtubeId": "L5O0rPsfFmM",
     "durationSec": 170,
     "channel": "Canned Heat - Topic",
     "uploadTitle": "Let's Work Together"
+  },
+  "billboard-1040-eric-clapton-lay-down-sally": {
+    "youtubeId": "vvomrmBmQAM",
+    "durationSec": 232,
+    "channel": "Eric Clapton",
+    "uploadTitle": "Lay Down Sally"
+  },
+  "billboard-0887-de-la-soul-me-myself-and-i": {
+    "youtubeId": "FPs2M0KPyP8",
+    "durationSec": 221,
+    "channel": "WeAreDeLaSoul",
+    "uploadTitle": "Me Myself and I (Single Mix)"
   },
   "billboard-1170-blue-cheer-summertime-blues": {
     "youtubeId": "6un_fi7F_1w",
@@ -41,113 +149,5 @@
     "durationSec": 174,
     "channel": "Iron Butterfly - Topic",
     "uploadTitle": "In-A-Gadda-Da-Vida (Single Version)"
-  },
-  "billboard-0026-the-chiffons-sweet-talkin-guy": {
-    "youtubeId": "UAPaGi7HuKo",
-    "durationSec": 147,
-    "channel": "The Chiffons - Topic",
-    "uploadTitle": "Sweet Talkin' Guy"
-  },
-  "billboard-0112-gladys-knight-and-the-pips-letter-full-of-tears": {
-    "youtubeId": "OI9pyee5DIU",
-    "durationSec": 165,
-    "channel": "Gladys Knight & The Pips - Topic",
-    "uploadTitle": "Letter Full of Tears"
-  },
-  "billboard-0762-grand-funk-railroad-walk-like-a-man": {
-    "youtubeId": "j6C4b7wzZVo",
-    "durationSec": 246,
-    "channel": "Grand Funk Railroad - Topic",
-    "uploadTitle": "Walk Like A Man (You Can Call Me Your Man) (Remastered 1999)"
-  },
-  "billboard-0054-j-frank-wilson-and-the-cavaliers-last-kiss": {
-    "youtubeId": "0PhOf9myHQM",
-    "durationSec": 148,
-    "channel": "J. Frank Wilson & The Cavaliers - Topic",
-    "uploadTitle": "Last Kiss"
-  },
-  "billboard-1112-stephanie-mills-never-knew-love-like-this-before": {
-    "youtubeId": "x-1fHv9IWqg",
-    "durationSec": 326,
-    "channel": "Stephanie Mills - Topic",
-    "uploadTitle": "Never Knew Love Like This Before"
-  },
-  "billboard-1289-the-la-s-there-she-goes": {
-    "youtubeId": "7tE0v57RMJw",
-    "durationSec": 163,
-    "channel": "The La's - Topic",
-    "uploadTitle": "There She Goes"
-  },
-  "billboard-1286-a-taste-of-honey-sukiyaki": {
-    "youtubeId": "qoU1jksH8LE",
-    "durationSec": 224,
-    "channel": "A Taste Of Honey - Topic",
-    "uploadTitle": "Sukiyaki (Remastered 2002)"
-  },
-  "billboard-0580-the-falcons-i-found-a-love": {
-    "youtubeId": "iDf4kyL5JTY",
-    "durationSec": 179,
-    "channel": "Falcons - Topic",
-    "uploadTitle": "I Found a Love"
-  },
-  "billboard-0965-arthur-conley-sweet-soul-music": {
-    "youtubeId": "So9XIEhGrFw",
-    "durationSec": 143,
-    "channel": "Arthur Conley - Topic",
-    "uploadTitle": "Sweet Soul Music"
-  },
-  "billboard-0822-lavern-baker-i-cried-a-tear": {
-    "youtubeId": "gW3WO-AbGvI",
-    "durationSec": 156,
-    "channel": "Lavern Baker - Topic",
-    "uploadTitle": "I Cried a Tear"
-  },
-  "billboard-1072-fats-domino-be-my-guest": {
-    "youtubeId": "lIWLtScRQtw",
-    "durationSec": 136,
-    "channel": "Fats Domino - Topic",
-    "uploadTitle": "Be My Guest (Remastered)"
-  },
-  "billboard-1033-the-byrds-goin-back": {
-    "youtubeId": "b56R_kc0ENY",
-    "durationSec": 207,
-    "channel": "THE BYRDS - Topic",
-    "uploadTitle": "Goin' Back (Single Version)"
-  },
-  "billboard-1287-johnny-horton-johnny-reb": {
-    "youtubeId": "eZDoceYPmD0",
-    "durationSec": 141,
-    "channel": "Johnny Horton - Topic",
-    "uploadTitle": "Johnny Reb (Album Version)"
-  },
-  "billboard-0074-martha-and-the-vandellas-nowhere-to-run": {
-    "youtubeId": "r83UttkZMcM",
-    "durationSec": 180,
-    "channel": "Martha - Topic",
-    "uploadTitle": "Nowhere to Run"
-  },
-  "billboard-0607-carl-carlton-everlasting-love": {
-    "youtubeId": "SqT1y5Qi6l0",
-    "durationSec": 154,
-    "channel": "Carl Carlton - Topic",
-    "uploadTitle": "Everlasting Love"
-  },
-  "billboard-0811-jermaine-jackson-let-s-get-serious": {
-    "youtubeId": "MeqSNQ9uiHI",
-    "durationSec": 215,
-    "channel": "Jermaine Jackson - Topic",
-    "uploadTitle": "Let's Get Serious (Single Version)"
-  },
-  "billboard-0814-marty-robbins-big-iron": {
-    "youtubeId": "QMcxZ9gfCZE",
-    "durationSec": 237,
-    "channel": "Marty Robbins - Topic",
-    "uploadTitle": "Big Iron (Album Version)"
-  },
-  "billboard-0134-the-electric-prunes-i-had-too-much-to-dream-last-night": {
-    "youtubeId": "xAmKKpFj1uw",
-    "durationSec": 180,
-    "channel": "THE ELECTRIC PRUNES - Topic",
-    "uploadTitle": "I Had Too Much to Dream (Last Night)"
   }
 }

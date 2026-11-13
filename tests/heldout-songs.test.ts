@@ -17,7 +17,7 @@ import {
   type RankedSong,
 } from '../src/eval/heldout-draw';
 import { checkResult, chooseUpload, cleanUploadTitle, excludedWord, parseLength, searchQueries, type SearchResult } from '../src/eval/heldout-uploads';
-import { buildHeldoutList, heldoutSongId, SEARCH_LOG_SCHEMA, TARGET_SONGS, type SearchLog, type SearchLogEntry } from '../src/eval/heldout-list';
+import { amendLog, buildHeldoutList, heldoutSongId, NOT_NEEDED_REASON, SEARCH_LOG_SCHEMA, selectionDiff, TARGET_SONGS, type SearchLog, type SearchLogEntry } from '../src/eval/heldout-list';
 
 /** A lab with n chord changes (alternating C and G, 2 s each) and trailing silence. */
 const labWith = (changes: number, labels = ['C:maj', 'G:maj']) => {
@@ -223,6 +223,54 @@ describe('held-out uploads: frozen search rules', () => {
   });
 });
 
+describe('held-out uploads: amended-v1 channel rule (PR #31 amendment)', () => {
+  const song = { artist: 'Robert Palmer', title: 'Addicted To Love', annotationDurationSec: 264.93 };
+  const official = (over: Partial<SearchResult> = {}, extra: SearchResult['extra'] = { channelId: 'UCx', ownerBadges: ['BADGE_STYLE_TYPE_VERIFIED_ARTIST'], snippet: 'Provided to YouTube by Universal Music Group Addicted To Love' }): SearchResult => ({
+    rank: 1,
+    videoId: 'abcdefghijk',
+    title: 'Addicted To Love',
+    channel: 'Robert Palmer',
+    lengthText: '4:25',
+    ...over,
+    extra,
+  });
+
+  it('accepts a verified official artist channel with a Provided to YouTube upload (branch 2)', () => {
+    const c = checkResult(official(), song, 'amended-v1');
+    expect(c).toMatchObject({ qualifies: true, branch: 'official-artist', topic: false });
+    expect(checkResult(official(), song, 'topic-only-v1').qualifies).toBe(false);
+    const d = chooseUpload(song, { Q1: [official()], Q2: [] }, 'amended-v1');
+    expect(d.chosen).toMatchObject({ videoId: 'abcdefghijk', branch: 'official-artist' });
+    expect(chooseUpload(song, { Q1: [official()], Q2: [] }).chosen).toBeNull();
+  });
+
+  it('fails branch 2 without the snippet, without the badge, with another badge or with a different prefix case', () => {
+    expect(checkResult(official({}, { ownerBadges: ['BADGE_STYLE_TYPE_VERIFIED_ARTIST'] }), song, 'amended-v1').qualifies).toBe(false);
+    const { extra: _none, ...noExtra } = official();
+    expect(checkResult(noExtra, song, 'amended-v1').failed).toEqual(['not a Topic channel and the upload is not a Provided to YouTube track']);
+    expect(checkResult(official({}, {}), song, 'amended-v1').qualifies).toBe(false);
+    expect(checkResult(official({}, { snippet: 'Provided to YouTube by X' }), song, 'amended-v1').failed).toEqual(['not a Topic channel and the channel is not a verified artist channel']);
+    expect(checkResult(official({}, { snippet: 'Provided to YouTube by X', ownerBadges: ['BADGE_STYLE_TYPE_VERIFIED'] }), song, 'amended-v1').qualifies).toBe(false);
+    expect(checkResult(official({}, { snippet: 'provided to YouTube by X', ownerBadges: ['BADGE_STYLE_TYPE_VERIFIED_ARTIST'] }), song, 'amended-v1').qualifies).toBe(false);
+    expect(checkResult(official({}, { snippet: ' Provided to YouTube by X', ownerBadges: ['BADGE_STYLE_TYPE_VERIFIED_ARTIST'] }), song, 'amended-v1').qualifies).toBe(false);
+    expect(checkResult(official({ channel: 'Someone Else' }), song, 'amended-v1').failed).toEqual(['artist channel does not match']);
+  });
+
+  it('never judges a " - Topic" channel by branch 2', () => {
+    const c = checkResult(official({ channel: 'Party Tyme - Topic' }), song, 'amended-v1');
+    expect(c.failed).toEqual(['Topic artist does not match']);
+    expect(c.branch).toBeNull();
+    expect(checkResult(official({ channel: 'Robert Palmer - Topic' }, {}), song, 'amended-v1').branch).toBe('topic');
+  });
+
+  it('needs nonempty normalized names in both branches', () => {
+    expect(checkResult(official({ channel: '() - Topic' }), song, 'amended-v1').qualifies).toBe(false);
+    expect(checkResult(official({ channel: '(!!)' }), song, 'amended-v1').qualifies).toBe(false);
+    expect(checkResult(official({ channel: 'Robert Palmer - Topic' }), { ...song, artist: '(x)' }, 'amended-v1').qualifies).toBe(false);
+    expect(checkResult(official(), { ...song, artist: '(x)' }, 'amended-v1').qualifies).toBe(false);
+  });
+});
+
 describe('held-out list builder', () => {
   const dataset: DatasetInfo = { name: 'BB', page: 'p', downloads: [], folder: 'billboard-2.0.1-lab', licence: 'CC0', licenceQuote: 'q', attribution: 'a', btcTraining: 'not listed' };
   const order: RankedSong[] = Array.from({ length: 40 }, (_, i) => ({
@@ -284,7 +332,7 @@ describe('held-out list builder', () => {
     const dec = log(28);
     dec.entries[1].decision = { ...chooseUpload(order[0], { Q1: [], Q2: [] }) };
     dec.entries[1].decision.status = 'chosen';
-    expect(() => buildHeldoutList({ order, log: dec, dataset, declaredAt: 'x' })).toThrow(/logged decision differs/);
+    expect(() => buildHeldoutList({ order, log: dec, dataset, declaredAt: 'x' })).toThrow(/logged topic-only-v1 decision differs/);
   });
 });
 
@@ -318,27 +366,72 @@ describe('heldout-songs script', () => {
   });
 });
 
-describe('committed held-out list (VGT-7, PR #31)', () => {
+describe('committed held-out list (VGT-7, PR #31 and its amendment)', () => {
   const read = (f: string) => JSON.parse(readFileSync(f, 'utf8'));
+  const pool = read('docs/annotation-heldout-v1-pool.json');
+  const log = read('docs/annotation-heldout-v1-search-log.json');
+  const existing = parseSongList(read('docs/annotation-eval-songs.json'));
+  const dataset = existing.datasets['billboard-2.0.1-lab'];
+  const order: RankedSong[] = pool.order.map((s: RankedSong & { id: string; ids: string[] }) => ({ ...s, id: Number(s.id), ids: s.ids.map(Number) }));
+  const list = parseSongList(read('docs/annotation-eval-songs-heldout-v1.json'));
+  const AMENDED_RANKS = [4, 5, 6, 8, 9, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 31, 32];
+  const TOPIC_ONLY_RANKS = [5, 18, 19, 25, 27, 31, 32, 35, 36, 37, 41, 57, 62, 63, 67, 69, 72, 81, 84, 104, 118, 128, 129, 130, 136];
 
-  it('is exactly what the frozen rules give for the committed pool and search log', () => {
-    const pool = read('docs/annotation-heldout-v1-pool.json');
-    const log = read('docs/annotation-heldout-v1-search-log.json');
-    const existing = parseSongList(read('docs/annotation-eval-songs.json'));
-    const order: RankedSong[] = pool.order.map((s: RankedSong & { id: string; ids: string[] }) => ({ ...s, id: Number(s.id), ids: s.ids.map(Number) }));
-    const list = parseSongList(read('docs/annotation-eval-songs-heldout-v1.json'));
-    const r = buildHeldoutList({ order, log, dataset: existing.datasets['billboard-2.0.1-lab'], declaredAt: list.declaredAt });
-    expect(list).toEqual(r.list);
-    const { $comment, ...uploads } = read('docs/annotation-heldout-v1-uploads.json');
-    expect($comment).toMatch(/PR #31/);
-    expect(parseUploads(uploads)).toEqual(r.uploads);
-    expect(log.stoppedAtRank).toBe(log.entries.length);
+  it('replays the original topic-only-v1 walk from the log: 25 songs, stop at rank 136', () => {
+    const r = buildHeldoutList({ order, log, dataset, declaredAt: 'x', rule: 'topic-only-v1' });
+    expect(r.stopRank).toBe(136);
+    expect(r.chosen.map((c) => c.rank)).toEqual(TOPIC_ONLY_RANKS);
+    expect(log.stoppedAtRank).toBe(136);
     expect(log.chosen).toBe(25);
   });
 
-  it('has 25 held-out eval songs with known annotations and no overlap with the earlier list', () => {
-    const list = parseSongList(read('docs/annotation-eval-songs-heldout-v1.json'));
-    const existing = parseSongList(read('docs/annotation-eval-songs.json'));
+  it('replays the amended-v1 walk from the same log: 25 songs, stop at rank 32, later songs not needed', () => {
+    const r = buildHeldoutList({ order, log, dataset, declaredAt: 'x', rule: 'amended-v1' });
+    expect(r.stopRank).toBe(32);
+    expect(r.chosen.map((c) => c.rank)).toEqual(AMENDED_RANKS);
+    expect(log.amended).toEqual({ rule: 'amended-v1', stoppedAtRank: 32, chosen: 25, skipped: 7, notNeeded: 104 });
+    for (const e of log.entries) {
+      expect(e.decision.status).toMatch(/^(chosen|skipped)$/);
+      if (e.rank > 32) expect(e.decisionAmended).toEqual({ status: 'not-needed', reason: NOT_NEEDED_REASON });
+    }
+    expect(amendLog(order, log)).toEqual(log);
+  });
+
+  it('fails when a logged amended decision differs from the recomputation', () => {
+    const bad = JSON.parse(JSON.stringify(log));
+    bad.entries[0].decisionAmended.status = 'chosen';
+    expect(() => buildHeldoutList({ order, log: bad, dataset, declaredAt: 'x', rule: 'amended-v1' })).toThrow(/logged amended-v1 decision differs/);
+    const early = JSON.parse(JSON.stringify(log));
+    early.entries[40].decisionAmended = early.entries[3].decisionAmended;
+    expect(() => buildHeldoutList({ order, log: early, dataset, declaredAt: 'x', rule: 'amended-v1' })).toThrow(/not marked not-needed/);
+  });
+
+  it('ships the list and uploads of the amended walk', () => {
+    const r = buildHeldoutList({ order, log, dataset, declaredAt: list.declaredAt, rule: 'amended-v1' });
+    expect(list).toEqual(r.list);
+    expect(list.purpose).toContain('amended-v1');
+    expect(list.purpose).toContain('PR #31 amendment');
+    const { $comment, ...uploads } = read('docs/annotation-heldout-v1-uploads.json');
+    expect($comment).toMatch(/amended-v1/);
+    expect(parseUploads(uploads)).toEqual(r.uploads);
+  });
+
+  it('records both selections in the selection diff', () => {
+    const a = buildHeldoutList({ order, log, dataset, declaredAt: 'x', rule: 'topic-only-v1' });
+    const b = buildHeldoutList({ order, log, dataset, declaredAt: 'x', rule: 'amended-v1' });
+    const d = read('docs/annotation-heldout-v1-selection-diff.json');
+    const { purpose, sources, ...rest } = d;
+    expect(purpose).toMatch(/not captured/);
+    expect(sources.searchLog).toBe('docs/annotation-heldout-v1-search-log.json');
+    expect(rest).toEqual(JSON.parse(JSON.stringify(selectionDiff(order, a, b))));
+    expect(d.overlap.length + d.only['amended-v1'].length).toBe(25);
+    expect(d.overlap.length + d.only['topic-only-v1'].length).toBe(25);
+    expect(d.selections['amended-v1'].passRate).toBeCloseTo(25 / 32, 12);
+    expect(d.selections['topic-only-v1'].passRate).toBeCloseTo(25 / 136, 12);
+    expect(d.selections['amended-v1'].members.every((m: { branch?: string }) => m.branch === 'topic' || m.branch === 'official-artist')).toBe(true);
+  });
+
+  it('has 25 held-out eval songs with no overlap with the earlier list', () => {
     expect(list.songs).toHaveLength(25);
     for (const s of list.songs) {
       expect(s.role).toBe('eval');

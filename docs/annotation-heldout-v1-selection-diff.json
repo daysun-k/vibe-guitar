@@ -1,0 +1,1036 @@
+{
+  "schema": "vibe-guitar-annotation-heldout-selection-diff/1",
+  "lengthBands": [
+    {
+      "name": "< 2:30",
+      "fromSec": 0,
+      "toSec": 150
+    },
+    {
+      "name": "2:30-3:30",
+      "fromSec": 150,
+      "toSec": 210
+    },
+    {
+      "name": "3:30-4:30",
+      "fromSec": 210,
+      "toSec": 270
+    },
+    {
+      "name": ">= 4:30",
+      "fromSec": 270,
+      "toSec": null
+    }
+  ],
+  "selections": {
+    "topic-only-v1": {
+      "rule": "topic-only-v1",
+      "stopRank": 136,
+      "searchedToStop": 136,
+      "chosen": 25,
+      "skipped": 111,
+      "passRate": 0.18382352941176472,
+      "composition": {
+        "decade": {
+          "1950s": 3,
+          "1960s": 13,
+          "1970s": 4,
+          "1980s": 3,
+          "1990s": 2
+        },
+        "complexity": {
+          "complex": 10,
+          "moderate": 5,
+          "simple": 10
+        },
+        "lengthBand": {
+          "2:30-3:30": 12,
+          "3:30-4:30": 6,
+          "< 2:30": 6,
+          ">= 4:30": 1
+        }
+      },
+      "members": [
+        {
+          "rank": 5,
+          "id": "1190",
+          "artist": "Dr. Hook",
+          "title": "Only Sixteen",
+          "chartDate": "1976-01-24",
+          "complexity": "simple",
+          "annotationDurationSec": 166.27,
+          "videoId": "FUr7lC3631Q",
+          "channel": "Dr. Hook - Topic",
+          "lengthText": "2:46",
+          "diffSec": 0.27000000000001023
+        },
+        {
+          "rank": 18,
+          "id": "0571",
+          "artist": "Gary U.S. Bonds",
+          "title": "Quarter To Three",
+          "chartDate": "1961-05-29",
+          "complexity": "simple",
+          "annotationDurationSec": 150.54,
+          "videoId": "YF69PoyXskY",
+          "channel": "Gary U.S. Bonds - Topic",
+          "lengthText": "2:31",
+          "diffSec": 0.46000000000000796
+        },
+        {
+          "rank": 19,
+          "id": "0674",
+          "artist": "The Fireballs",
+          "title": "Sugar Shack",
+          "chartDate": "1963-12-14",
+          "complexity": "moderate",
+          "annotationDurationSec": 123.85,
+          "videoId": "5szXUpJi6kA",
+          "channel": "the Fireballs - Topic",
+          "lengthText": "2:02",
+          "diffSec": 1.8499999999999943
+        },
+        {
+          "rank": 25,
+          "id": "1145",
+          "artist": "Tevin Campbell",
+          "title": "Tell Me What You Want Me To Do",
+          "chartDate": "1991-11-16",
+          "complexity": "complex",
+          "annotationDurationSec": 257.59,
+          "videoId": "LpMlZCXPYRQ",
+          "channel": "Tevin Campbell - Topic",
+          "lengthText": "4:17",
+          "diffSec": 0.589999999999975
+        },
+        {
+          "rank": 27,
+          "id": "0577",
+          "artist": "Canned Heat",
+          "title": "Let's Work Together",
+          "chartDate": "1970-10-10",
+          "complexity": "moderate",
+          "annotationDurationSec": 169.9,
+          "videoId": "L5O0rPsfFmM",
+          "channel": "Canned Heat - Topic",
+          "lengthText": "2:50",
+          "diffSec": 0.09999999999999432
+        },
+        {
+          "rank": 31,
+          "id": "1170",
+          "artist": "Blue Cheer",
+          "title": "Summertime Blues",
+          "chartDate": "1968-05-25",
+          "complexity": "complex",
+          "annotationDurationSec": 226.19,
+          "videoId": "6un_fi7F_1w",
+          "channel": "Blue Cheer - Topic",
+          "lengthText": "3:47",
+          "diffSec": 0.8100000000000023
+        },
+        {
+          "rank": 32,
+          "id": "0261",
+          "artist": "Iron Butterfly",
+          "title": "In-A-Gadda-Da-Vida",
+          "chartDate": "1968-11-02",
+          "complexity": "complex",
+          "annotationDurationSec": 174.48,
+          "videoId": "XugIsZbTFy0",
+          "channel": "Iron Butterfly - Topic",
+          "lengthText": "2:54",
+          "diffSec": 0.47999999999998977
+        },
+        {
+          "rank": 35,
+          "id": "0026",
+          "artist": "The Chiffons",
+          "title": "Sweet Talkin' Guy",
+          "chartDate": "1966-05-07",
+          "complexity": "complex",
+          "annotationDurationSec": 148.39,
+          "videoId": "UAPaGi7HuKo",
+          "channel": "The Chiffons - Topic",
+          "lengthText": "2:27",
+          "diffSec": 1.3899999999999864
+        },
+        {
+          "rank": 36,
+          "id": "0112",
+          "artist": "Gladys Knight & The Pips",
+          "title": "Letter Full Of Tears",
+          "chartDate": "1962-01-27",
+          "complexity": "simple",
+          "annotationDurationSec": 165.69,
+          "videoId": "OI9pyee5DIU",
+          "channel": "Gladys Knight & The Pips - Topic",
+          "lengthText": "2:45",
+          "diffSec": 0.6899999999999977
+        },
+        {
+          "rank": 37,
+          "id": "0762",
+          "artist": "Grand Funk Railroad",
+          "title": "Walk Like A Man",
+          "chartDate": "1973-12-08",
+          "complexity": "simple",
+          "annotationDurationSec": 245.24,
+          "videoId": "j6C4b7wzZVo",
+          "channel": "Grand Funk Railroad - Topic",
+          "lengthText": "4:06",
+          "diffSec": 0.7599999999999909
+        },
+        {
+          "rank": 41,
+          "id": "0054",
+          "artist": "J. Frank Wilson & The Cavaliers",
+          "title": "Last Kiss",
+          "chartDate": "1964-09-05",
+          "complexity": "simple",
+          "annotationDurationSec": 147.7,
+          "videoId": "0PhOf9myHQM",
+          "channel": "J. Frank Wilson & The Cavaliers - Topic",
+          "lengthText": "2:28",
+          "diffSec": 0.30000000000001137
+        },
+        {
+          "rank": 57,
+          "id": "1112",
+          "artist": "Stephanie Mills",
+          "title": "Never Knew Love Like This Before",
+          "chartDate": "1980-12-06",
+          "complexity": "complex",
+          "annotationDurationSec": 324.5,
+          "videoId": "x-1fHv9IWqg",
+          "channel": "Stephanie Mills - Topic",
+          "lengthText": "5:26",
+          "diffSec": 1.5
+        },
+        {
+          "rank": 62,
+          "id": "1289",
+          "artist": "The La's",
+          "title": "There She Goes",
+          "chartDate": "1991-07-27",
+          "complexity": "complex",
+          "annotationDurationSec": 162.56,
+          "videoId": "7tE0v57RMJw",
+          "channel": "The La's - Topic",
+          "lengthText": "2:43",
+          "diffSec": 0.4399999999999977
+        },
+        {
+          "rank": 63,
+          "id": "1286",
+          "artist": "A Taste Of Honey",
+          "title": "Sukiyaki",
+          "chartDate": "1981-04-25",
+          "complexity": "complex",
+          "annotationDurationSec": 223.24,
+          "videoId": "qoU1jksH8LE",
+          "channel": "A Taste Of Honey - Topic",
+          "lengthText": "3:44",
+          "diffSec": 0.7599999999999909
+        },
+        {
+          "rank": 67,
+          "id": "0580",
+          "artist": "The Falcons",
+          "title": "I Found A Love",
+          "chartDate": "1962-05-26",
+          "complexity": "simple",
+          "annotationDurationSec": 178.68,
+          "videoId": "iDf4kyL5JTY",
+          "channel": "Falcons - Topic",
+          "lengthText": "2:59",
+          "diffSec": 0.3199999999999932
+        },
+        {
+          "rank": 69,
+          "id": "0965",
+          "artist": "Arthur Conley",
+          "title": "Sweet Soul Music",
+          "chartDate": "1967-03-25",
+          "complexity": "simple",
+          "annotationDurationSec": 143.08,
+          "videoId": "So9XIEhGrFw",
+          "channel": "Arthur Conley - Topic",
+          "lengthText": "2:23",
+          "diffSec": 0.0800000000000125
+        },
+        {
+          "rank": 72,
+          "id": "0822",
+          "artist": "LaVern Baker",
+          "title": "I Cried A Tear",
+          "chartDate": "1959-02-09",
+          "complexity": "complex",
+          "annotationDurationSec": 156.24,
+          "videoId": "gW3WO-AbGvI",
+          "channel": "Lavern Baker - Topic",
+          "lengthText": "2:36",
+          "diffSec": 0.2400000000000091
+        },
+        {
+          "rank": 81,
+          "id": "1072",
+          "artist": "Fats Domino",
+          "title": "Be My Guest",
+          "chartDate": "1959-11-16",
+          "complexity": "moderate",
+          "annotationDurationSec": 135.92,
+          "videoId": "lIWLtScRQtw",
+          "channel": "Fats Domino - Topic",
+          "lengthText": "2:16",
+          "diffSec": 0.0800000000000125
+        },
+        {
+          "rank": 84,
+          "id": "1033",
+          "artist": "The Byrds",
+          "title": "Goin' Back",
+          "chartDate": "1967-11-18",
+          "complexity": "moderate",
+          "annotationDurationSec": 207.96,
+          "videoId": "b56R_kc0ENY",
+          "channel": "THE BYRDS - Topic",
+          "lengthText": "3:27",
+          "diffSec": 0.960000000000008
+        },
+        {
+          "rank": 104,
+          "id": "1287",
+          "artist": "Johnny Horton",
+          "title": "Johnny Reb",
+          "chartDate": "1959-08-24",
+          "complexity": "simple",
+          "annotationDurationSec": 141.44,
+          "videoId": "eZDoceYPmD0",
+          "channel": "Johnny Horton - Topic",
+          "lengthText": "2:21",
+          "diffSec": 0.4399999999999977
+        },
+        {
+          "rank": 118,
+          "id": "0074",
+          "artist": "Martha & The Vandellas",
+          "title": "Nowhere To Run",
+          "chartDate": "1965-03-27",
+          "complexity": "moderate",
+          "annotationDurationSec": 178.78,
+          "videoId": "r83UttkZMcM",
+          "channel": "Martha - Topic",
+          "lengthText": "3:00",
+          "diffSec": 1.2199999999999989
+        },
+        {
+          "rank": 128,
+          "id": "0607",
+          "artist": "Carl Carlton",
+          "title": "Everlasting Love",
+          "chartDate": "1974-12-21",
+          "complexity": "complex",
+          "annotationDurationSec": 155.04,
+          "videoId": "SqT1y5Qi6l0",
+          "channel": "Carl Carlton - Topic",
+          "lengthText": "2:34",
+          "diffSec": 1.039999999999992
+        },
+        {
+          "rank": 129,
+          "id": "0811",
+          "artist": "Jermaine Jackson",
+          "title": "Let's Get Serious",
+          "chartDate": "1980-08-30",
+          "complexity": "complex",
+          "annotationDurationSec": 216.37,
+          "videoId": "MeqSNQ9uiHI",
+          "channel": "Jermaine Jackson - Topic",
+          "lengthText": "3:35",
+          "diffSec": 1.3700000000000045
+        },
+        {
+          "rank": 130,
+          "id": "0814",
+          "artist": "Marty Robbins",
+          "title": "Big Iron",
+          "chartDate": "1960-03-21",
+          "complexity": "simple",
+          "annotationDurationSec": 236.93,
+          "videoId": "QMcxZ9gfCZE",
+          "channel": "Marty Robbins - Topic",
+          "lengthText": "3:57",
+          "diffSec": 0.06999999999999318
+        },
+        {
+          "rank": 136,
+          "id": "0134",
+          "artist": "The Electric Prunes",
+          "title": "I Had Too Much To Dream (Last Night)",
+          "chartDate": "1967-01-07",
+          "complexity": "simple",
+          "annotationDurationSec": 179.98,
+          "videoId": "xAmKKpFj1uw",
+          "channel": "THE ELECTRIC PRUNES - Topic",
+          "lengthText": "3:00",
+          "diffSec": 0.020000000000010232
+        }
+      ]
+    },
+    "amended-v1": {
+      "rule": "amended-v1",
+      "stopRank": 32,
+      "searchedToStop": 32,
+      "chosen": 25,
+      "skipped": 7,
+      "passRate": 0.78125,
+      "composition": {
+        "decade": {
+          "1960s": 8,
+          "1970s": 7,
+          "1980s": 9,
+          "1990s": 1
+        },
+        "complexity": {
+          "complex": 11,
+          "moderate": 7,
+          "simple": 7
+        },
+        "lengthBand": {
+          "2:30-3:30": 9,
+          "3:30-4:30": 9,
+          "< 2:30": 4,
+          ">= 4:30": 3
+        },
+        "branch": {
+          "official-artist": 18,
+          "topic": 7
+        }
+      },
+      "members": [
+        {
+          "rank": 4,
+          "id": "1020",
+          "artist": "The Dramatics",
+          "title": "Hey You! Get Off My Mountain",
+          "chartDate": "1973-05-26",
+          "complexity": "complex",
+          "annotationDurationSec": 211.2,
+          "videoId": "QW4PD_q1VaI",
+          "channel": "thedramaticschannel",
+          "lengthText": "3:31",
+          "diffSec": 0.19999999999998863,
+          "branch": "official-artist"
+        },
+        {
+          "rank": 5,
+          "id": "1190",
+          "artist": "Dr. Hook",
+          "title": "Only Sixteen",
+          "chartDate": "1976-01-24",
+          "complexity": "simple",
+          "annotationDurationSec": 166.27,
+          "videoId": "FUr7lC3631Q",
+          "channel": "Dr. Hook - Topic",
+          "lengthText": "2:46",
+          "diffSec": 0.27000000000001023,
+          "branch": "topic"
+        },
+        {
+          "rank": 6,
+          "id": "0591",
+          "artist": "Eagles",
+          "title": "The Long Run",
+          "chartDate": "1980-03-15",
+          "complexity": "simple",
+          "annotationDurationSec": 221.65,
+          "videoId": "f6liGUpVuP8",
+          "channel": "Eagles",
+          "lengthText": "3:42",
+          "diffSec": 0.3499999999999943,
+          "branch": "official-artist"
+        },
+        {
+          "rank": 8,
+          "id": "0542",
+          "artist": "Wham!",
+          "title": "Wake Me Up Before You Go-Go",
+          "chartDate": "1984-10-27",
+          "complexity": "moderate",
+          "annotationDurationSec": 234.42,
+          "videoId": "17t7SEsoKfE",
+          "channel": "WHAM!",
+          "lengthText": "3:53",
+          "diffSec": 1.4199999999999875,
+          "branch": "official-artist"
+        },
+        {
+          "rank": 9,
+          "id": "0891",
+          "artist": "The Who",
+          "title": "Happy Jack",
+          "chartDate": "1967-04-22",
+          "complexity": "simple",
+          "annotationDurationSec": 132.1,
+          "videoId": "_64CuYwlmT4",
+          "channel": "TheWho",
+          "lengthText": "2:12",
+          "diffSec": 0.09999999999999432,
+          "branch": "official-artist"
+        },
+        {
+          "rank": 11,
+          "id": "0046",
+          "artist": "The Staple Singers",
+          "title": "I'll Take You There",
+          "chartDate": "1972-07-01",
+          "complexity": "moderate",
+          "annotationDurationSec": 194.75,
+          "videoId": "ZRFz8I72bTA",
+          "channel": "The Staple Singers",
+          "lengthText": "3:15",
+          "diffSec": 0.25,
+          "branch": "official-artist"
+        },
+        {
+          "rank": 12,
+          "id": "1232",
+          "artist": "Bonnie Pointer",
+          "title": "Heaven Must Have Sent You",
+          "chartDate": "1979-11-03",
+          "complexity": "moderate",
+          "annotationDurationSec": 215.75,
+          "videoId": "owiYwYdjgM8",
+          "channel": "BonniePointer",
+          "lengthText": "3:35",
+          "diffSec": 0.75,
+          "branch": "official-artist"
+        },
+        {
+          "rank": 13,
+          "id": "1126",
+          "artist": "Genesis",
+          "title": "Invisible Touch",
+          "chartDate": "1986-07-26",
+          "complexity": "complex",
+          "annotationDurationSec": 209.35,
+          "videoId": "MHSGsIPMQIo",
+          "channel": "Genesis",
+          "lengthText": "3:29",
+          "diffSec": 0.3499999999999943,
+          "branch": "official-artist"
+        },
+        {
+          "rank": 14,
+          "id": "0330",
+          "artist": "The 5th Dimension",
+          "title": "Go Where You Wanna Go",
+          "chartDate": "1967-01-21",
+          "complexity": "moderate",
+          "annotationDurationSec": 145.01,
+          "videoId": "242bVcCcB5A",
+          "channel": "The 5th Dimension",
+          "lengthText": "2:25",
+          "diffSec": 0.009999999999990905,
+          "branch": "official-artist"
+        },
+        {
+          "rank": 15,
+          "id": "0010",
+          "artist": "Billy Joel",
+          "title": "An Innocent Man",
+          "chartDate": "1984-03-24",
+          "complexity": "moderate",
+          "annotationDurationSec": 318.16,
+          "videoId": "zx9-3On46-c",
+          "channel": "Billy Joel",
+          "lengthText": "5:18",
+          "diffSec": 0.160000000000025,
+          "branch": "official-artist"
+        },
+        {
+          "rank": 16,
+          "id": "0879",
+          "artist": "Run-D.M.C.",
+          "title": "Walk This Way",
+          "chartDate": "1986-08-02",
+          "complexity": "complex",
+          "annotationDurationSec": 312.03,
+          "videoId": "dLB0P8nT2w8",
+          "channel": "Run DMC",
+          "lengthText": "5:11",
+          "diffSec": 1.0299999999999727,
+          "branch": "official-artist"
+        },
+        {
+          "rank": 18,
+          "id": "0571",
+          "artist": "Gary U.S. Bonds",
+          "title": "Quarter To Three",
+          "chartDate": "1961-05-29",
+          "complexity": "simple",
+          "annotationDurationSec": 150.54,
+          "videoId": "YF69PoyXskY",
+          "channel": "Gary U.S. Bonds - Topic",
+          "lengthText": "2:31",
+          "diffSec": 0.46000000000000796,
+          "branch": "topic"
+        },
+        {
+          "rank": 19,
+          "id": "0674",
+          "artist": "The Fireballs",
+          "title": "Sugar Shack",
+          "chartDate": "1963-12-14",
+          "complexity": "moderate",
+          "annotationDurationSec": 123.85,
+          "videoId": "5szXUpJi6kA",
+          "channel": "the Fireballs - Topic",
+          "lengthText": "2:02",
+          "diffSec": 1.8499999999999943,
+          "branch": "topic"
+        },
+        {
+          "rank": 20,
+          "id": "0864",
+          "artist": "Oak Ridge Boys",
+          "title": "Elvira",
+          "chartDate": "1981-05-30",
+          "complexity": "complex",
+          "annotationDurationSec": 161.16,
+          "videoId": "2mgxsXu3D9A",
+          "channel": "The Oak Ridge Boys",
+          "lengthText": "2:42",
+          "diffSec": 0.8400000000000034,
+          "branch": "official-artist"
+        },
+        {
+          "rank": 21,
+          "id": "0159",
+          "artist": "Elvis Presley",
+          "title": "Little Sister",
+          "chartDate": "1961-10-30",
+          "complexity": "simple",
+          "annotationDurationSec": 152.03,
+          "videoId": "KM4JZBqjQqA",
+          "channel": "Elvis Presley",
+          "lengthText": "2:32",
+          "diffSec": 0.030000000000001137,
+          "branch": "official-artist"
+        },
+        {
+          "rank": 22,
+          "id": "0094",
+          "artist": "The Rolling Stones",
+          "title": "Wild Horses",
+          "chartDate": "1971-06-19",
+          "complexity": "simple",
+          "annotationDurationSec": 344.14,
+          "videoId": "1PxuYrGEVow",
+          "channel": "The Rolling Stones",
+          "lengthText": "5:45",
+          "diffSec": 0.8600000000000136,
+          "branch": "official-artist"
+        },
+        {
+          "rank": 23,
+          "id": "0578",
+          "artist": "Anita Baker",
+          "title": "Giving You The Best That I Got",
+          "chartDate": "1989-01-21",
+          "complexity": "complex",
+          "annotationDurationSec": 260.55,
+          "videoId": "GNDuWcLI5fg",
+          "channel": "Anita Baker",
+          "lengthText": "4:21",
+          "diffSec": 0.44999999999998863,
+          "branch": "official-artist"
+        },
+        {
+          "rank": 24,
+          "id": "0162",
+          "artist": "Brenda Lee",
+          "title": "Sweet Nothin's",
+          "chartDate": "1960-01-04",
+          "complexity": "simple",
+          "annotationDurationSec": 145.76,
+          "videoId": "y5mznY_WPFw",
+          "channel": "Brenda Lee",
+          "lengthText": "2:26",
+          "diffSec": 0.2400000000000091,
+          "branch": "official-artist"
+        },
+        {
+          "rank": 25,
+          "id": "1145",
+          "artist": "Tevin Campbell",
+          "title": "Tell Me What You Want Me To Do",
+          "chartDate": "1991-11-16",
+          "complexity": "complex",
+          "annotationDurationSec": 257.59,
+          "videoId": "LpMlZCXPYRQ",
+          "channel": "Tevin Campbell - Topic",
+          "lengthText": "4:17",
+          "diffSec": 0.589999999999975,
+          "branch": "topic"
+        },
+        {
+          "rank": 26,
+          "id": "0393",
+          "artist": "Genesis",
+          "title": "Misunderstanding",
+          "chartDate": "1980-07-26",
+          "complexity": "complex",
+          "annotationDurationSec": 194.87,
+          "videoId": "tVQHWKfzYEM",
+          "channel": "Genesis",
+          "lengthText": "3:14",
+          "diffSec": 0.8700000000000045,
+          "branch": "official-artist"
+        },
+        {
+          "rank": 27,
+          "id": "0577",
+          "artist": "Canned Heat",
+          "title": "Let's Work Together",
+          "chartDate": "1970-10-10",
+          "complexity": "moderate",
+          "annotationDurationSec": 169.9,
+          "videoId": "L5O0rPsfFmM",
+          "channel": "Canned Heat - Topic",
+          "lengthText": "2:50",
+          "diffSec": 0.09999999999999432,
+          "branch": "topic"
+        },
+        {
+          "rank": 28,
+          "id": "1040",
+          "artist": "Eric Clapton",
+          "title": "Lay Down Sally",
+          "chartDate": "1978-05-20",
+          "complexity": "complex",
+          "annotationDurationSec": 230.84,
+          "videoId": "vvomrmBmQAM",
+          "channel": "Eric Clapton",
+          "lengthText": "3:52",
+          "diffSec": 1.1599999999999966,
+          "branch": "official-artist"
+        },
+        {
+          "rank": 29,
+          "id": "0887",
+          "artist": "De La Soul",
+          "title": "Me Myself And I",
+          "chartDate": "1989-09-09",
+          "complexity": "complex",
+          "annotationDurationSec": 221.44,
+          "videoId": "FPs2M0KPyP8",
+          "channel": "WeAreDeLaSoul",
+          "lengthText": "3:41",
+          "diffSec": 0.4399999999999977,
+          "branch": "official-artist"
+        },
+        {
+          "rank": 31,
+          "id": "1170",
+          "artist": "Blue Cheer",
+          "title": "Summertime Blues",
+          "chartDate": "1968-05-25",
+          "complexity": "complex",
+          "annotationDurationSec": 226.19,
+          "videoId": "6un_fi7F_1w",
+          "channel": "Blue Cheer - Topic",
+          "lengthText": "3:47",
+          "diffSec": 0.8100000000000023,
+          "branch": "topic"
+        },
+        {
+          "rank": 32,
+          "id": "0261",
+          "artist": "Iron Butterfly",
+          "title": "In-A-Gadda-Da-Vida",
+          "chartDate": "1968-11-02",
+          "complexity": "complex",
+          "annotationDurationSec": 174.48,
+          "videoId": "XugIsZbTFy0",
+          "channel": "Iron Butterfly - Topic",
+          "lengthText": "2:54",
+          "diffSec": 0.47999999999998977,
+          "branch": "topic"
+        }
+      ]
+    }
+  },
+  "overlap": [
+    {
+      "rank": 5,
+      "id": "1190",
+      "artist": "Dr. Hook",
+      "title": "Only Sixteen"
+    },
+    {
+      "rank": 18,
+      "id": "0571",
+      "artist": "Gary U.S. Bonds",
+      "title": "Quarter To Three"
+    },
+    {
+      "rank": 19,
+      "id": "0674",
+      "artist": "The Fireballs",
+      "title": "Sugar Shack"
+    },
+    {
+      "rank": 25,
+      "id": "1145",
+      "artist": "Tevin Campbell",
+      "title": "Tell Me What You Want Me To Do"
+    },
+    {
+      "rank": 27,
+      "id": "0577",
+      "artist": "Canned Heat",
+      "title": "Let's Work Together"
+    },
+    {
+      "rank": 31,
+      "id": "1170",
+      "artist": "Blue Cheer",
+      "title": "Summertime Blues"
+    },
+    {
+      "rank": 32,
+      "id": "0261",
+      "artist": "Iron Butterfly",
+      "title": "In-A-Gadda-Da-Vida"
+    }
+  ],
+  "only": {
+    "topic-only-v1": [
+      {
+        "rank": 35,
+        "id": "0026",
+        "artist": "The Chiffons",
+        "title": "Sweet Talkin' Guy"
+      },
+      {
+        "rank": 36,
+        "id": "0112",
+        "artist": "Gladys Knight & The Pips",
+        "title": "Letter Full Of Tears"
+      },
+      {
+        "rank": 37,
+        "id": "0762",
+        "artist": "Grand Funk Railroad",
+        "title": "Walk Like A Man"
+      },
+      {
+        "rank": 41,
+        "id": "0054",
+        "artist": "J. Frank Wilson & The Cavaliers",
+        "title": "Last Kiss"
+      },
+      {
+        "rank": 57,
+        "id": "1112",
+        "artist": "Stephanie Mills",
+        "title": "Never Knew Love Like This Before"
+      },
+      {
+        "rank": 62,
+        "id": "1289",
+        "artist": "The La's",
+        "title": "There She Goes"
+      },
+      {
+        "rank": 63,
+        "id": "1286",
+        "artist": "A Taste Of Honey",
+        "title": "Sukiyaki"
+      },
+      {
+        "rank": 67,
+        "id": "0580",
+        "artist": "The Falcons",
+        "title": "I Found A Love"
+      },
+      {
+        "rank": 69,
+        "id": "0965",
+        "artist": "Arthur Conley",
+        "title": "Sweet Soul Music"
+      },
+      {
+        "rank": 72,
+        "id": "0822",
+        "artist": "LaVern Baker",
+        "title": "I Cried A Tear"
+      },
+      {
+        "rank": 81,
+        "id": "1072",
+        "artist": "Fats Domino",
+        "title": "Be My Guest"
+      },
+      {
+        "rank": 84,
+        "id": "1033",
+        "artist": "The Byrds",
+        "title": "Goin' Back"
+      },
+      {
+        "rank": 104,
+        "id": "1287",
+        "artist": "Johnny Horton",
+        "title": "Johnny Reb"
+      },
+      {
+        "rank": 118,
+        "id": "0074",
+        "artist": "Martha & The Vandellas",
+        "title": "Nowhere To Run"
+      },
+      {
+        "rank": 128,
+        "id": "0607",
+        "artist": "Carl Carlton",
+        "title": "Everlasting Love"
+      },
+      {
+        "rank": 129,
+        "id": "0811",
+        "artist": "Jermaine Jackson",
+        "title": "Let's Get Serious"
+      },
+      {
+        "rank": 130,
+        "id": "0814",
+        "artist": "Marty Robbins",
+        "title": "Big Iron"
+      },
+      {
+        "rank": 136,
+        "id": "0134",
+        "artist": "The Electric Prunes",
+        "title": "I Had Too Much To Dream (Last Night)"
+      }
+    ],
+    "amended-v1": [
+      {
+        "rank": 4,
+        "id": "1020",
+        "artist": "The Dramatics",
+        "title": "Hey You! Get Off My Mountain"
+      },
+      {
+        "rank": 6,
+        "id": "0591",
+        "artist": "Eagles",
+        "title": "The Long Run"
+      },
+      {
+        "rank": 8,
+        "id": "0542",
+        "artist": "Wham!",
+        "title": "Wake Me Up Before You Go-Go"
+      },
+      {
+        "rank": 9,
+        "id": "0891",
+        "artist": "The Who",
+        "title": "Happy Jack"
+      },
+      {
+        "rank": 11,
+        "id": "0046",
+        "artist": "The Staple Singers",
+        "title": "I'll Take You There"
+      },
+      {
+        "rank": 12,
+        "id": "1232",
+        "artist": "Bonnie Pointer",
+        "title": "Heaven Must Have Sent You"
+      },
+      {
+        "rank": 13,
+        "id": "1126",
+        "artist": "Genesis",
+        "title": "Invisible Touch"
+      },
+      {
+        "rank": 14,
+        "id": "0330",
+        "artist": "The 5th Dimension",
+        "title": "Go Where You Wanna Go"
+      },
+      {
+        "rank": 15,
+        "id": "0010",
+        "artist": "Billy Joel",
+        "title": "An Innocent Man"
+      },
+      {
+        "rank": 16,
+        "id": "0879",
+        "artist": "Run-D.M.C.",
+        "title": "Walk This Way"
+      },
+      {
+        "rank": 20,
+        "id": "0864",
+        "artist": "Oak Ridge Boys",
+        "title": "Elvira"
+      },
+      {
+        "rank": 21,
+        "id": "0159",
+        "artist": "Elvis Presley",
+        "title": "Little Sister"
+      },
+      {
+        "rank": 22,
+        "id": "0094",
+        "artist": "The Rolling Stones",
+        "title": "Wild Horses"
+      },
+      {
+        "rank": 23,
+        "id": "0578",
+        "artist": "Anita Baker",
+        "title": "Giving You The Best That I Got"
+      },
+      {
+        "rank": 24,
+        "id": "0162",
+        "artist": "Brenda Lee",
+        "title": "Sweet Nothin's"
+      },
+      {
+        "rank": 26,
+        "id": "0393",
+        "artist": "Genesis",
+        "title": "Misunderstanding"
+      },
+      {
+        "rank": 28,
+        "id": "1040",
+        "artist": "Eric Clapton",
+        "title": "Lay Down Sally"
+      },
+      {
+        "rank": 29,
+        "id": "0887",
+        "artist": "De La Soul",
+        "title": "Me Myself And I"
+      }
+    ]
+  },
+  "purpose": "Selection-sensitivity record of the VGT-7 held-out list (PR #31 amendment): the same pool and search log walked under the original topic-only-v1 rule and the amended-v1 rule. The list uses amended-v1; the songs only in the topic-only selection are not captured.",
+  "sources": {
+    "pool": "docs/annotation-heldout-v1-pool.json",
+    "searchLog": "docs/annotation-heldout-v1-search-log.json"
+  }
+}

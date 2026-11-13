@@ -7,7 +7,8 @@
   "notes": [
     "Before the logged run, rank 1 (Robert Palmer, Addicted To Love) was searched before: once with both queries to check the result format, and once more with Q1 only to inspect the channel fields. Those results are not in the log; rank 1 was searched again in the logged run.",
     "At 16:39 the batch for ranks 67-76 could not connect to Aside (Could not connect to Aside at http://127.0.0.1:21420) and returned no results; Aside answered again seconds later and the same batch was run from rank 67. No result of that failed attempt exists.",
-    "Observed: auto-generated 'Provided to YouTube' uploads of artists with an official artist channel appear under the artist's channel name (for example 'Robert Palmer', same channel id as the music video), not '<artist> - Topic'. The frozen rule requires the ' - Topic' suffix and is applied as written."
+    "Observed: auto-generated 'Provided to YouTube' uploads of artists with an official artist channel appear under the artist's channel name (for example 'Robert Palmer', same channel id as the music video), not '<artist> - Topic'. The frozen rule requires the ' - Topic' suffix and is applied as written.",
+    "Amendment amended-v1 (2026-11-13): Under topic-only-v1 only 25 of 136 searched songs qualified: artists with an official artist channel publish their auto-generated 'Provided to YouTube' tracks under the artist channel name, not '<artist> - Topic', so the rule kept mostly artists without such a channel. Decided by the Paseo parent after an Astra advisor round, before any capture; re-judged from this same log, no new searches. All other conditions, query limits, ordering, tie-break and the stop at 25 are unchanged. Each entry keeps 'decision' (topic-only-v1) and gains 'decisionAmended'; entries past the amended stop (rank 32) are 'not needed: beyond the amended stop'."
   ],
   "stoppedAtRank": 136,
   "chosen": 25,
@@ -470,6 +471,47 @@
             "diffSec": 78.93
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "skipped",
+        "chosen": null,
+        "qualifying": 0,
+        "reason": "no qualifying upload in the first 15 results of Q1 and Q2",
+        "nearestTopic": [
+          {
+            "query": "Q1",
+            "rank": 8,
+            "videoId": "sW4rk5sMsB0",
+            "title": "Addicted To Love (Remix)",
+            "channel": "Robert Palmer",
+            "lengthText": "4:26",
+            "lengthSec": 266,
+            "diffSec": 1.0699999999999932,
+            "branch": "official-artist"
+          },
+          {
+            "query": "Q1",
+            "rank": 9,
+            "videoId": "a6cdN1PQSiE",
+            "title": "Addicted To Love (Edit)",
+            "channel": "Robert Palmer",
+            "lengthText": "4:27",
+            "lengthSec": 267,
+            "diffSec": 2.069999999999993,
+            "branch": "official-artist"
+          },
+          {
+            "query": "Q1",
+            "rank": 11,
+            "videoId": "NtpGw1p7R90",
+            "title": "Addicted To Love (Edit)",
+            "channel": "Robert Palmer",
+            "lengthText": "4:20",
+            "lengthSec": 260,
+            "diffSec": 4.930000000000007,
+            "branch": "official-artist"
+          }
+        ]
       }
     },
     {
@@ -911,6 +953,47 @@
             "lengthText": "13:46",
             "lengthSec": 826,
             "diffSec": 617.86
+          }
+        ]
+      },
+      "decisionAmended": {
+        "status": "skipped",
+        "chosen": null,
+        "qualifying": 0,
+        "reason": "no qualifying upload in the first 15 results of Q1 and Q2",
+        "nearestTopic": [
+          {
+            "query": "Q1",
+            "rank": 3,
+            "videoId": "P57rRpl2hpo",
+            "title": "Frankenstein (Single Version)",
+            "channel": "Edgar Winter",
+            "lengthText": "3:26",
+            "lengthSec": 206,
+            "diffSec": 2.1399999999999864,
+            "branch": "official-artist"
+          },
+          {
+            "query": "Q1",
+            "rank": 5,
+            "videoId": "jhtztznkVBc",
+            "title": "Frankenstein (Single Version)",
+            "channel": "Edgar Winter",
+            "lengthText": "3:26",
+            "lengthSec": 206,
+            "diffSec": 2.1399999999999864,
+            "branch": "official-artist"
+          },
+          {
+            "query": "Q1",
+            "rank": 4,
+            "videoId": "22L-vgEvKsM",
+            "title": "Frankenstein (Single Version)",
+            "channel": "Edgar Winter",
+            "lengthText": "3:25",
+            "lengthSec": 205,
+            "diffSec": 3.1399999999999864,
+            "branch": "official-artist"
           }
         ]
       }
@@ -1364,6 +1447,47 @@
             "diffSec": 30.05000000000001
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "skipped",
+        "chosen": null,
+        "qualifying": 0,
+        "reason": "no qualifying upload in the first 15 results of Q1 and Q2",
+        "nearestTopic": [
+          {
+            "query": "Q1",
+            "rank": 14,
+            "videoId": "-wrfo2An0qo",
+            "title": "Cradle Of Love",
+            "channel": "Billy Idol",
+            "lengthText": "4:42",
+            "lengthSec": 282,
+            "diffSec": 3.9499999999999886,
+            "branch": "official-artist"
+          },
+          {
+            "query": "Q1",
+            "rank": 9,
+            "videoId": "seHlHzYpWBU",
+            "title": "Rebel Yell",
+            "channel": "Billy Idol",
+            "lengthText": "4:49",
+            "lengthSec": 289,
+            "diffSec": 10.949999999999989,
+            "branch": "official-artist"
+          },
+          {
+            "query": "Q1",
+            "rank": 4,
+            "videoId": "Ri5iXRipuYM",
+            "title": "Flesh For Fantasy (Session Take)",
+            "channel": "Billy Idol",
+            "lengthText": "5:10",
+            "lengthSec": 310,
+            "diffSec": 31.94999999999999,
+            "branch": "official-artist"
+          }
+        ]
       }
     },
     {
@@ -1802,6 +1926,57 @@
         "qualifying": 0,
         "reason": "no qualifying upload in the first 15 results of Q1 and Q2",
         "nearestTopic": []
+      },
+      "decisionAmended": {
+        "status": "chosen",
+        "chosen": {
+          "query": "Q1",
+          "rank": 3,
+          "videoId": "QW4PD_q1VaI",
+          "title": "Hey You! Get Off My Mountain",
+          "channel": "thedramaticschannel",
+          "lengthText": "3:31",
+          "lengthSec": 211,
+          "diffSec": 0.19999999999998863,
+          "branch": "official-artist"
+        },
+        "qualifying": 8,
+        "reason": null,
+        "nearestTopic": [
+          {
+            "query": "Q1",
+            "rank": 3,
+            "videoId": "QW4PD_q1VaI",
+            "title": "Hey You! Get Off My Mountain",
+            "channel": "thedramaticschannel",
+            "lengthText": "3:31",
+            "lengthSec": 211,
+            "diffSec": 0.19999999999998863,
+            "branch": "official-artist"
+          },
+          {
+            "query": "Q1",
+            "rank": 4,
+            "videoId": "jybIJnQox5k",
+            "title": "Hey You! Get Off My Mountain",
+            "channel": "thedramaticschannel",
+            "lengthText": "3:31",
+            "lengthSec": 211,
+            "diffSec": 0.19999999999998863,
+            "branch": "official-artist"
+          },
+          {
+            "query": "Q1",
+            "rank": 6,
+            "videoId": "irvjOcus_aQ",
+            "title": "Hey You! Get Off My Mountain",
+            "channel": "thedramaticschannel",
+            "lengthText": "3:30",
+            "lengthSec": 210,
+            "diffSec": 1.1999999999999886,
+            "branch": "official-artist"
+          }
+        ]
       }
     },
     {
@@ -2250,6 +2425,57 @@
             "lengthText": "2:48",
             "lengthSec": 168,
             "diffSec": 1.7299999999999898
+          }
+        ]
+      },
+      "decisionAmended": {
+        "status": "chosen",
+        "chosen": {
+          "query": "Q1",
+          "rank": 2,
+          "videoId": "FUr7lC3631Q",
+          "title": "Only Sixteen (Remastered)",
+          "channel": "Dr. Hook - Topic",
+          "lengthText": "2:46",
+          "lengthSec": 166,
+          "diffSec": 0.27000000000001023,
+          "branch": "topic"
+        },
+        "qualifying": 8,
+        "reason": null,
+        "nearestTopic": [
+          {
+            "query": "Q1",
+            "rank": 2,
+            "videoId": "FUr7lC3631Q",
+            "title": "Only Sixteen (Remastered)",
+            "channel": "Dr. Hook - Topic",
+            "lengthText": "2:46",
+            "lengthSec": 166,
+            "diffSec": 0.27000000000001023,
+            "branch": "topic"
+          },
+          {
+            "query": "Q1",
+            "rank": 4,
+            "videoId": "ZWPJmmAlpf4",
+            "title": "Only Sixteen",
+            "channel": "Dr. Hook - Topic",
+            "lengthText": "2:46",
+            "lengthSec": 166,
+            "diffSec": 0.27000000000001023,
+            "branch": "topic"
+          },
+          {
+            "query": "Q1",
+            "rank": 1,
+            "videoId": "nF0-OKKOJl4",
+            "title": "Only Sixteen",
+            "channel": "Dr. Hook - Topic",
+            "lengthText": "2:48",
+            "lengthSec": 168,
+            "diffSec": 1.7299999999999898,
+            "branch": "topic"
           }
         ]
       }
@@ -2715,6 +2941,57 @@
             "diffSec": 21.349999999999994
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "chosen",
+        "chosen": {
+          "query": "Q1",
+          "rank": 1,
+          "videoId": "f6liGUpVuP8",
+          "title": "The Long Run (2013 Remaster)",
+          "channel": "Eagles",
+          "lengthText": "3:42",
+          "lengthSec": 222,
+          "diffSec": 0.3499999999999943,
+          "branch": "official-artist"
+        },
+        "qualifying": 2,
+        "reason": null,
+        "nearestTopic": [
+          {
+            "query": "Q1",
+            "rank": 1,
+            "videoId": "f6liGUpVuP8",
+            "title": "The Long Run (2013 Remaster)",
+            "channel": "Eagles",
+            "lengthText": "3:42",
+            "lengthSec": 222,
+            "diffSec": 0.3499999999999943,
+            "branch": "official-artist"
+          },
+          {
+            "query": "Q1",
+            "rank": 2,
+            "videoId": "v_6Wc1tePbk",
+            "title": "The Long Run (2013 Remaster)",
+            "channel": "Eagles",
+            "lengthText": "3:42",
+            "lengthSec": 222,
+            "diffSec": 0.3499999999999943,
+            "branch": "official-artist"
+          },
+          {
+            "query": "Q1",
+            "rank": 11,
+            "videoId": "VNA2LoTYoU0",
+            "title": "How Long",
+            "channel": "Eagles",
+            "lengthText": "3:17",
+            "lengthSec": 197,
+            "diffSec": 24.650000000000006,
+            "branch": "official-artist"
+          }
+        ]
       }
     },
     {
@@ -3164,6 +3441,47 @@
             "lengthText": "2:50",
             "lengthSec": 170,
             "diffSec": 15.830000000000013
+          }
+        ]
+      },
+      "decisionAmended": {
+        "status": "skipped",
+        "chosen": null,
+        "qualifying": 0,
+        "reason": "no qualifying upload in the first 15 results of Q1 and Q2",
+        "nearestTopic": [
+          {
+            "query": "Q1",
+            "rank": 4,
+            "videoId": "Z2P3b3Cw4Oc",
+            "title": "These Boots Are Made for Walkin'",
+            "channel": "Nancy Sinatra",
+            "lengthText": "2:30",
+            "lengthSec": 150,
+            "diffSec": 4.1699999999999875,
+            "branch": "official-artist"
+          },
+          {
+            "query": "Q1",
+            "rank": 6,
+            "videoId": "jqpsVXJrm4s",
+            "title": "These Boots Are Made for Walking",
+            "channel": "Nancy Sinatra",
+            "lengthText": "2:41",
+            "lengthSec": 161,
+            "diffSec": 6.8300000000000125,
+            "branch": "official-artist"
+          },
+          {
+            "query": "Q1",
+            "rank": 3,
+            "videoId": "fZjrkbkeWzo",
+            "title": "These Boots Are Made for Walkin'",
+            "channel": "Nancy Sinatra",
+            "lengthText": "2:43",
+            "lengthSec": 163,
+            "diffSec": 8.830000000000013,
+            "branch": "official-artist"
           }
         ]
       }
@@ -3625,6 +3943,57 @@
             "diffSec": 17.419999999999987
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "chosen",
+        "chosen": {
+          "query": "Q1",
+          "rank": 3,
+          "videoId": "17t7SEsoKfE",
+          "title": "Wake Me Up Before You Go-Go (Remastered)",
+          "channel": "WHAM!",
+          "lengthText": "3:53",
+          "lengthSec": 233,
+          "diffSec": 1.4199999999999875,
+          "branch": "official-artist"
+        },
+        "qualifying": 2,
+        "reason": null,
+        "nearestTopic": [
+          {
+            "query": "Q1",
+            "rank": 3,
+            "videoId": "17t7SEsoKfE",
+            "title": "Wake Me Up Before You Go-Go (Remastered)",
+            "channel": "WHAM!",
+            "lengthText": "3:53",
+            "lengthSec": 233,
+            "diffSec": 1.4199999999999875,
+            "branch": "official-artist"
+          },
+          {
+            "query": "Q1",
+            "rank": 1,
+            "videoId": "R14lGgHgVJM",
+            "title": "Wake Me Up Before You Go-Go",
+            "channel": "WHAM!",
+            "lengthText": "3:52",
+            "lengthSec": 232,
+            "diffSec": 2.4199999999999875,
+            "branch": "official-artist"
+          },
+          {
+            "query": "Q1",
+            "rank": 2,
+            "videoId": "c5DGcQoBC9k",
+            "title": "Wake Me Up Before You Go-Go",
+            "channel": "WHAM!",
+            "lengthText": "3:51",
+            "lengthSec": 231,
+            "diffSec": 3.4199999999999875,
+            "branch": "official-artist"
+          }
+        ]
       }
     },
     {
@@ -4072,6 +4441,57 @@
             "lengthText": "3:01",
             "lengthSec": 181,
             "diffSec": 48.900000000000006
+          }
+        ]
+      },
+      "decisionAmended": {
+        "status": "chosen",
+        "chosen": {
+          "query": "Q1",
+          "rank": 3,
+          "videoId": "_64CuYwlmT4",
+          "title": "Happy Jack",
+          "channel": "TheWho",
+          "lengthText": "2:12",
+          "lengthSec": 132,
+          "diffSec": 0.09999999999999432,
+          "branch": "official-artist"
+        },
+        "qualifying": 9,
+        "reason": null,
+        "nearestTopic": [
+          {
+            "query": "Q1",
+            "rank": 3,
+            "videoId": "_64CuYwlmT4",
+            "title": "Happy Jack",
+            "channel": "TheWho",
+            "lengthText": "2:12",
+            "lengthSec": 132,
+            "diffSec": 0.09999999999999432,
+            "branch": "official-artist"
+          },
+          {
+            "query": "Q1",
+            "rank": 1,
+            "videoId": "FI7ssXjFY2c",
+            "title": "Happy Jack",
+            "channel": "TheWho",
+            "lengthText": "2:13",
+            "lengthSec": 133,
+            "diffSec": 0.9000000000000057,
+            "branch": "official-artist"
+          },
+          {
+            "query": "Q1",
+            "rank": 2,
+            "videoId": "mguSawjjKMQ",
+            "title": "Happy Jack",
+            "channel": "TheWho",
+            "lengthText": "2:13",
+            "lengthSec": 133,
+            "diffSec": 0.9000000000000057,
+            "branch": "official-artist"
           }
         ]
       }
@@ -4522,6 +4942,47 @@
         "qualifying": 0,
         "reason": "no qualifying upload in the first 15 results of Q1 and Q2",
         "nearestTopic": []
+      },
+      "decisionAmended": {
+        "status": "skipped",
+        "chosen": null,
+        "qualifying": 0,
+        "reason": "no qualifying upload in the first 15 results of Q1 and Q2",
+        "nearestTopic": [
+          {
+            "query": "Q1",
+            "rank": 2,
+            "videoId": "yLH4IbJiiSo",
+            "title": "Kicks (Album Version)",
+            "channel": "Paul Revere & The Raiders",
+            "lengthText": "2:27",
+            "lengthSec": 147,
+            "diffSec": 2.319999999999993,
+            "branch": "official-artist"
+          },
+          {
+            "query": "Q1",
+            "rank": 15,
+            "videoId": "JRSHuS03VhI",
+            "title": "Kicks",
+            "channel": "Paul Revere & The Raiders",
+            "lengthText": "2:27",
+            "lengthSec": 147,
+            "diffSec": 2.319999999999993,
+            "branch": "official-artist"
+          },
+          {
+            "query": "Q1",
+            "rank": 1,
+            "videoId": "_mUNIGbwrNI",
+            "title": "Kicks",
+            "channel": "Paul Revere & The Raiders",
+            "lengthText": "2:32",
+            "lengthSec": 152,
+            "diffSec": 2.680000000000007,
+            "branch": "official-artist"
+          }
+        ]
       }
     },
     {
@@ -4950,6 +5411,57 @@
         "qualifying": 0,
         "reason": "no qualifying upload in the first 15 results of Q1 and Q2",
         "nearestTopic": []
+      },
+      "decisionAmended": {
+        "status": "chosen",
+        "chosen": {
+          "query": "Q1",
+          "rank": 11,
+          "videoId": "ZRFz8I72bTA",
+          "title": "I'll Take You There",
+          "channel": "The Staple Singers",
+          "lengthText": "3:15",
+          "lengthSec": 195,
+          "diffSec": 0.25,
+          "branch": "official-artist"
+        },
+        "qualifying": 10,
+        "reason": null,
+        "nearestTopic": [
+          {
+            "query": "Q1",
+            "rank": 11,
+            "videoId": "ZRFz8I72bTA",
+            "title": "I'll Take You There",
+            "channel": "The Staple Singers",
+            "lengthText": "3:15",
+            "lengthSec": 195,
+            "diffSec": 0.25,
+            "branch": "official-artist"
+          },
+          {
+            "query": "Q1",
+            "rank": 3,
+            "videoId": "3VuWrYlMwuE",
+            "title": "I'll Take You There",
+            "channel": "The Staple Singers",
+            "lengthText": "3:16",
+            "lengthSec": 196,
+            "diffSec": 1.25,
+            "branch": "official-artist"
+          },
+          {
+            "query": "Q1",
+            "rank": 5,
+            "videoId": "FXq3TPvh1Wc",
+            "title": "I'll Take You There",
+            "channel": "The Staple Singers",
+            "lengthText": "3:16",
+            "lengthSec": 196,
+            "diffSec": 1.25,
+            "branch": "official-artist"
+          }
+        ]
       }
     },
     {
@@ -5383,6 +5895,46 @@
             "lengthText": "3:54",
             "lengthSec": 234,
             "diffSec": 18.25
+          }
+        ]
+      },
+      "decisionAmended": {
+        "status": "chosen",
+        "chosen": {
+          "query": "Q1",
+          "rank": 1,
+          "videoId": "owiYwYdjgM8",
+          "title": "Heaven Must Have Sent You",
+          "channel": "BonniePointer",
+          "lengthText": "3:35",
+          "lengthSec": 215,
+          "diffSec": 0.75,
+          "branch": "official-artist"
+        },
+        "qualifying": 2,
+        "reason": null,
+        "nearestTopic": [
+          {
+            "query": "Q1",
+            "rank": 1,
+            "videoId": "owiYwYdjgM8",
+            "title": "Heaven Must Have Sent You",
+            "channel": "BonniePointer",
+            "lengthText": "3:35",
+            "lengthSec": 215,
+            "diffSec": 0.75,
+            "branch": "official-artist"
+          },
+          {
+            "query": "Q1",
+            "rank": 5,
+            "videoId": "e_yC2CZqMfM",
+            "title": "Hide",
+            "channel": "BonniePointer",
+            "lengthText": "3:11",
+            "lengthSec": 191,
+            "diffSec": 24.75,
+            "branch": "official-artist"
           }
         ]
       }
@@ -5822,6 +6374,57 @@
             "lengthText": "3:19",
             "lengthSec": 199,
             "diffSec": 10.349999999999994
+          }
+        ]
+      },
+      "decisionAmended": {
+        "status": "chosen",
+        "chosen": {
+          "query": "Q1",
+          "rank": 1,
+          "videoId": "MHSGsIPMQIo",
+          "title": "Invisible Touch (2007 Remaster)",
+          "channel": "Genesis",
+          "lengthText": "3:29",
+          "lengthSec": 209,
+          "diffSec": 0.3499999999999943,
+          "branch": "official-artist"
+        },
+        "qualifying": 4,
+        "reason": null,
+        "nearestTopic": [
+          {
+            "query": "Q1",
+            "rank": 1,
+            "videoId": "MHSGsIPMQIo",
+            "title": "Invisible Touch (2007 Remaster)",
+            "channel": "Genesis",
+            "lengthText": "3:29",
+            "lengthSec": 209,
+            "diffSec": 0.3499999999999943,
+            "branch": "official-artist"
+          },
+          {
+            "query": "Q1",
+            "rank": 3,
+            "videoId": "Kx2UU-iI1sE",
+            "title": "Invisible Touch (Platinum Collection Version)",
+            "channel": "Genesis",
+            "lengthText": "3:29",
+            "lengthSec": 209,
+            "diffSec": 0.3499999999999943,
+            "branch": "official-artist"
+          },
+          {
+            "query": "Q1",
+            "rank": 2,
+            "videoId": "hHdBRygLBxc",
+            "title": "Invisible Touch",
+            "channel": "Genesis",
+            "lengthText": "3:28",
+            "lengthSec": 208,
+            "diffSec": 1.3499999999999943,
+            "branch": "official-artist"
           }
         ]
       }
@@ -6285,6 +6888,57 @@
             "lengthText": "2:39",
             "lengthSec": 159,
             "diffSec": 13.990000000000009
+          }
+        ]
+      },
+      "decisionAmended": {
+        "status": "chosen",
+        "chosen": {
+          "query": "Q1",
+          "rank": 2,
+          "videoId": "242bVcCcB5A",
+          "title": "Go Where You Wanna Go (Digitally Remastered 1997)",
+          "channel": "The 5th Dimension",
+          "lengthText": "2:25",
+          "lengthSec": 145,
+          "diffSec": 0.009999999999990905,
+          "branch": "official-artist"
+        },
+        "qualifying": 2,
+        "reason": null,
+        "nearestTopic": [
+          {
+            "query": "Q1",
+            "rank": 2,
+            "videoId": "242bVcCcB5A",
+            "title": "Go Where You Wanna Go (Digitally Remastered 1997)",
+            "channel": "The 5th Dimension",
+            "lengthText": "2:25",
+            "lengthSec": 145,
+            "diffSec": 0.009999999999990905,
+            "branch": "official-artist"
+          },
+          {
+            "query": "Q1",
+            "rank": 3,
+            "videoId": "83gsr3xYnLk",
+            "title": "Go Where You Wanna Go",
+            "channel": "The 5th Dimension",
+            "lengthText": "2:23",
+            "lengthSec": 143,
+            "diffSec": 2.009999999999991,
+            "branch": "official-artist"
+          },
+          {
+            "query": "Q1",
+            "rank": 8,
+            "videoId": "CcxSRaBLZzc",
+            "title": "Go Where You Wanna Go (The Mama's and The Papa's Cover)",
+            "channel": "The 5th Dimension",
+            "lengthText": "2:23",
+            "lengthSec": 143,
+            "diffSec": 2.009999999999991,
+            "branch": "official-artist"
           }
         ]
       }
@@ -6752,6 +7406,57 @@
             "diffSec": 2.160000000000025
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "chosen",
+        "chosen": {
+          "query": "Q1",
+          "rank": 1,
+          "videoId": "zx9-3On46-c",
+          "title": "An Innocent Man",
+          "channel": "Billy Joel",
+          "lengthText": "5:18",
+          "lengthSec": 318,
+          "diffSec": 0.160000000000025,
+          "branch": "official-artist"
+        },
+        "qualifying": 5,
+        "reason": null,
+        "nearestTopic": [
+          {
+            "query": "Q1",
+            "rank": 1,
+            "videoId": "zx9-3On46-c",
+            "title": "An Innocent Man",
+            "channel": "Billy Joel",
+            "lengthText": "5:18",
+            "lengthSec": 318,
+            "diffSec": 0.160000000000025,
+            "branch": "official-artist"
+          },
+          {
+            "query": "Q1",
+            "rank": 2,
+            "videoId": "QpPoYt_9IN4",
+            "title": "An Innocent Man",
+            "channel": "Billy Joel",
+            "lengthText": "5:19",
+            "lengthSec": 319,
+            "diffSec": 0.839999999999975,
+            "branch": "official-artist"
+          },
+          {
+            "query": "Q1",
+            "rank": 3,
+            "videoId": "L-jZdVCP6kM",
+            "title": "An Innocent Man",
+            "channel": "Billy Joel",
+            "lengthText": "5:20",
+            "lengthSec": 320,
+            "diffSec": 1.839999999999975,
+            "branch": "official-artist"
+          }
+        ]
       }
     },
     {
@@ -7213,6 +7918,57 @@
             "diffSec": 129.02999999999997
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "chosen",
+        "chosen": {
+          "query": "Q1",
+          "rank": 1,
+          "videoId": "dLB0P8nT2w8",
+          "title": "Walk This Way",
+          "channel": "Run DMC",
+          "lengthText": "5:11",
+          "lengthSec": 311,
+          "diffSec": 1.0299999999999727,
+          "branch": "official-artist"
+        },
+        "qualifying": 1,
+        "reason": null,
+        "nearestTopic": [
+          {
+            "query": "Q1",
+            "rank": 1,
+            "videoId": "dLB0P8nT2w8",
+            "title": "Walk This Way",
+            "channel": "Run DMC",
+            "lengthText": "5:11",
+            "lengthSec": 311,
+            "diffSec": 1.0299999999999727,
+            "branch": "official-artist"
+          },
+          {
+            "query": "Q1",
+            "rank": 7,
+            "videoId": "7K_d5bKT3k4",
+            "title": "Walk This Way (Demo)",
+            "channel": "Run DMC",
+            "lengthText": "5:26",
+            "lengthSec": 326,
+            "diffSec": 13.970000000000027,
+            "branch": "official-artist"
+          },
+          {
+            "query": "Q1",
+            "rank": 11,
+            "videoId": "dVrpJWlwcO0",
+            "title": "Walk This Way (Instrumental)",
+            "channel": "Run DMC",
+            "lengthText": "4:02",
+            "lengthSec": 242,
+            "diffSec": 70.02999999999997,
+            "branch": "official-artist"
+          }
+        ]
       }
     },
     {
@@ -7658,6 +8414,47 @@
             "diffSec": 504.28
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "skipped",
+        "chosen": null,
+        "qualifying": 0,
+        "reason": "no qualifying upload in the first 15 results of Q1 and Q2",
+        "nearestTopic": [
+          {
+            "query": "Q1",
+            "rank": 3,
+            "videoId": "Wz7IRdvQsG0",
+            "title": "Willie And The Hand Jive / Get Ready (Live At Long Beach Arena, California / 1974)",
+            "channel": "Eric Clapton",
+            "lengthText": "11:43",
+            "lengthSec": 703,
+            "diffSec": 0.7200000000000273,
+            "branch": "official-artist"
+          },
+          {
+            "query": "Q1",
+            "rank": 1,
+            "videoId": "h7m8eTlQNYM",
+            "title": "Willie And The Hand Jive",
+            "channel": "Eric Clapton",
+            "lengthText": "3:30",
+            "lengthSec": 210,
+            "diffSec": 492.28,
+            "branch": "official-artist"
+          },
+          {
+            "query": "Q1",
+            "rank": 2,
+            "videoId": "OYkgKNfszAY",
+            "title": "Willie And The Hand Jive",
+            "channel": "Eric Clapton",
+            "lengthText": "3:30",
+            "lengthSec": 210,
+            "diffSec": 492.28,
+            "branch": "official-artist"
+          }
+        ]
       }
     },
     {
@@ -8090,6 +8887,57 @@
             "diffSec": 0.46000000000000796
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "chosen",
+        "chosen": {
+          "query": "Q1",
+          "rank": 5,
+          "videoId": "YF69PoyXskY",
+          "title": "Quarter To Three",
+          "channel": "Gary U.S. Bonds - Topic",
+          "lengthText": "2:31",
+          "lengthSec": 151,
+          "diffSec": 0.46000000000000796,
+          "branch": "topic"
+        },
+        "qualifying": 11,
+        "reason": null,
+        "nearestTopic": [
+          {
+            "query": "Q1",
+            "rank": 5,
+            "videoId": "YF69PoyXskY",
+            "title": "Quarter To Three",
+            "channel": "Gary U.S. Bonds - Topic",
+            "lengthText": "2:31",
+            "lengthSec": 151,
+            "diffSec": 0.46000000000000796,
+            "branch": "topic"
+          },
+          {
+            "query": "Q1",
+            "rank": 8,
+            "videoId": "444yywv8BXA",
+            "title": "Quarter To Three",
+            "channel": "Gary U.S. Bonds - Topic",
+            "lengthText": "2:31",
+            "lengthSec": 151,
+            "diffSec": 0.46000000000000796,
+            "branch": "topic"
+          },
+          {
+            "query": "Q1",
+            "rank": 9,
+            "videoId": "cy9C2dx099I",
+            "title": "Quarter to Three",
+            "channel": "Gary U.S. Bonds - Topic",
+            "lengthText": "2:31",
+            "lengthSec": 151,
+            "diffSec": 0.46000000000000796,
+            "branch": "topic"
+          }
+        ]
       }
     },
     {
@@ -8520,6 +9368,57 @@
             "lengthText": "2:03",
             "lengthSec": 123,
             "diffSec": 0.8499999999999943
+          }
+        ]
+      },
+      "decisionAmended": {
+        "status": "chosen",
+        "chosen": {
+          "query": "Q1",
+          "rank": 1,
+          "videoId": "5szXUpJi6kA",
+          "title": "Sugar Shack",
+          "channel": "the Fireballs - Topic",
+          "lengthText": "2:02",
+          "lengthSec": 122,
+          "diffSec": 1.8499999999999943,
+          "branch": "topic"
+        },
+        "qualifying": 2,
+        "reason": null,
+        "nearestTopic": [
+          {
+            "query": "Q1",
+            "rank": 1,
+            "videoId": "5szXUpJi6kA",
+            "title": "Sugar Shack",
+            "channel": "the Fireballs - Topic",
+            "lengthText": "2:02",
+            "lengthSec": 122,
+            "diffSec": 1.8499999999999943,
+            "branch": "topic"
+          },
+          {
+            "query": "Q1",
+            "rank": 2,
+            "videoId": "3Muad1UgTLY",
+            "title": "Sugar Shack",
+            "channel": "Jimmy Gilmer & The Fireballs - Topic",
+            "lengthText": "2:01",
+            "lengthSec": 121,
+            "diffSec": 2.8499999999999943,
+            "branch": "topic"
+          },
+          {
+            "query": "Q1",
+            "rank": 15,
+            "videoId": "73drPeJhYIk",
+            "title": "I Wonder Why",
+            "channel": "the Fireballs - Topic",
+            "lengthText": "2:28",
+            "lengthSec": 148,
+            "diffSec": 24.150000000000006,
+            "branch": "topic"
           }
         ]
       }
@@ -8983,6 +9882,57 @@
             "diffSec": 59.84
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "chosen",
+        "chosen": {
+          "query": "Q1",
+          "rank": 3,
+          "videoId": "2mgxsXu3D9A",
+          "title": "Elvira",
+          "channel": "The Oak Ridge Boys",
+          "lengthText": "2:42",
+          "lengthSec": 162,
+          "diffSec": 0.8400000000000034,
+          "branch": "official-artist"
+        },
+        "qualifying": 2,
+        "reason": null,
+        "nearestTopic": [
+          {
+            "query": "Q1",
+            "rank": 3,
+            "videoId": "2mgxsXu3D9A",
+            "title": "Elvira",
+            "channel": "The Oak Ridge Boys",
+            "lengthText": "2:42",
+            "lengthSec": 162,
+            "diffSec": 0.8400000000000034,
+            "branch": "official-artist"
+          },
+          {
+            "query": "Q1",
+            "rank": 2,
+            "videoId": "iWuRO_DJC7o",
+            "title": "Elvira",
+            "channel": "The Oak Ridge Boys",
+            "lengthText": "2:39",
+            "lengthSec": 159,
+            "diffSec": 2.1599999999999966,
+            "branch": "official-artist"
+          },
+          {
+            "query": "Q1",
+            "rank": 14,
+            "videoId": "67DNgP5bGdM",
+            "title": "Elvira",
+            "channel": "The Oak Ridge Boys",
+            "lengthText": "3:24",
+            "lengthSec": 204,
+            "diffSec": 42.84,
+            "branch": "official-artist"
+          }
+        ]
       }
     },
     {
@@ -9409,6 +10359,57 @@
         "qualifying": 0,
         "reason": "no qualifying upload in the first 15 results of Q1 and Q2",
         "nearestTopic": []
+      },
+      "decisionAmended": {
+        "status": "chosen",
+        "chosen": {
+          "query": "Q1",
+          "rank": 3,
+          "videoId": "KM4JZBqjQqA",
+          "title": "Little Sister",
+          "channel": "Elvis Presley",
+          "lengthText": "2:32",
+          "lengthSec": 152,
+          "diffSec": 0.030000000000001137,
+          "branch": "official-artist"
+        },
+        "qualifying": 6,
+        "reason": null,
+        "nearestTopic": [
+          {
+            "query": "Q1",
+            "rank": 3,
+            "videoId": "KM4JZBqjQqA",
+            "title": "Little Sister",
+            "channel": "Elvis Presley",
+            "lengthText": "2:32",
+            "lengthSec": 152,
+            "diffSec": 0.030000000000001137,
+            "branch": "official-artist"
+          },
+          {
+            "query": "Q1",
+            "rank": 5,
+            "videoId": "crws9A33OUs",
+            "title": "Little Sister (Remastered)",
+            "channel": "Elvis Presley",
+            "lengthText": "2:33",
+            "lengthSec": 153,
+            "diffSec": 0.9699999999999989,
+            "branch": "official-artist"
+          },
+          {
+            "query": "Q1",
+            "rank": 7,
+            "videoId": "EThzIahhmtc",
+            "title": "Little Sister",
+            "channel": "Elvis Presley",
+            "lengthText": "2:31",
+            "lengthSec": 151,
+            "diffSec": 1.0300000000000011,
+            "branch": "official-artist"
+          }
+        ]
       }
     },
     {
@@ -9837,6 +10838,57 @@
         "qualifying": 0,
         "reason": "no qualifying upload in the first 15 results of Q1 and Q2",
         "nearestTopic": []
+      },
+      "decisionAmended": {
+        "status": "chosen",
+        "chosen": {
+          "query": "Q1",
+          "rank": 10,
+          "videoId": "1PxuYrGEVow",
+          "title": "Wild Horses",
+          "channel": "The Rolling Stones",
+          "lengthText": "5:45",
+          "lengthSec": 345,
+          "diffSec": 0.8600000000000136,
+          "branch": "official-artist"
+        },
+        "qualifying": 6,
+        "reason": null,
+        "nearestTopic": [
+          {
+            "query": "Q1",
+            "rank": 10,
+            "videoId": "1PxuYrGEVow",
+            "title": "Wild Horses",
+            "channel": "The Rolling Stones",
+            "lengthText": "5:45",
+            "lengthSec": 345,
+            "diffSec": 0.8600000000000136,
+            "branch": "official-artist"
+          },
+          {
+            "query": "Q1",
+            "rank": 4,
+            "videoId": "ux6SKYa7n2U",
+            "title": "Wild Horses",
+            "channel": "The Rolling Stones",
+            "lengthText": "5:43",
+            "lengthSec": 343,
+            "diffSec": 1.1399999999999864,
+            "branch": "official-artist"
+          },
+          {
+            "query": "Q1",
+            "rank": 11,
+            "videoId": "FqX8UXBpR-w",
+            "title": "Wild Horses",
+            "channel": "The Rolling Stones",
+            "lengthText": "5:46",
+            "lengthSec": 346,
+            "diffSec": 1.8600000000000136,
+            "branch": "official-artist"
+          }
+        ]
       }
     },
     {
@@ -10292,6 +11344,57 @@
             "diffSec": 18.44999999999999
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "chosen",
+        "chosen": {
+          "query": "Q1",
+          "rank": 2,
+          "videoId": "GNDuWcLI5fg",
+          "title": "Giving You the Best That I Got",
+          "channel": "Anita Baker",
+          "lengthText": "4:21",
+          "lengthSec": 261,
+          "diffSec": 0.44999999999998863,
+          "branch": "official-artist"
+        },
+        "qualifying": 3,
+        "reason": null,
+        "nearestTopic": [
+          {
+            "query": "Q1",
+            "rank": 2,
+            "videoId": "GNDuWcLI5fg",
+            "title": "Giving You the Best That I Got",
+            "channel": "Anita Baker",
+            "lengthText": "4:21",
+            "lengthSec": 261,
+            "diffSec": 0.44999999999998863,
+            "branch": "official-artist"
+          },
+          {
+            "query": "Q1",
+            "rank": 4,
+            "videoId": "qJOfWzkywPw",
+            "title": "Giving You the Best That I Got",
+            "channel": "Anita Baker",
+            "lengthText": "4:21",
+            "lengthSec": 261,
+            "diffSec": 0.44999999999998863,
+            "branch": "official-artist"
+          },
+          {
+            "query": "Q2",
+            "rank": 9,
+            "videoId": "Oz-b86LZ21c",
+            "title": "Caught Up in the Rapture",
+            "channel": "Anita Baker",
+            "lengthText": "4:11",
+            "lengthSec": 251,
+            "diffSec": 9.550000000000011,
+            "branch": "official-artist"
+          }
+        ]
       }
     },
     {
@@ -10738,6 +11841,57 @@
         "qualifying": 0,
         "reason": "no qualifying upload in the first 15 results of Q1 and Q2",
         "nearestTopic": []
+      },
+      "decisionAmended": {
+        "status": "chosen",
+        "chosen": {
+          "query": "Q1",
+          "rank": 3,
+          "videoId": "y5mznY_WPFw",
+          "title": "Sweet Nothin's",
+          "channel": "Brenda Lee",
+          "lengthText": "2:26",
+          "lengthSec": 146,
+          "diffSec": 0.2400000000000091,
+          "branch": "official-artist"
+        },
+        "qualifying": 17,
+        "reason": null,
+        "nearestTopic": [
+          {
+            "query": "Q1",
+            "rank": 3,
+            "videoId": "y5mznY_WPFw",
+            "title": "Sweet Nothin's",
+            "channel": "Brenda Lee",
+            "lengthText": "2:26",
+            "lengthSec": 146,
+            "diffSec": 0.2400000000000091,
+            "branch": "official-artist"
+          },
+          {
+            "query": "Q2",
+            "rank": 5,
+            "videoId": "SasGw7LM0gg",
+            "title": "Sweet Nothin's",
+            "channel": "Brenda Lee",
+            "lengthText": "2:26",
+            "lengthSec": 146,
+            "diffSec": 0.2400000000000091,
+            "branch": "official-artist"
+          },
+          {
+            "query": "Q2",
+            "rank": 15,
+            "videoId": "nTikyl9Yaj0",
+            "title": "Sweet Nothin's",
+            "channel": "Brenda Lee",
+            "lengthText": "2:26",
+            "lengthSec": 146,
+            "diffSec": 0.2400000000000091,
+            "branch": "official-artist"
+          }
+        ]
       }
     },
     {
@@ -11174,6 +12328,57 @@
             "lengthText": "4:17",
             "lengthSec": 257,
             "diffSec": 0.589999999999975
+          }
+        ]
+      },
+      "decisionAmended": {
+        "status": "chosen",
+        "chosen": {
+          "query": "Q1",
+          "rank": 1,
+          "videoId": "LpMlZCXPYRQ",
+          "title": "Tell Me What You Want Me to Do",
+          "channel": "Tevin Campbell - Topic",
+          "lengthText": "4:17",
+          "lengthSec": 257,
+          "diffSec": 0.589999999999975,
+          "branch": "topic"
+        },
+        "qualifying": 3,
+        "reason": null,
+        "nearestTopic": [
+          {
+            "query": "Q1",
+            "rank": 1,
+            "videoId": "LpMlZCXPYRQ",
+            "title": "Tell Me What You Want Me to Do",
+            "channel": "Tevin Campbell - Topic",
+            "lengthText": "4:17",
+            "lengthSec": 257,
+            "diffSec": 0.589999999999975,
+            "branch": "topic"
+          },
+          {
+            "query": "Q1",
+            "rank": 2,
+            "videoId": "eGWkiANWwvM",
+            "title": "Tell Me What You Want Me to Do",
+            "channel": "Tevin Campbell - Topic",
+            "lengthText": "4:17",
+            "lengthSec": 257,
+            "diffSec": 0.589999999999975,
+            "branch": "topic"
+          },
+          {
+            "query": "Q1",
+            "rank": 3,
+            "videoId": "UDrPOjfWJLg",
+            "title": "Tell Me What You Want Me to Do",
+            "channel": "Tevin Campbell - Topic",
+            "lengthText": "4:17",
+            "lengthSec": 257,
+            "diffSec": 0.589999999999975,
+            "branch": "topic"
           }
         ]
       }
@@ -11623,6 +12828,57 @@
             "diffSec": 9.129999999999995
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "chosen",
+        "chosen": {
+          "query": "Q1",
+          "rank": 2,
+          "videoId": "tVQHWKfzYEM",
+          "title": "Misunderstanding (Platinum Collection Version)",
+          "channel": "Genesis",
+          "lengthText": "3:14",
+          "lengthSec": 194,
+          "diffSec": 0.8700000000000045,
+          "branch": "official-artist"
+        },
+        "qualifying": 1,
+        "reason": null,
+        "nearestTopic": [
+          {
+            "query": "Q1",
+            "rank": 2,
+            "videoId": "tVQHWKfzYEM",
+            "title": "Misunderstanding (Platinum Collection Version)",
+            "channel": "Genesis",
+            "lengthText": "3:14",
+            "lengthSec": 194,
+            "diffSec": 0.8700000000000045,
+            "branch": "official-artist"
+          },
+          {
+            "query": "Q1",
+            "rank": 1,
+            "videoId": "n8nGGYIlJxg",
+            "title": "Misunderstanding (2007 Remaster)",
+            "channel": "Genesis",
+            "lengthText": "3:12",
+            "lengthSec": 192,
+            "diffSec": 2.8700000000000045,
+            "branch": "official-artist"
+          },
+          {
+            "query": "Q1",
+            "rank": 3,
+            "videoId": "8fJGeZ6HuTo",
+            "title": "Misunderstanding",
+            "channel": "Genesis",
+            "lengthText": "3:12",
+            "lengthSec": 192,
+            "diffSec": 2.8700000000000045,
+            "branch": "official-artist"
+          }
+        ]
       }
     },
     {
@@ -12061,6 +13317,57 @@
             "diffSec": 1.0999999999999943
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "chosen",
+        "chosen": {
+          "query": "Q1",
+          "rank": 3,
+          "videoId": "L5O0rPsfFmM",
+          "title": "Let's Work Together",
+          "channel": "Canned Heat - Topic",
+          "lengthText": "2:50",
+          "lengthSec": 170,
+          "diffSec": 0.09999999999999432,
+          "branch": "topic"
+        },
+        "qualifying": 7,
+        "reason": null,
+        "nearestTopic": [
+          {
+            "query": "Q1",
+            "rank": 3,
+            "videoId": "L5O0rPsfFmM",
+            "title": "Let's Work Together",
+            "channel": "Canned Heat - Topic",
+            "lengthText": "2:50",
+            "lengthSec": 170,
+            "diffSec": 0.09999999999999432,
+            "branch": "topic"
+          },
+          {
+            "query": "Q1",
+            "rank": 14,
+            "videoId": "4QkxHiB2qLI",
+            "title": "Let's Work Together",
+            "channel": "Canned Heat - Topic",
+            "lengthText": "2:50",
+            "lengthSec": 170,
+            "diffSec": 0.09999999999999432,
+            "branch": "topic"
+          },
+          {
+            "query": "Q1",
+            "rank": 2,
+            "videoId": "DAZby9KWO2Q",
+            "title": "Let's Work Together",
+            "channel": "Canned Heat - Topic",
+            "lengthText": "2:51",
+            "lengthSec": 171,
+            "diffSec": 1.0999999999999943,
+            "branch": "topic"
+          }
+        ]
       }
     },
     {
@@ -12477,6 +13784,57 @@
         "qualifying": 0,
         "reason": "no qualifying upload in the first 15 results of Q1 and Q2",
         "nearestTopic": []
+      },
+      "decisionAmended": {
+        "status": "chosen",
+        "chosen": {
+          "query": "Q1",
+          "rank": 4,
+          "videoId": "vvomrmBmQAM",
+          "title": "Lay Down Sally",
+          "channel": "Eric Clapton",
+          "lengthText": "3:52",
+          "lengthSec": 232,
+          "diffSec": 1.1599999999999966,
+          "branch": "official-artist"
+        },
+        "qualifying": 2,
+        "reason": null,
+        "nearestTopic": [
+          {
+            "query": "Q1",
+            "rank": 4,
+            "videoId": "vvomrmBmQAM",
+            "title": "Lay Down Sally",
+            "channel": "Eric Clapton",
+            "lengthText": "3:52",
+            "lengthSec": 232,
+            "diffSec": 1.1599999999999966,
+            "branch": "official-artist"
+          },
+          {
+            "query": "Q1",
+            "rank": 1,
+            "videoId": "9BYyPok2O5k",
+            "title": "Lay Down Sally",
+            "channel": "Eric Clapton",
+            "lengthText": "3:57",
+            "lengthSec": 237,
+            "diffSec": 6.159999999999997,
+            "branch": "official-artist"
+          },
+          {
+            "query": "Q2",
+            "rank": 9,
+            "videoId": "O6yeLNNVa4A",
+            "title": "Cocaine",
+            "channel": "Eric Clapton",
+            "lengthText": "3:39",
+            "lengthSec": 219,
+            "diffSec": 11.840000000000003,
+            "branch": "official-artist"
+          }
+        ]
       }
     },
     {
@@ -12936,6 +14294,57 @@
             "diffSec": 18.439999999999998
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "chosen",
+        "chosen": {
+          "query": "Q1",
+          "rank": 7,
+          "videoId": "FPs2M0KPyP8",
+          "title": "Me Myself and I (Single Mix)",
+          "channel": "WeAreDeLaSoul",
+          "lengthText": "3:41",
+          "lengthSec": 221,
+          "diffSec": 0.4399999999999977,
+          "branch": "official-artist"
+        },
+        "qualifying": 3,
+        "reason": null,
+        "nearestTopic": [
+          {
+            "query": "Q1",
+            "rank": 7,
+            "videoId": "FPs2M0KPyP8",
+            "title": "Me Myself and I (Single Mix)",
+            "channel": "WeAreDeLaSoul",
+            "lengthText": "3:41",
+            "lengthSec": 221,
+            "diffSec": 0.4399999999999977,
+            "branch": "official-artist"
+          },
+          {
+            "query": "Q1",
+            "rank": 4,
+            "videoId": "NerII_Zgd5I",
+            "title": "Me Myself and I",
+            "channel": "WeAreDeLaSoul",
+            "lengthText": "3:42",
+            "lengthSec": 222,
+            "diffSec": 0.5600000000000023,
+            "branch": "official-artist"
+          },
+          {
+            "query": "Q1",
+            "rank": 2,
+            "videoId": "Wa8u6NPGCDo",
+            "title": "Me Myself And I",
+            "channel": "WeAreDeLaSoul",
+            "lengthText": "3:45",
+            "lengthSec": 225,
+            "diffSec": 3.5600000000000023,
+            "branch": "official-artist"
+          }
+        ]
       }
     },
     {
@@ -13393,6 +14802,13 @@
             "diffSec": 0.8799999999999955
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "skipped",
+        "chosen": null,
+        "qualifying": 0,
+        "reason": "no qualifying upload in the first 15 results of Q1 and Q2",
+        "nearestTopic": []
       }
     },
     {
@@ -13825,6 +15241,57 @@
             "lengthText": "3:48",
             "lengthSec": 228,
             "diffSec": 1.8100000000000023
+          }
+        ]
+      },
+      "decisionAmended": {
+        "status": "chosen",
+        "chosen": {
+          "query": "Q1",
+          "rank": 12,
+          "videoId": "6un_fi7F_1w",
+          "title": "Summertime Blues",
+          "channel": "Blue Cheer - Topic",
+          "lengthText": "3:47",
+          "lengthSec": 227,
+          "diffSec": 0.8100000000000023,
+          "branch": "topic"
+        },
+        "qualifying": 6,
+        "reason": null,
+        "nearestTopic": [
+          {
+            "query": "Q1",
+            "rank": 12,
+            "videoId": "6un_fi7F_1w",
+            "title": "Summertime Blues",
+            "channel": "Blue Cheer - Topic",
+            "lengthText": "3:47",
+            "lengthSec": 227,
+            "diffSec": 0.8100000000000023,
+            "branch": "topic"
+          },
+          {
+            "query": "Q1",
+            "rank": 2,
+            "videoId": "o4vIlg4alz8",
+            "title": "Summertime Blues",
+            "channel": "Blue Cheer - Topic",
+            "lengthText": "3:48",
+            "lengthSec": 228,
+            "diffSec": 1.8100000000000023,
+            "branch": "topic"
+          },
+          {
+            "query": "Q1",
+            "rank": 13,
+            "videoId": "e_krgis-IDE",
+            "title": "Summertime Blues",
+            "channel": "Blue Cheer - Topic",
+            "lengthText": "3:48",
+            "lengthSec": 228,
+            "diffSec": 1.8100000000000023,
+            "branch": "topic"
           }
         ]
       }
@@ -14263,6 +15730,57 @@
             "lengthText": "2:54",
             "lengthSec": 174,
             "diffSec": 0.47999999999998977
+          }
+        ]
+      },
+      "decisionAmended": {
+        "status": "chosen",
+        "chosen": {
+          "query": "Q1",
+          "rank": 1,
+          "videoId": "XugIsZbTFy0",
+          "title": "In-A-Gadda-Da-Vida (Single Version)",
+          "channel": "Iron Butterfly - Topic",
+          "lengthText": "2:54",
+          "lengthSec": 174,
+          "diffSec": 0.47999999999998977,
+          "branch": "topic"
+        },
+        "qualifying": 10,
+        "reason": null,
+        "nearestTopic": [
+          {
+            "query": "Q1",
+            "rank": 1,
+            "videoId": "XugIsZbTFy0",
+            "title": "In-A-Gadda-Da-Vida (Single Version)",
+            "channel": "Iron Butterfly - Topic",
+            "lengthText": "2:54",
+            "lengthSec": 174,
+            "diffSec": 0.47999999999998977,
+            "branch": "topic"
+          },
+          {
+            "query": "Q1",
+            "rank": 5,
+            "videoId": "dcacs7n0rF4",
+            "title": "In-A-Gadda-Da-Vida",
+            "channel": "Iron Butterfly - Topic",
+            "lengthText": "2:54",
+            "lengthSec": 174,
+            "diffSec": 0.47999999999998977,
+            "branch": "topic"
+          },
+          {
+            "query": "Q1",
+            "rank": 7,
+            "videoId": "Q-pyiCRe6Vw",
+            "title": "In-A-Gadda-Da-Vida",
+            "channel": "Iron Butterfly - Topic",
+            "lengthText": "2:54",
+            "lengthSec": 174,
+            "diffSec": 0.47999999999998977,
+            "branch": "topic"
           }
         ]
       }
@@ -14718,6 +16236,10 @@
             "diffSec": 28.5
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -15138,6 +16660,10 @@
         "qualifying": 0,
         "reason": "no qualifying upload in the first 15 results of Q1 and Q2",
         "nearestTopic": []
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -15570,6 +17096,10 @@
             "diffSec": 1.3899999999999864
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -15990,6 +17520,10 @@
             "diffSec": 0.6899999999999977
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -16426,6 +17960,10 @@
             "diffSec": 6.240000000000009
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -16887,6 +18425,10 @@
             "diffSec": 138.83
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -17312,6 +18854,10 @@
             "diffSec": 5.8799999999999955
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -17752,6 +19298,10 @@
         "qualifying": 0,
         "reason": "no qualifying upload in the first 15 results of Q1 and Q2",
         "nearestTopic": []
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -18188,6 +19738,10 @@
             "diffSec": 0.30000000000001137
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -18614,6 +20168,10 @@
         "qualifying": 0,
         "reason": "no qualifying upload in the first 15 results of Q1 and Q2",
         "nearestTopic": []
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -19069,6 +20627,10 @@
             "diffSec": 5.97999999999999
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -19528,6 +21090,10 @@
             "diffSec": 22.430000000000007
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -19987,6 +21553,10 @@
             "diffSec": 8.949999999999989
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -20438,6 +22008,10 @@
             "diffSec": 4.22999999999999
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -20871,6 +22445,10 @@
             "diffSec": 13.810000000000002
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -21326,6 +22904,10 @@
             "diffSec": 27.970000000000027
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -21750,6 +23332,10 @@
         "qualifying": 0,
         "reason": "no qualifying upload in the first 15 results of Q1 and Q2",
         "nearestTopic": []
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -22194,6 +23780,10 @@
         "qualifying": 0,
         "reason": "no qualifying upload in the first 15 results of Q1 and Q2",
         "nearestTopic": []
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -22638,6 +24228,10 @@
         "qualifying": 0,
         "reason": "no qualifying upload in the first 15 results of Q1 and Q2",
         "nearestTopic": []
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -23061,6 +24655,10 @@
             "diffSec": 3.0799999999999983
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -23520,6 +25118,10 @@
             "diffSec": 4.77000000000001
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -23971,6 +25573,10 @@
             "diffSec": 50.83000000000001
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -24403,6 +26009,10 @@
         "qualifying": 0,
         "reason": "no qualifying upload in the first 15 results of Q1 and Q2",
         "nearestTopic": []
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -24864,6 +26474,10 @@
             "diffSec": 40.22999999999999
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -25296,6 +26910,10 @@
             "diffSec": 15.5
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -25745,6 +27363,10 @@
             "diffSec": 81.38
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -26200,6 +27822,10 @@
             "diffSec": 61.99000000000001
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -26643,6 +28269,10 @@
             "diffSec": 60.799999999999955
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -27063,6 +28693,10 @@
         "qualifying": 0,
         "reason": "no qualifying upload in the first 15 results of Q1 and Q2",
         "nearestTopic": []
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -27505,6 +29139,10 @@
             "diffSec": 1.4399999999999977
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -27939,6 +29577,10 @@
             "diffSec": 2.759999999999991
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -28376,6 +30018,10 @@
             "diffSec": 24.210000000000008
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -28821,6 +30467,10 @@
             "diffSec": 42.72999999999999
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -29274,6 +30924,10 @@
             "diffSec": 6.389999999999986
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -29720,6 +31374,10 @@
             "diffSec": 0.6800000000000068
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -30161,6 +31819,10 @@
             "diffSec": 10.340000000000003
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -30597,6 +32259,10 @@
             "diffSec": 1.0800000000000125
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -31048,6 +32714,10 @@
             "diffSec": 18.389999999999986
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -31498,6 +33168,10 @@
         "qualifying": 0,
         "reason": "no qualifying upload in the first 15 results of Q1 and Q2",
         "nearestTopic": []
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -31930,6 +33604,10 @@
             "diffSec": 0.2400000000000091
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -32389,6 +34067,10 @@
             "diffSec": 73.89999999999998
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -32852,6 +34534,10 @@
             "diffSec": 186.55
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -33285,6 +34971,10 @@
             "diffSec": 113.38999999999999
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -33725,6 +35415,10 @@
         "qualifying": 0,
         "reason": "no qualifying upload in the first 15 results of Q1 and Q2",
         "nearestTopic": []
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -34172,6 +35866,10 @@
             "diffSec": 11.789999999999992
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -34625,6 +36323,10 @@
             "diffSec": 6.240000000000009
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -35065,6 +36767,10 @@
         "qualifying": 0,
         "reason": "no qualifying upload in the first 15 results of Q1 and Q2",
         "nearestTopic": []
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -35520,6 +37226,10 @@
             "diffSec": 3.719999999999999
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -35952,6 +37662,10 @@
             "diffSec": 0.0800000000000125
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -36380,6 +38094,10 @@
         "qualifying": 0,
         "reason": "no qualifying upload in the first 15 results of Q1 and Q2",
         "nearestTopic": []
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -36833,6 +38551,10 @@
             "diffSec": 23.47999999999999
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -37271,6 +38993,10 @@
             "diffSec": 0.960000000000008
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -37728,6 +39454,10 @@
             "diffSec": 40.66
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -38181,6 +39911,10 @@
             "diffSec": 2.319999999999993
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -38610,6 +40344,10 @@
             "diffSec": 50.49000000000001
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -39057,6 +40795,10 @@
             "diffSec": 3.240000000000009
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -39498,6 +41240,10 @@
             "diffSec": 8.689999999999998
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -39946,6 +41692,10 @@
         "qualifying": 0,
         "reason": "no qualifying upload in the first 15 results of Q1 and Q2",
         "nearestTopic": []
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -40373,6 +42123,10 @@
             "diffSec": 4.050000000000011
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -40813,6 +42567,10 @@
         "qualifying": 0,
         "reason": "no qualifying upload in the first 15 results of Q1 and Q2",
         "nearestTopic": []
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -41270,6 +43028,10 @@
             "diffSec": 43.78
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -41710,6 +43472,10 @@
         "qualifying": 0,
         "reason": "no qualifying upload in the first 15 results of Q1 and Q2",
         "nearestTopic": []
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -42144,6 +43910,10 @@
         "qualifying": 0,
         "reason": "no qualifying upload in the first 15 results of Q1 and Q2",
         "nearestTopic": []
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -42588,6 +44358,10 @@
         "qualifying": 0,
         "reason": "no qualifying upload in the first 15 results of Q1 and Q2",
         "nearestTopic": []
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -43035,6 +44809,10 @@
             "diffSec": 10.819999999999993
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -43486,6 +45264,10 @@
             "diffSec": 7.840000000000003
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -43926,6 +45708,10 @@
         "qualifying": 0,
         "reason": "no qualifying upload in the first 15 results of Q1 and Q2",
         "nearestTopic": []
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -44354,6 +46140,10 @@
         "qualifying": 0,
         "reason": "no qualifying upload in the first 15 results of Q1 and Q2",
         "nearestTopic": []
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -44809,6 +46599,10 @@
             "diffSec": 58.30000000000001
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -45262,6 +47056,10 @@
             "diffSec": 13.909999999999997
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -45699,6 +47497,10 @@
             "diffSec": 0.3499999999999943
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -46131,6 +47933,10 @@
             "diffSec": 0.4399999999999977
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -46590,6 +48396,10 @@
             "diffSec": 39.50999999999999
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -47042,6 +48852,10 @@
         "qualifying": 0,
         "reason": "no qualifying upload in the first 15 results of Q1 and Q2",
         "nearestTopic": []
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -47473,6 +49287,10 @@
             "diffSec": 4.659999999999997
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -47916,6 +49734,10 @@
             "diffSec": 9.469999999999999
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -48361,6 +50183,10 @@
             "diffSec": 2.969999999999999
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -48792,6 +50618,10 @@
             "diffSec": 8.150000000000006
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -49249,6 +51079,10 @@
             "diffSec": 22.310000000000002
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -49686,6 +51520,10 @@
             "diffSec": 65.54000000000002
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -50133,6 +51971,10 @@
             "diffSec": 4.360000000000014
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -50588,6 +52430,10 @@
             "diffSec": 40.47999999999999
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -51037,6 +52883,10 @@
             "diffSec": 6.480000000000018
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -51473,6 +53323,10 @@
         "qualifying": 0,
         "reason": "no qualifying upload in the first 15 results of Q1 and Q2",
         "nearestTopic": []
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -51898,6 +53752,10 @@
             "diffSec": 1.1399999999999864
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -52330,6 +54188,10 @@
             "diffSec": 0.7800000000000011
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -52765,6 +54627,10 @@
             "diffSec": 57.56999999999999
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -53189,6 +55055,10 @@
         "qualifying": 0,
         "reason": "no qualifying upload in the first 15 results of Q1 and Q2",
         "nearestTopic": []
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -53629,6 +55499,10 @@
         "qualifying": 0,
         "reason": "no qualifying upload in the first 15 results of Q1 and Q2",
         "nearestTopic": []
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -54027,6 +55901,10 @@
         "qualifying": 0,
         "reason": "no qualifying upload in the first 15 results of Q1 and Q2",
         "nearestTopic": []
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -54467,6 +56345,10 @@
         "qualifying": 0,
         "reason": "no qualifying upload in the first 15 results of Q1 and Q2",
         "nearestTopic": []
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -54891,6 +56773,10 @@
         "qualifying": 0,
         "reason": "no qualifying upload in the first 15 results of Q1 and Q2",
         "nearestTopic": []
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -55307,6 +57193,10 @@
         "qualifying": 0,
         "reason": "no qualifying upload in the first 15 results of Q1 and Q2",
         "nearestTopic": []
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -55754,6 +57644,10 @@
             "diffSec": 4.77000000000001
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -56205,6 +58099,10 @@
             "diffSec": 8.219999999999999
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -56637,6 +58535,10 @@
             "diffSec": 133.96
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -57073,6 +58975,10 @@
             "diffSec": 3.3700000000000045
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -57553,6 +59459,10 @@
             "diffSec": 0.9300000000000068
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -58010,6 +59920,10 @@
             "diffSec": 450.79999999999995
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -58459,6 +60373,10 @@
             "diffSec": 39.02000000000001
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -58912,6 +60830,10 @@
             "diffSec": 36.89999999999998
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -59333,6 +61255,10 @@
             "diffSec": 32.94
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -59788,6 +61714,10 @@
             "diffSec": 83.01999999999998
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     },
     {
@@ -60220,7 +62150,29 @@
             "diffSec": 1.0200000000000102
           }
         ]
+      },
+      "decisionAmended": {
+        "status": "not-needed",
+        "reason": "not needed: beyond the amended stop"
       }
     }
-  ]
+  ],
+  "amendment": {
+    "rule": "amended-v1",
+    "replaces": "topic-only-v1",
+    "decidedAt": "2026-11-13",
+    "recordedAt": "2026-11-13",
+    "before": "any capture, chart or accuracy result of a held-out song",
+    "topicOnlyChannelRule": "the channel name ends with ' - Topic', and its artist part, normalized, contains or is contained in the normalized Billboard artist (normalized Topic artist part nonempty)",
+    "amendedChannelRule": "A result satisfies the channel condition if either: (1) its channel name ends with the exact suffix ' - Topic', and the channel name with that suffix removed and the Billboard artist, both normalized by the existing normalization, are nonempty and either contains the other; or (2) its channel name does not end with that suffix, its recorded extra.snippet starts exactly and case-sensitively with 'Provided to YouTube by', its recorded extra.ownerBadges contains BADGE_STYLE_TYPE_VERIFIED_ARTIST, and its full channel name and the Billboard artist, normalized as above, are nonempty and either contains the other. Missing snippet or badge data fails branch (2).",
+    "reason": "Under topic-only-v1 only 25 of 136 searched songs qualified: artists with an official artist channel publish their auto-generated 'Provided to YouTube' tracks under the artist channel name, not '<artist> - Topic', so the rule kept mostly artists without such a channel. Decided by the Paseo parent after an Astra advisor round, before any capture; re-judged from this same log, no new searches. All other conditions, query limits, ordering, tie-break and the stop at 25 are unchanged.",
+    "unchanged": "decision (topic-only-v1) of every entry is left as it was; decisionAmended is added"
+  },
+  "amended": {
+    "rule": "amended-v1",
+    "stoppedAtRank": 32,
+    "chosen": 25,
+    "skipped": 7,
+    "notNeeded": 104
+  }
 }

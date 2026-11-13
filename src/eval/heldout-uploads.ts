@@ -13,6 +13,16 @@ export const EXCLUDED_WORDS = ['live', 'remix', 're-recorded', 'rerecorded', 'ka
 
 export type QueryLabel = 'Q1' | 'Q2';
 
+/**
+ * topic-only-v1: the rule frozen in PR #31 (a ' - Topic' channel only). amended-v1: the PR #31
+ * amendment recorded before any capture: a ' - Topic' channel, or a verified official artist
+ * channel whose upload is an auto-generated 'Provided to YouTube by' track.
+ */
+export type UploadRule = 'topic-only-v1' | 'amended-v1';
+export const UPLOAD_RULES: UploadRule[] = ['topic-only-v1', 'amended-v1'];
+export const PROVIDED_PREFIX = 'Provided to YouTube by';
+export const VERIFIED_ARTIST_BADGE = 'BADGE_STYLE_TYPE_VERIFIED_ARTIST';
+
 export function searchQueries(artist: string, title: string): Record<QueryLabel, string> {
   return { Q1: `${artist} ${title} "Provided to YouTube"`, Q2: `${artist} - Topic ${title}` };
 }
@@ -24,6 +34,8 @@ export interface SearchResult {
   title: string;
   channel: string;
   lengthText: string;
+  /** Recorded for the record (channel id, owner badge styles, first description snippet); read only by amended-v1. */
+  extra?: { channelId?: string | null; ownerBadges?: string[]; snippet?: string };
 }
 
 /** "m:ss" or "h:mm:ss" to seconds; null for anything else (live streams, missing lengths). */
@@ -59,23 +71,44 @@ export interface SongForSearch {
   annotationDurationSec: number;
 }
 
+export type ChannelBranch = 'topic' | 'official-artist';
+
 export interface ResultCheck {
   qualifies: boolean;
   /** Failed conditions, in the order of the protocol. */
   failed: string[];
   topic: boolean;
+  /** Which branch met the channel condition (null when none did). */
+  branch: ChannelBranch | null;
   lengthSec: number | null;
   diffSec: number | null;
 }
 
-export function checkResult(r: SearchResult, song: SongForSearch): ResultCheck {
+const namesMatch = (a: string, b: string) => !!a && !!b && (a.includes(b) || b.includes(a));
+
+export function checkResult(r: SearchResult, song: SongForSearch, rule: UploadRule = 'topic-only-v1'): ResultCheck {
   const failed: string[] = [];
   const topic = r.channel.endsWith(TOPIC_SUFFIX);
-  if (!topic) failed.push('channel is not a Topic channel');
-  else {
-    const a = normalize(r.channel.slice(0, -TOPIC_SUFFIX.length));
-    const b = normalize(song.artist);
-    if (!a || !(a.includes(b) || b.includes(a))) failed.push('Topic artist does not match');
+  let branch: ChannelBranch | null = null;
+  if (rule === 'topic-only-v1') {
+    if (!topic) failed.push('channel is not a Topic channel');
+    else {
+      const a = normalize(r.channel.slice(0, -TOPIC_SUFFIX.length));
+      const b = normalize(song.artist);
+      if (!a || !(a.includes(b) || b.includes(a))) failed.push('Topic artist does not match');
+      else branch = 'topic';
+    }
+  } else if (topic) {
+    // A ' - Topic' channel is judged by branch 1 only, never by branch 2.
+    if (!namesMatch(normalize(r.channel.slice(0, -TOPIC_SUFFIX.length)), normalize(song.artist))) failed.push('Topic artist does not match');
+    else branch = 'topic';
+  } else {
+    const snippet = r.extra?.snippet;
+    const badges = r.extra?.ownerBadges;
+    if (typeof snippet !== 'string' || !snippet.startsWith(PROVIDED_PREFIX)) failed.push('not a Topic channel and the upload is not a Provided to YouTube track');
+    else if (!Array.isArray(badges) || !badges.includes(VERIFIED_ARTIST_BADGE)) failed.push('not a Topic channel and the channel is not a verified artist channel');
+    else if (!namesMatch(normalize(r.channel), normalize(song.artist))) failed.push('artist channel does not match');
+    else branch = 'official-artist';
   }
   if (normalize(cleanUploadTitle(r.title)) !== normalize(song.title)) failed.push('title does not match');
   const word = excludedWord(r.title);
@@ -84,7 +117,7 @@ export function checkResult(r: SearchResult, song: SongForSearch): ResultCheck {
   const diffSec = lengthSec === null ? null : Math.abs(lengthSec - song.annotationDurationSec);
   if (diffSec === null) failed.push('no length');
   else if (!(diffSec <= MAX_LENGTH_DIFF_SEC)) failed.push(`length differs by ${diffSec.toFixed(2)} s`);
-  return { qualifies: failed.length === 0, failed, topic, lengthSec, diffSec };
+  return { qualifies: failed.length === 0, failed, topic, branch, lengthSec, diffSec };
 }
 
 export interface Candidate {
@@ -96,6 +129,8 @@ export interface Candidate {
   lengthText: string;
   lengthSec: number | null;
   diffSec: number | null;
+  /** amended-v1 only: the branch that met the channel condition. */
+  branch?: ChannelBranch;
 }
 
 export interface UploadDecision {
@@ -104,7 +139,10 @@ export interface UploadDecision {
   qualifying: number;
   /** Skipped songs: why. */
   reason: string | null;
-  /** Up to three Topic-channel results nearest to the annotation length (any artist or title). */
+  /**
+   * Up to three results nearest to the annotation length (any title): topic-only-v1, every
+   * ' - Topic' channel (any artist); amended-v1, every result that meets the channel condition.
+   */
   nearestTopic: Candidate[];
 }
 
@@ -114,15 +152,17 @@ const QUERY_ORDER: Record<QueryLabel, number> = { Q1: 0, Q2: 1 };
  * Choice among qualifying results of both queries (first RESULTS_PER_QUERY each): smallest length
  * difference, then Q1 before Q2, then result rank.
  */
-export function chooseUpload(song: SongForSearch, results: Record<QueryLabel, SearchResult[]>): UploadDecision {
+export function chooseUpload(song: SongForSearch, results: Record<QueryLabel, SearchResult[]>, rule: UploadRule = 'topic-only-v1'): UploadDecision {
   const qualifying: Candidate[] = [];
   const topics: Candidate[] = [];
   for (const query of ['Q1', 'Q2'] as QueryLabel[]) {
     for (const r of results[query].filter((x) => x.rank >= 1 && x.rank <= RESULTS_PER_QUERY)) {
-      const c = checkResult(r, song);
+      const c = checkResult(r, song, rule);
       const cand: Candidate = { query, rank: r.rank, videoId: r.videoId, title: r.title, channel: r.channel, lengthText: r.lengthText, lengthSec: c.lengthSec, diffSec: c.diffSec };
+      if (rule === 'amended-v1' && c.branch) cand.branch = c.branch;
       if (c.qualifies) qualifying.push(cand);
-      if (c.topic && c.diffSec !== null) topics.push(cand);
+      const near = rule === 'topic-only-v1' ? c.topic : c.branch !== null;
+      if (near && c.diffSec !== null) topics.push(cand);
     }
   }
   const byChoice = (a: Candidate, b: Candidate) => a.diffSec! - b.diffSec! || QUERY_ORDER[a.query] - QUERY_ORDER[b.query] || a.rank - b.rank;

@@ -4,9 +4,13 @@
 //        [--archive <billboard-2.0.1-lab.tar.gz>] [--out docs/annotation-heldout-v1-pool.json]
 //   node scripts/heldout-songs.mjs list --log <search-log.json> [--pool docs/annotation-heldout-v1-pool.json]
 //        [--declared-at YYYY-MM-DD] [--out docs/annotation-eval-songs-heldout-v1.json]
-//        [--uploads-out docs/annotation-heldout-v1-uploads.json]
+//        [--uploads-out docs/annotation-heldout-v1-uploads.json] [--rule amended-v1|topic-only-v1]
+//   node scripts/heldout-songs.mjs amend-log [--log docs/annotation-heldout-v1-search-log.json] [--pool ...]
+//   node scripts/heldout-songs.mjs diff [--log ...] [--pool ...] [--out docs/annotation-heldout-v1-selection-diff.json]
 // titles: the UsPop2002 title list BTC trained on (rule 1). pool: the ordered pool with every
-// exclusion. list: walks the pool with the search log and writes the song list and uploads.
+// exclusion. list: walks the pool with the search log and writes the song list and uploads
+// (default rule amended-v1, the PR #31 amendment). amend-log: adds the amended-v1 decision to every
+// log entry (original decisions unchanged). diff: the selection under both rules side by side.
 // Bundles src/eval/heldout-*.ts in memory with esbuild; reads and writes local files only.
 import * as esbuild from 'esbuild';
 import { createHash } from 'node:crypto';
@@ -31,9 +35,9 @@ const USAGE = 'usage: node scripts/heldout-songs.mjs titles|pool|list [options] 
 export function parseArgs(argv) {
   const [cmd, ...rest] = argv;
   if (!cmd || cmd === '--help' || cmd === '-h') return { help: true };
-  if (!['titles', 'pool', 'list'].includes(cmd)) throw new Error(`unknown step: ${cmd}\n${USAGE}`);
+  if (!['titles', 'pool', 'list', 'amend-log', 'diff'].includes(cmd)) throw new Error(`unknown step: ${cmd}\n${USAGE}`);
   const out = { cmd };
-  const keys = { '--tree': 'tree', '--out': 'out', '--index': 'index', '--labs': 'labs', '--archive': 'archive', '--log': 'log', '--pool': 'pool', '--declared-at': 'declaredAt', '--uploads-out': 'uploadsOut', '--songs': 'songs', '--titles': 'titles' };
+  const keys = { '--tree': 'tree', '--out': 'out', '--index': 'index', '--labs': 'labs', '--archive': 'archive', '--log': 'log', '--pool': 'pool', '--declared-at': 'declaredAt', '--uploads-out': 'uploadsOut', '--songs': 'songs', '--titles': 'titles', '--rule': 'rule' };
   for (let i = 0; i < rest.length; i++) {
     const a = rest[i];
     const eq = a.indexOf('=');
@@ -44,7 +48,8 @@ export function parseArgs(argv) {
     if (!value) throw new Error(`${flag} needs a value`);
     out[key] = value;
   }
-  const need = { titles: ['tree'], pool: ['index', 'labs'], list: ['log'] }[cmd];
+  const need = { titles: ['tree'], pool: ['index', 'labs'], list: [], 'amend-log': [], diff: [] }[cmd];
+  if (out.rule && !['amended-v1', 'topic-only-v1'].includes(out.rule)) throw new Error(`unknown rule: ${out.rule}`);
   for (const k of need) if (!out[k]) throw new Error(`${cmd} needs --${k}\n${USAGE}`);
   return out;
 }
@@ -159,22 +164,75 @@ export function rankedFromPoolFile(p) {
   return p.order.map((s) => ({ ...s, id: Number(s.id), ids: s.ids.map(Number) }));
 }
 
-async function list(m, args) {
+function readPool(m, args) {
   const poolFile = args.pool ?? doc('annotation-heldout-v1-pool.json');
   const p = JSON.parse(readFileSync(poolFile, 'utf8'));
   if (p.schema !== m.POOL_SCHEMA) throw new Error(`${poolFile}: expected schema ${m.POOL_SCHEMA}`);
-  const existing = m.parseSongList(JSON.parse(readFileSync(args.songs ?? doc('annotation-eval-songs.json'), 'utf8')));
-  const dataset = existing.datasets[m.BILLBOARD_DATASET];
-  const log = JSON.parse(readFileSync(args.log, 'utf8'));
+  return rankedFromPoolFile(p);
+}
+
+const logFile = (args) => args.log ?? doc('annotation-heldout-v1-search-log.json');
+const billboardDataset = (m, args) => m.parseSongList(JSON.parse(readFileSync(args.songs ?? doc('annotation-eval-songs.json'), 'utf8'))).datasets[m.BILLBOARD_DATASET];
+
+export const AMENDMENT = {
+  rule: 'amended-v1',
+  replaces: 'topic-only-v1',
+  decidedAt: '2026-11-13',
+  recordedAt: '2026-11-13',
+  before: 'any capture, chart or accuracy result of a held-out song',
+  topicOnlyChannelRule: "the channel name ends with ' - Topic', and its artist part, normalized, contains or is contained in the normalized Billboard artist (normalized Topic artist part nonempty)",
+  amendedChannelRule:
+    "A result satisfies the channel condition if either: (1) its channel name ends with the exact suffix ' - Topic', and the channel name with that suffix removed and the Billboard artist, both normalized by the existing normalization, are nonempty and either contains the other; or (2) its channel name does not end with that suffix, its recorded extra.snippet starts exactly and case-sensitively with 'Provided to YouTube by', its recorded extra.ownerBadges contains BADGE_STYLE_TYPE_VERIFIED_ARTIST, and its full channel name and the Billboard artist, normalized as above, are nonempty and either contains the other. Missing snippet or badge data fails branch (2).",
+  reason:
+    "Under topic-only-v1 only 25 of 136 searched songs qualified: artists with an official artist channel publish their auto-generated 'Provided to YouTube' tracks under the artist channel name, not '<artist> - Topic', so the rule kept mostly artists without such a channel. Decided by the Paseo parent after an Astra advisor round, before any capture; re-judged from this same log, no new searches. All other conditions, query limits, ordering, tie-break and the stop at 25 are unchanged.",
+  unchanged: 'decision (topic-only-v1) of every entry is left as it was; decisionAmended is added',
+};
+
+async function amendLogCmd(m, args) {
+  const file = logFile(args);
+  const log = JSON.parse(readFileSync(file, 'utf8'));
+  const amended = m.amendLog(readPool(m, args), log);
+  const counts = (status) => amended.entries.filter((e) => e.decisionAmended.status === status).length;
+  const stop = amended.entries.filter((e) => e.decisionAmended.status !== 'not-needed').at(-1).rank;
+  const out = {
+    ...amended,
+    notes: [...(log.notes ?? []).filter((n) => !n.startsWith('Amendment amended-v1')), `Amendment amended-v1 (${AMENDMENT.decidedAt}): ${AMENDMENT.reason} Each entry keeps 'decision' (topic-only-v1) and gains 'decisionAmended'; entries past the amended stop (rank ${stop}) are '${m.NOT_NEEDED_REASON}'.`],
+    amendment: AMENDMENT,
+    amended: { rule: 'amended-v1', stoppedAtRank: stop, chosen: counts('chosen'), skipped: counts('skipped'), notNeeded: counts('not-needed') },
+  };
+  await writeFile(file, json(out), 'utf8');
+  console.log(`${file}: amended stop rank ${stop}, chosen ${out.amended.chosen}, skipped ${out.amended.skipped}, not needed ${out.amended.notNeeded}`);
+}
+
+async function diff(m, args) {
+  const order = readPool(m, args);
+  const log = JSON.parse(readFileSync(logFile(args), 'utf8'));
+  const dataset = billboardDataset(m, args);
+  const a = m.buildHeldoutList({ order, log, dataset, declaredAt: 'x', rule: 'topic-only-v1' });
+  const b = m.buildHeldoutList({ order, log, dataset, declaredAt: 'x', rule: 'amended-v1' });
+  const out = {
+    ...m.selectionDiff(order, a, b),
+    purpose: 'Selection-sensitivity record of the VGT-7 held-out list (PR #31 amendment): the same pool and search log walked under the original topic-only-v1 rule and the amended-v1 rule. The list uses amended-v1; the songs only in the topic-only selection are not captured.',
+    sources: { pool: 'docs/annotation-heldout-v1-pool.json', searchLog: 'docs/annotation-heldout-v1-search-log.json' },
+  };
+  const file = args.out ?? doc('annotation-heldout-v1-selection-diff.json');
+  await writeFile(file, json(out), 'utf8');
+  console.log(`${file}: topic-only stop ${a.stopRank}, amended stop ${b.stopRank}, overlap ${out.overlap.length}`);
+}
+
+async function list(m, args) {
+  const rule = args.rule ?? 'amended-v1';
+  const dataset = billboardDataset(m, args);
+  const log = JSON.parse(readFileSync(logFile(args), 'utf8'));
   const declaredAt = args.declaredAt ?? new Date().toISOString().slice(0, 10);
-  const r = m.buildHeldoutList({ order: rankedFromPoolFile(p), log, dataset, declaredAt });
+  const r = m.buildHeldoutList({ order: readPool(m, args), log, dataset, declaredAt, rule });
   m.parseSongList(r.list);
   m.parseUploads(r.uploads);
   const listFile = args.out ?? doc('annotation-eval-songs-heldout-v1.json');
   const uploadsFile = args.uploadsOut ?? doc('annotation-heldout-v1-uploads.json');
   await writeFile(listFile, json(r.list), 'utf8');
-  await writeFile(uploadsFile, json({ $comment: 'Uploads chosen by the frozen PR #31 search (docs/annotation-heldout-v1-search-log.json); copy into the charts folder as uploads.json.', ...r.uploads }), 'utf8');
-  console.log(`${listFile}: ${r.chosen.length} songs; skipped ${r.skipped.length} (ranks ${r.skipped.map((s) => s.rank).join(', ') || 'none'})`);
+  await writeFile(uploadsFile, json({ $comment: `Uploads chosen by the PR #31 search under rule ${rule} (docs/annotation-heldout-v1-search-log.json); copy into the charts folder as uploads.json.`, ...r.uploads }), 'utf8');
+  console.log(`${listFile}: rule ${rule}, stop rank ${r.stopRank}, ${r.chosen.length} songs; skipped ${r.skipped.length} (ranks ${r.skipped.map((s) => s.rank).join(', ') || 'none'})`);
   console.log(uploadsFile);
 }
 
@@ -185,7 +243,7 @@ async function main() {
     return 0;
   }
   const m = await loadModules();
-  await { titles, pool, list }[args.cmd](m, args);
+  await { titles, pool, list, 'amend-log': amendLogCmd, diff }[args.cmd](m, args);
   return 0;
 }
 
