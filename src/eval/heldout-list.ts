@@ -42,7 +42,10 @@ const slug = (s: string) =>
 
 export const heldoutSongId = (s: { id: number; artist: string; title: string }) => `billboard-${id4(s.id)}-${slug(s.artist)}-${slug(s.title)}`;
 
-const mmss = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.round(sec % 60)).padStart(2, '0')}`;
+const mmss = (sec: number) => {
+  const s = Math.round(sec);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+};
 
 export const HELDOUT_PURPOSE =
   'Predeclared before any result (VGT-7, PR #31): 25 held-out evaluation songs drawn by a fixed seed from McGill Billboard 2.0.1 songs with no known BTC training-song overlap, for scoring Vibe Guitar auto charts against public, time-aligned chord annotations. ' +
