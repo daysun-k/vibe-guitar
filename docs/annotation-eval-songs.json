@@ -1,0 +1,442 @@
+{
+  "schema": "vibe-guitar-annotation-eval-songs/1",
+  "declaredAt": "2026-11-13",
+  "purpose": "Predeclared before any result: 2 pilot songs (pipeline check, not in totals) and 20 evaluation songs for scoring Vibe Guitar auto charts against public, time-aligned chord annotations (Linear VGT-7). Complexity rule (from the annotation, N and X ignored): complex when >= 20 distinct labels or >= 40% of chord time is not a plain major/minor triad; simple when <= 10 labels and < 20%; otherwise moderate. Upload rule: the same studio recording on an official channel ('Topic' preferred), length within 2 s of annotationDurationSec; otherwise the song stays unscored.",
+  "datasets": {
+    "isophonics-the-beatles": {
+      "name": "Isophonics Reference Annotations: The Beatles (chords v1.2, beats)",
+      "page": "http://isophonics.net/content/reference-annotations-beatles",
+      "downloads": [
+        "http://isophonics.net/files/annotations/The%20Beatles%20Annotations.tar.gz"
+      ],
+      "folder": "isophonics-the-beatles",
+      "licence": "No licence statement on the official pages or in the archive (checked 2026-11-13). Used for non-commercial research evaluation with attribution; the files are not redistributed.",
+      "licenceQuote": "Note: Please be sure to read the page describing these annotations before use. In particular, the level of confidence we have in the individual annotations is described there, as well as the original CD issue numbers from which we worked.",
+      "attribution": "Isophonics reference annotations, Centre for Digital Music, Queen Mary University of London (isophonics.net); Matthias Mauch et al., OMRAS2 metadata project late-breaking paper (cited as [1] on isophonics.net/content/reference-annotations); Chris Harte's PhD thesis (2010) for the Beatles chord transcriptions.",
+      "btcTraining": "Likely. The BTC README (github.com/jayg996/BTC-ISMIR19) says: \"We used Isophonics[1], Robbie Williams[2], UsPop2002[3] dataset which consists of chord label files.\" It does not say which songs the released checkpoint saw, so every Isophonics song is treated as possibly trained on; results on them are optimistic."
+    },
+    "isophonics-queen": {
+      "name": "Isophonics Reference Annotations: Queen (chords; no beats)",
+      "page": "http://isophonics.net/content/reference-annotations-queen",
+      "downloads": [
+        "http://isophonics.net/files/annotations/Queen%20Annotations.tar.gz"
+      ],
+      "folder": "isophonics-queen",
+      "licence": "No licence statement on the official pages or in the archive (checked 2026-11-13). Used for non-commercial research evaluation with attribution; the files are not redistributed.",
+      "licenceQuote": "Queen: checked by Matthias, use with moderate confidence.",
+      "attribution": "Isophonics reference annotations, Centre for Digital Music, Queen Mary University of London (isophonics.net); Matthias Mauch et al., OMRAS2 metadata project late-breaking paper (cited as [1] on isophonics.net/content/reference-annotations).",
+      "btcTraining": "Likely. The BTC README (github.com/jayg996/BTC-ISMIR19) says: \"We used Isophonics[1], Robbie Williams[2], UsPop2002[3] dataset which consists of chord label files.\" It does not say which songs the released checkpoint saw, so every Isophonics song is treated as possibly trained on; results on them are optimistic."
+    },
+    "billboard-2.0.1-lab": {
+      "name": "McGill Billboard 2.0 (2.0.1 LAB files; chords only, no beats)",
+      "page": "https://ddmal.ca/research/The_McGill_Billboard_Project_(Chord_Analysis_Dataset)/",
+      "downloads": [
+        "https://www.dropbox.com/s/ep41gwy28vo3wxy/billboard-2.0.1-lab.tar.gz?dl=1",
+        "https://www.dropbox.com/s/o0olz0uwl9z9stb/billboard-2.0-index.csv?dl=1"
+      ],
+      "folder": "billboard-2.0.1-lab",
+      "licence": "CC0",
+      "licenceQuote": "we have made them available legally under a CC0 license, but we ask that users follow scholarly norms in any public-facing work based on upon these data by citing the following ISMIR paper",
+      "attribution": "John Ashley Burgoyne, Jonathan Wild, and Ichiro Fujinaga, 'An Expert Ground Truth Set for Audio Chord Recognition and Music Analysis', in Proceedings of the 12th International Society for Music Information Retrieval Conference (Miami, FL, 2011), pp. 633-38.",
+      "btcTraining": "Not listed in the BTC README. The chosen songs were also checked against the UsPop2002 annotation list BTC used (github.com/tmc323/Chord-Annotations, uspopLabels, 195 songs): no title match. Two Billboard candidates that are in that list (Michael Jackson 'Beat It', Billy Joel 'Just the Way You Are') were left out."
+    }
+  },
+  "songs": [
+    {
+      "id": "pilot-beatles-drive-my-car",
+      "role": "pilot",
+      "artist": "The Beatles",
+      "title": "Drive My Car",
+      "release": "Rubber Soul (Parlophone CD CDP 7 46440 2, 1987 issue)",
+      "dataset": "isophonics-the-beatles",
+      "chords": "chordlab/The Beatles/06_-_Rubber_Soul/01_-_Drive_My_Car.lab",
+      "beats": "beat/The Beatles/06_-_Rubber_Soul/01_-_Drive_My_Car.txt",
+      "annotationDurationSec": 150.28,
+      "btcTraining": "likely",
+      "complexity": "moderate",
+      "search": [
+        "The Beatles Drive My Car Remastered 2009",
+        "The Beatles - Topic Drive My Car Rubber Soul"
+      ],
+      "uploadHint": "'The Beatles - Topic' upload titled 'Drive My Car (Remastered 2009)' from Rubber Soul, length 2:30 (within 2 s). Not a 2017-2023 remix/anniversary mix, mono, live, Anthology or 1 (2015) version."
+    },
+    {
+      "id": "pilot-talking-heads-and-she-was",
+      "role": "pilot",
+      "artist": "Talking Heads",
+      "title": "And She Was",
+      "release": "Billboard Hot 100 entry 1985-12-07 (McGill Billboard id 0023); the dataset does not record the CD used. Expected studio album: Little Creatures (1985)",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0023/full.lab",
+      "beats": null,
+      "annotationDurationSec": 219.25,
+      "btcTraining": "not-known",
+      "complexity": "simple",
+      "search": [
+        "Talking Heads And She Was Little Creatures",
+        "Talking Heads - Topic And She Was"
+      ],
+      "uploadHint": "'Talking Heads - Topic' (Provided to YouTube) or official audio upload of the original studio recording from Little Creatures (1985), length 3:39 (within 2 s; the annotation includes the CD track's trailing silence). Not the music video, a single edit, extended mix, live or re-recording. If no upload is within 2 s, leave the song out of uploads.json."
+    },
+    {
+      "id": "beatles-something",
+      "role": "eval",
+      "artist": "The Beatles",
+      "title": "Something",
+      "release": "Abbey Road (Parlophone CD CDP 7 46446 2, 1987 issue)",
+      "dataset": "isophonics-the-beatles",
+      "chords": "chordlab/The Beatles/11_-_Abbey_Road/02_-_Something.lab",
+      "beats": "beat/The Beatles/11_-_Abbey_Road/02_-_Something.txt",
+      "annotationDurationSec": 183.01,
+      "btcTraining": "likely",
+      "complexity": "complex",
+      "search": [
+        "The Beatles Something Remastered 2009",
+        "The Beatles - Topic Something Abbey Road"
+      ],
+      "uploadHint": "'The Beatles - Topic' upload titled 'Something (Remastered 2009)' from Abbey Road, length 3:03 (within 2 s). Not a 2017-2023 remix/anniversary mix, mono, live, Anthology or 1 (2015) version."
+    },
+    {
+      "id": "beatles-here-comes-the-sun",
+      "role": "eval",
+      "artist": "The Beatles",
+      "title": "Here Comes The Sun",
+      "release": "Abbey Road (Parlophone CD CDP 7 46446 2, 1987 issue)",
+      "dataset": "isophonics-the-beatles",
+      "chords": "chordlab/The Beatles/11_-_Abbey_Road/07_-_Here_Comes_The_Sun.lab",
+      "beats": "beat/The Beatles/11_-_Abbey_Road/07_-_Here_Comes_The_Sun.txt",
+      "annotationDurationSec": 185.57,
+      "btcTraining": "likely",
+      "complexity": "moderate",
+      "search": [
+        "The Beatles Here Comes The Sun Remastered 2009",
+        "The Beatles - Topic Here Comes The Sun Abbey Road"
+      ],
+      "uploadHint": "'The Beatles - Topic' upload titled 'Here Comes The Sun (Remastered 2009)' from Abbey Road, length 3:06 (within 2 s). Not a 2017-2023 remix/anniversary mix, mono, live, Anthology or 1 (2015) version."
+    },
+    {
+      "id": "beatles-come-together",
+      "role": "eval",
+      "artist": "The Beatles",
+      "title": "Come Together",
+      "release": "Abbey Road (Parlophone CD CDP 7 46446 2, 1987 issue)",
+      "dataset": "isophonics-the-beatles",
+      "chords": "chordlab/The Beatles/11_-_Abbey_Road/01_-_Come_Together.lab",
+      "beats": "beat/The Beatles/11_-_Abbey_Road/01_-_Come_Together.txt",
+      "annotationDurationSec": 260.65,
+      "btcTraining": "likely",
+      "complexity": "simple",
+      "search": [
+        "The Beatles Come Together Remastered 2009",
+        "The Beatles - Topic Come Together Abbey Road"
+      ],
+      "uploadHint": "'The Beatles - Topic' upload titled 'Come Together (Remastered 2009)' from Abbey Road, length 4:21 (within 2 s). Not a 2017-2023 remix/anniversary mix, mono, live, Anthology or 1 (2015) version."
+    },
+    {
+      "id": "beatles-let-it-be",
+      "role": "eval",
+      "artist": "The Beatles",
+      "title": "Let It Be",
+      "release": "Let It Be (Parlophone CD CDP 7 46447 2, 1987 issue)",
+      "dataset": "isophonics-the-beatles",
+      "chords": "chordlab/The Beatles/12_-_Let_It_Be/06_-_Let_It_Be.lab",
+      "beats": "beat/The Beatles/12_-_Let_It_Be/06_-_Let_It_Be.txt",
+      "annotationDurationSec": 243.33,
+      "btcTraining": "likely",
+      "complexity": "simple",
+      "search": [
+        "The Beatles Let It Be Remastered 2009",
+        "The Beatles - Topic Let It Be Let It Be"
+      ],
+      "uploadHint": "'The Beatles - Topic' upload titled 'Let It Be (Remastered 2009)' from Let It Be, length 4:03 (within 2 s). Not a 2017-2023 remix/anniversary mix, mono, live, Anthology or 1 (2015) version."
+    },
+    {
+      "id": "beatles-penny-lane",
+      "role": "eval",
+      "artist": "The Beatles",
+      "title": "Penny Lane",
+      "release": "Magical Mystery Tour (Parlophone CD CDP 7 48062 2, 1987 issue)",
+      "dataset": "isophonics-the-beatles",
+      "chords": "chordlab/The Beatles/09_-_Magical_Mystery_Tour/09_-_Penny_Lane.lab",
+      "beats": "beat/The Beatles/09_-_Magical_Mystery_Tour/09_-_Penny_Lane.txt",
+      "annotationDurationSec": 183.38,
+      "btcTraining": "likely",
+      "complexity": "complex",
+      "search": [
+        "The Beatles Penny Lane Remastered 2009",
+        "The Beatles - Topic Penny Lane Magical Mystery Tour"
+      ],
+      "uploadHint": "'The Beatles - Topic' upload titled 'Penny Lane (Remastered 2009)' from Magical Mystery Tour, length 3:03 (within 2 s). Not a 2017-2023 remix/anniversary mix, mono, live, Anthology or 1 (2015) version."
+    },
+    {
+      "id": "beatles-while-my-guitar-gently-weeps",
+      "role": "eval",
+      "artist": "The Beatles",
+      "title": "While My Guitar Gently Weeps",
+      "release": "The Beatles (White Album) (Parlophone CD CDS 7 46443 8, 1987 issue)",
+      "dataset": "isophonics-the-beatles",
+      "chords": "chordlab/The Beatles/10CD1_-_The_Beatles/CD1_-_07_-_While_My_Guitar_Gently_Weeps.lab",
+      "beats": "beat/The Beatles/10CD1_-_The_Beatles/CD1_-_07_-_While_My_Guitar_Gently_Weeps.txt",
+      "annotationDurationSec": 285.31,
+      "btcTraining": "likely",
+      "complexity": "moderate",
+      "search": [
+        "The Beatles While My Guitar Gently Weeps Remastered 2009",
+        "The Beatles - Topic While My Guitar Gently Weeps The Beatles (White Album)"
+      ],
+      "uploadHint": "'The Beatles - Topic' upload titled 'While My Guitar Gently Weeps (Remastered 2009)' from The Beatles (White Album), length 4:45 (within 2 s). Not a 2017-2023 remix/anniversary mix, mono, live, Anthology or 1 (2015) version."
+    },
+    {
+      "id": "queen-bohemian-rhapsody",
+      "role": "eval",
+      "artist": "Queen",
+      "title": "Bohemian Rhapsody",
+      "release": "Greatest Hits I (Parlophone CD 0777 7 8950424)",
+      "dataset": "isophonics-queen",
+      "chords": "chordlab/Queen/Greatest Hits I/01 Bohemian Rhapsody.lab",
+      "beats": null,
+      "annotationDurationSec": 358.29,
+      "btcTraining": "likely",
+      "complexity": "complex",
+      "search": [
+        "Queen Bohemian Rhapsody Remastered 2011",
+        "Queen - Topic Bohemian Rhapsody A Night at the Opera"
+      ],
+      "uploadHint": "'Queen - Topic' upload of the studio track (A Night at the Opera or Greatest Hits, 'Remastered 2011' is fine), length 5:58 (within 2 s). Not the music video, a live, 2021-2024 remix or single edit."
+    },
+    {
+      "id": "queen-dont-stop-me-now",
+      "role": "eval",
+      "artist": "Queen",
+      "title": "Don't Stop Me Now",
+      "release": "Greatest Hits I (Parlophone CD 0777 7 8950424)",
+      "dataset": "isophonics-queen",
+      "chords": "chordlab/Queen/Greatest Hits I/07 Don't Stop Me Now.lab",
+      "beats": null,
+      "annotationDurationSec": 211.73,
+      "btcTraining": "likely",
+      "complexity": "complex",
+      "search": [
+        "Queen Don't Stop Me Now Remastered 2011",
+        "Queen - Topic Don't Stop Me Now Jazz"
+      ],
+      "uploadHint": "'Queen - Topic' upload of the studio track (Jazz or Greatest Hits, 'Remastered 2011' is fine), length 3:32 (within 2 s). Not the music video, a live, 2021-2024 remix or single edit."
+    },
+    {
+      "id": "queen-somebody-to-love",
+      "role": "eval",
+      "artist": "Queen",
+      "title": "Somebody To Love",
+      "release": "Greatest Hits I (Parlophone CD 0777 7 8950424)",
+      "dataset": "isophonics-queen",
+      "chords": "chordlab/Queen/Greatest Hits I/10 Somebody To Love.lab",
+      "beats": null,
+      "annotationDurationSec": 297.67,
+      "btcTraining": "likely",
+      "complexity": "complex",
+      "search": [
+        "Queen Somebody To Love Remastered 2011",
+        "Queen - Topic Somebody To Love A Day at the Races"
+      ],
+      "uploadHint": "'Queen - Topic' upload of the studio track (A Day at the Races or Greatest Hits, 'Remastered 2011' is fine), length 4:58 (within 2 s). Not the music video, a live, 2021-2024 remix or single edit."
+    },
+    {
+      "id": "billboard-michael-jackson-human-nature",
+      "role": "eval",
+      "artist": "Michael Jackson",
+      "title": "Human Nature",
+      "release": "Billboard Hot 100 entry 1983-08-13 (McGill Billboard id 0637); the dataset does not record the CD used. Expected studio album: Thriller (1982)",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0637/full.lab",
+      "beats": null,
+      "annotationDurationSec": 245.73,
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "search": [
+        "Michael Jackson Human Nature Thriller",
+        "Michael Jackson - Topic Human Nature"
+      ],
+      "uploadHint": "'Michael Jackson - Topic' (Provided to YouTube) or official audio upload of the original studio recording from Thriller (1982), length 4:06 (within 2 s; the annotation includes the CD track's trailing silence). Not the music video, a single edit, extended mix, live or re-recording. If no upload is within 2 s, leave the song out of uploads.json."
+    },
+    {
+      "id": "billboard-cyndi-lauper-true-colors",
+      "role": "eval",
+      "artist": "Cyndi Lauper",
+      "title": "True Colors",
+      "release": "Billboard Hot 100 entry 1986-09-13 (McGill Billboard id 0803); the dataset does not record the CD used. Expected studio album: True Colors (1986)",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0803/full.lab",
+      "beats": null,
+      "annotationDurationSec": 228.22,
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "search": [
+        "Cyndi Lauper True Colors True Colors",
+        "Cyndi Lauper - Topic True Colors"
+      ],
+      "uploadHint": "'Cyndi Lauper - Topic' (Provided to YouTube) or official audio upload of the original studio recording from True Colors (1986), length 3:48 (within 2 s; the annotation includes the CD track's trailing silence). Not the music video, a single edit, extended mix, live or re-recording. If no upload is within 2 s, leave the song out of uploads.json."
+    },
+    {
+      "id": "billboard-police-every-little-thing-she-does-is-magic",
+      "role": "eval",
+      "artist": "The Police",
+      "title": "Every Little Thing She Does Is Magic",
+      "release": "Billboard Hot 100 entry 1981-12-26 (McGill Billboard id 0293); the dataset does not record the CD used. Expected studio album: Ghost in the Machine (1981)",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0293/full.lab",
+      "beats": null,
+      "annotationDurationSec": 261.24,
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "search": [
+        "The Police Every Little Thing She Does Is Magic Ghost in the Machine",
+        "The Police - Topic Every Little Thing She Does Is Magic"
+      ],
+      "uploadHint": "'The Police - Topic' (Provided to YouTube) or official audio upload of the original studio recording from Ghost in the Machine (1981), length 4:21 (within 2 s; the annotation includes the CD track's trailing silence). Not the music video, a single edit, extended mix, live or re-recording. If no upload is within 2 s, leave the song out of uploads.json."
+    },
+    {
+      "id": "billboard-abba-knowing-me-knowing-you",
+      "role": "eval",
+      "artist": "Abba",
+      "title": "Knowing Me, Knowing You",
+      "release": "Billboard Hot 100 entry 1977-07-02 (McGill Billboard id 0231); the dataset does not record the CD used. Expected studio album: Arrival (1976)",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0231/full.lab",
+      "beats": null,
+      "annotationDurationSec": 243.67,
+      "btcTraining": "not-known",
+      "complexity": "moderate",
+      "search": [
+        "Abba Knowing Me, Knowing You Arrival",
+        "Abba - Topic Knowing Me, Knowing You"
+      ],
+      "uploadHint": "'Abba - Topic' (Provided to YouTube) or official audio upload of the original studio recording from Arrival (1976), length 4:04 (within 2 s; the annotation includes the CD track's trailing silence). Not the music video, a single edit, extended mix, live or re-recording. If no upload is within 2 s, leave the song out of uploads.json."
+    },
+    {
+      "id": "billboard-eagles-best-of-my-love",
+      "role": "eval",
+      "artist": "Eagles",
+      "title": "Best Of My Love",
+      "release": "Billboard Hot 100 entry 1975-02-22 (McGill Billboard id 1061); the dataset does not record the CD used. Expected studio album: On the Border (1974)",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/1061/full.lab",
+      "beats": null,
+      "annotationDurationSec": 274.81,
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "search": [
+        "Eagles Best Of My Love On the Border",
+        "Eagles - Topic Best Of My Love"
+      ],
+      "uploadHint": "'Eagles - Topic' (Provided to YouTube) or official audio upload of the original studio recording from On the Border (1974), length 4:35 (within 2 s; the annotation includes the CD track's trailing silence). Not the music video, a single edit, extended mix, live or re-recording. If no upload is within 2 s, leave the song out of uploads.json."
+    },
+    {
+      "id": "billboard-elton-john-goodbye-yellow-brick-road",
+      "role": "eval",
+      "artist": "Elton John",
+      "title": "Goodbye Yellow Brick Road",
+      "release": "Billboard Hot 100 entry 1973-11-03 (McGill Billboard id 0842); the dataset does not record the CD used. Expected studio album: Goodbye Yellow Brick Road (1973)",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0842/full.lab",
+      "beats": null,
+      "annotationDurationSec": 194.74,
+      "btcTraining": "not-known",
+      "complexity": "moderate",
+      "search": [
+        "Elton John Goodbye Yellow Brick Road Goodbye Yellow Brick Road",
+        "Elton John - Topic Goodbye Yellow Brick Road"
+      ],
+      "uploadHint": "'Elton John - Topic' (Provided to YouTube) or official audio upload of the original studio recording from Goodbye Yellow Brick Road (1973), length 3:15 (within 2 s; the annotation includes the CD track's trailing silence). Not the music video, a single edit, extended mix, live or re-recording. If no upload is within 2 s, leave the song out of uploads.json."
+    },
+    {
+      "id": "billboard-hall-oates-maneater",
+      "role": "eval",
+      "artist": "Daryl Hall & John Oates",
+      "title": "Maneater",
+      "release": "Billboard Hot 100 entry 1983-03-05 (McGill Billboard id 0633); the dataset does not record the CD used. Expected studio album: H2O (1982)",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0633/full.lab",
+      "beats": null,
+      "annotationDurationSec": 274.21,
+      "btcTraining": "not-known",
+      "complexity": "moderate",
+      "search": [
+        "Daryl Hall & John Oates Maneater H2O",
+        "Daryl Hall & John Oates - Topic Maneater"
+      ],
+      "uploadHint": "'Daryl Hall & John Oates - Topic' (Provided to YouTube) or official audio upload of the original studio recording from H2O (1982), length 4:34 (within 2 s; the annotation includes the CD track's trailing silence). Not the music video, a single edit, extended mix, live or re-recording. If no upload is within 2 s, leave the song out of uploads.json."
+    },
+    {
+      "id": "billboard-roxette-the-look",
+      "role": "eval",
+      "artist": "Roxette",
+      "title": "The Look",
+      "release": "Billboard Hot 100 entry 1989-03-04 (McGill Billboard id 0567); the dataset does not record the CD used. Expected studio album: Look Sharp! (1988)",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0567/full.lab",
+      "beats": null,
+      "annotationDurationSec": 237.98,
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "search": [
+        "Roxette The Look Look Sharp!",
+        "Roxette - Topic The Look"
+      ],
+      "uploadHint": "'Roxette - Topic' (Provided to YouTube) or official audio upload of the original studio recording from Look Sharp! (1988), length 3:58 (within 2 s; the annotation includes the CD track's trailing silence). Not the music video, a single edit, extended mix, live or re-recording. If no upload is within 2 s, leave the song out of uploads.json."
+    },
+    {
+      "id": "billboard-paul-simon-you-can-call-me-al",
+      "role": "eval",
+      "artist": "Paul Simon",
+      "title": "You Can Call Me Al",
+      "release": "Billboard Hot 100 entry 1986-08-23 (McGill Billboard id 0081); the dataset does not record the CD used. Expected studio album: Graceland (1986)",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0081/full.lab",
+      "beats": null,
+      "annotationDurationSec": 280.61,
+      "btcTraining": "not-known",
+      "complexity": "moderate",
+      "search": [
+        "Paul Simon You Can Call Me Al Graceland",
+        "Paul Simon - Topic You Can Call Me Al"
+      ],
+      "uploadHint": "'Paul Simon - Topic' (Provided to YouTube) or official audio upload of the original studio recording from Graceland (1986), length 4:41 (within 2 s; the annotation includes the CD track's trailing silence). Not the music video, a single edit, extended mix, live or re-recording. If no upload is within 2 s, leave the song out of uploads.json."
+    },
+    {
+      "id": "billboard-david-bowie-space-oddity",
+      "role": "eval",
+      "artist": "David Bowie",
+      "title": "Space Oddity",
+      "release": "Billboard Hot 100 entry 1973-04-21 (McGill Billboard id 0086); the dataset does not record the CD used. Expected studio album: David Bowie (1969, later titled Space Oddity)",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0086/full.lab",
+      "beats": null,
+      "annotationDurationSec": 315.14,
+      "btcTraining": "not-known",
+      "complexity": "moderate",
+      "search": [
+        "David Bowie Space Oddity David Bowie",
+        "David Bowie - Topic Space Oddity"
+      ],
+      "uploadHint": "'David Bowie - Topic' (Provided to YouTube) or official audio upload of the original studio recording from David Bowie (1969, later titled Space Oddity), length 5:15 (within 2 s; the annotation includes the CD track's trailing silence). Not the music video, a single edit, extended mix, live or re-recording. If no upload is within 2 s, leave the song out of uploads.json."
+    },
+    {
+      "id": "billboard-heart-crazy-on-you",
+      "role": "eval",
+      "artist": "Heart",
+      "title": "Crazy On You",
+      "release": "Billboard Hot 100 entry 1978-02-11 (McGill Billboard id 0033); the dataset does not record the CD used. Expected studio album: Dreamboat Annie (1976)",
+      "dataset": "billboard-2.0.1-lab",
+      "chords": "McGill-Billboard/0033/full.lab",
+      "beats": null,
+      "annotationDurationSec": 291.51,
+      "btcTraining": "not-known",
+      "complexity": "moderate",
+      "search": [
+        "Heart Crazy On You Dreamboat Annie",
+        "Heart - Topic Crazy On You"
+      ],
+      "uploadHint": "'Heart - Topic' (Provided to YouTube) or official audio upload of the original studio recording from Dreamboat Annie (1976), length 4:52 (within 2 s; the annotation includes the CD track's trailing silence). Not the music video, a single edit, extended mix, live or re-recording. If no upload is within 2 s, leave the song out of uploads.json."
+    }
+  ]
+}

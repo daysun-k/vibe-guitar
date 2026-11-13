@@ -403,6 +403,35 @@ In the browser: open `chrome-extension://<extension id>/bench.html` (link in the
 Optional feature parity check against librosa: `uv run --with librosa==0.10.2.post1 --with numpy python
 scripts/verify-features.py`, then `npm test`.
 
+### Accuracy against public chord annotations (VGT-7)
+
+`docs/annotation-eval-songs.json` predeclares 2 pilot and 20 evaluation songs (Isophonics The Beatles
+with beats, Isophonics Queen, McGill Billboard 2.0) with annotation paths, lengths, licences,
+attribution, BTC training overlap and upload search rules. The annotation files are not in the
+repository: download the archives listed under `datasets[].downloads` and extract each into
+`<annotations>/<datasets[].folder>` (for Billboard, `billboard-2.0.1-lab.tar.gz` gives
+`McGill-Billboard/<id>/full.lab`).
+
+For each song, play the matching official upload (length within 2 s of `annotationDurationSec`) end
+to end at 1x with listening mode on, then save the stored auto chart (`autochart:youtube:<id>` in
+`chrome.storage.local`) as `<charts>/<id>.json` and record the choice in `<charts>/uploads.json`:
+`{ "<song id>": { "youtubeId": "<id>", "durationSec": 245.7, "channel": "…", "uploadTitle": "…" } }`.
+
+```sh
+npm run eval-annotations -- --annotations <annotations> --charts <charts> [--out <prefix>]
+```
+
+writes `<charts>/annotation-eval.json` and a self-contained Korean `annotation-eval.html`. One offset
+per song is frozen before scoring, from annotation beats (or annotation chord changes when a dataset has
+no beats, marked weak) against the chart's Beat This! beats; songs whose start / middle / end offsets
+differ by more than 0.1 s, or whose upload length differs by more than 2 s, are excluded with a reason.
+Scores use `compareCharts` (majmin / root / sevenths WCSR, as in `npm run bench -- --compare`) from the
+first to the last annotated chord. Harte labels map to chart symbols at concert pitch with sharp
+spelling; inversions score as root position, extensions are ignored by majmin and root, no-third chords
+count for root only, N must match N and X is excluded. Chord-change residuals (auto minus annotation,
+nearest within ±1 s) are listed per change and are descriptive only. Isophonics songs were likely in
+BTC's training data, so the report keeps them apart from the held-out Billboard songs.
+
 Charts are stored in `chrome.storage.local`, keyed by `chart:<source>:<recording id>`; use the JSON
 export/import buttons in the Edit tab to back them up.
 
