@@ -1,0 +1,279 @@
+{
+  "$comment": "Uploads of the v2 held-out batch (PR #33): docs/annotation-heldout-v1-search-log.json walked from rank 33 under rule amended-v1; copy into the charts folder as uploads.json.",
+  "billboard-0813-lesley-gore-california-nights": {
+    "youtubeId": "9KvzNL-p9TI",
+    "durationSec": 170,
+    "channel": "Lesley Gore",
+    "uploadTitle": "California Nights"
+  },
+  "billboard-0133-bobby-bare-detroit-city": {
+    "youtubeId": "Y7tGjpYzWa8",
+    "durationSec": 167,
+    "channel": "Bobby Bare Official",
+    "uploadTitle": "Detroit City"
+  },
+  "billboard-0026-the-chiffons-sweet-talkin-guy": {
+    "youtubeId": "UAPaGi7HuKo",
+    "durationSec": 147,
+    "channel": "The Chiffons - Topic",
+    "uploadTitle": "Sweet Talkin' Guy"
+  },
+  "billboard-0112-gladys-knight-and-the-pips-letter-full-of-tears": {
+    "youtubeId": "OI9pyee5DIU",
+    "durationSec": 165,
+    "channel": "Gladys Knight & The Pips - Topic",
+    "uploadTitle": "Letter Full of Tears"
+  },
+  "billboard-0762-grand-funk-railroad-walk-like-a-man": {
+    "youtubeId": "j6C4b7wzZVo",
+    "durationSec": 246,
+    "channel": "Grand Funk Railroad - Topic",
+    "uploadTitle": "Walk Like A Man (You Can Call Me Your Man) (Remastered 1999)"
+  },
+  "billboard-1051-billy-squier-my-kinda-lover": {
+    "youtubeId": "xtKRkAhY7cg",
+    "durationSec": 213,
+    "channel": "Official Billy Squier",
+    "uploadTitle": "My Kinda Lover"
+  },
+  "billboard-0242-stevie-b-because-i-love-you-the-postman-song": {
+    "youtubeId": "SAVK45GpriA",
+    "durationSec": 262,
+    "channel": "Stevie B Oficial",
+    "uploadTitle": "Because I Love You"
+  },
+  "billboard-0054-j-frank-wilson-and-the-cavaliers-last-kiss": {
+    "youtubeId": "0PhOf9myHQM",
+    "durationSec": 148,
+    "channel": "J. Frank Wilson & The Cavaliers - Topic",
+    "uploadTitle": "Last Kiss"
+  },
+  "billboard-0128-looking-glass-brandy-you-re-a-fine-girl": {
+    "youtubeId": "CFhFyvk0yS8",
+    "durationSec": 187,
+    "channel": "Looking Glass",
+    "uploadTitle": "Brandy (You're a Fine Girl)"
+  },
+  "billboard-1143-eddie-rabbitt-i-love-a-rainy-night": {
+    "youtubeId": "NWoL65SexB4",
+    "durationSec": 190,
+    "channel": "Eddie Rabbitt",
+    "uploadTitle": "I Love a Rainy Night (2009 Remaster)"
+  },
+  "billboard-0648-pet-shop-boys-what-have-i-done-to-deserve-this": {
+    "youtubeId": "KI3k9C6wD2A",
+    "durationSec": 261,
+    "channel": "Pet Shop Boys",
+    "uploadTitle": "What Have I Done to Deserve This? (with Dusty Springfield)"
+  },
+  "billboard-0619-marvin-gaye-tammi-terrell-if-i-could-build-my-whole-world-around-you": {
+    "youtubeId": "D3b3U6kkkP8",
+    "durationSec": 147,
+    "channel": "Marvin Gaye",
+    "uploadTitle": "If I Could Build My Whole World Around You"
+  },
+  "billboard-0307-smokey-robinson-cruisin": {
+    "youtubeId": "cGsOCUaJlDE",
+    "durationSec": 270,
+    "channel": "Smokey Robinson",
+    "uploadTitle": "Cruisin'"
+  },
+  "billboard-0502-otis-redding-i-ve-been-loving-you-too-long-to-stop-now": {
+    "youtubeId": "ZO3mNU_urjM",
+    "durationSec": 196,
+    "channel": "Otis Redding",
+    "uploadTitle": "I've Been Loving You Too Long"
+  },
+  "billboard-0018-daryl-hall-and-john-oates-kiss-on-my-list": {
+    "youtubeId": "UceVGqkz9oM",
+    "durationSec": 233,
+    "channel": "Daryl Hall & John Oates",
+    "uploadTitle": "Kiss on My List"
+  },
+  "billboard-0253-dion-love-came-to-me": {
+    "youtubeId": "V0M4BeN_mrM",
+    "durationSec": 166,
+    "channel": "Dion",
+    "uploadTitle": "Love Came to Me"
+  },
+  "billboard-0747-tracy-chapman-baby-can-i-hold-you": {
+    "youtubeId": "zd136WPHb60",
+    "durationSec": 193,
+    "channel": "Tracy Chapman",
+    "uploadTitle": "Baby Can I Hold You (2015 Remaster)"
+  },
+  "billboard-0775-marc-cohn-walking-in-memphis": {
+    "youtubeId": "yLFnE88fdoU",
+    "durationSec": 256,
+    "channel": "Marc Cohn",
+    "uploadTitle": "Walking in Memphis"
+  },
+  "billboard-0214-ray-charles-night-time-is-the-right-time": {
+    "youtubeId": "7eHTDfqavQg",
+    "durationSec": 205,
+    "channel": "Ray Charles",
+    "uploadTitle": "The Right Time"
+  },
+  "billboard-1112-stephanie-mills-never-knew-love-like-this-before": {
+    "youtubeId": "x-1fHv9IWqg",
+    "durationSec": 326,
+    "channel": "Stephanie Mills - Topic",
+    "uploadTitle": "Never Knew Love Like This Before"
+  },
+  "billboard-1289-the-la-s-there-she-goes": {
+    "youtubeId": "7tE0v57RMJw",
+    "durationSec": 163,
+    "channel": "The La's - Topic",
+    "uploadTitle": "There She Goes"
+  },
+  "billboard-1286-a-taste-of-honey-sukiyaki": {
+    "youtubeId": "qoU1jksH8LE",
+    "durationSec": 224,
+    "channel": "A Taste Of Honey - Topic",
+    "uploadTitle": "Sukiyaki (Remastered 2002)"
+  },
+  "billboard-1021-wilson-pickett-soul-dance-number-three": {
+    "youtubeId": "RhD6JUpsT-w",
+    "durationSec": 162,
+    "channel": "Wilson Pickett",
+    "uploadTitle": "Soul Dance Number Three"
+  },
+  "billboard-0381-focus-hocus-pocus": {
+    "youtubeId": "zUdhMhbIHvM",
+    "durationSec": 205,
+    "channel": "Official Focus",
+    "uploadTitle": "Hocus Pocus (U.S. Single Version)"
+  },
+  "billboard-0265-the-5th-dimension-last-night-i-didn-t-get-to-sleep-at-all": {
+    "youtubeId": "kWogzq0Sz0A",
+    "durationSec": 193,
+    "channel": "The 5th Dimension",
+    "uploadTitle": "(Last Night) I Didn't Get To Sleep At All"
+  },
+  "billboard-0580-the-falcons-i-found-a-love": {
+    "youtubeId": "iDf4kyL5JTY",
+    "durationSec": 179,
+    "channel": "Falcons - Topic",
+    "uploadTitle": "I Found a Love"
+  },
+  "billboard-0947-simon-and-garfunkel-fakin-it": {
+    "youtubeId": "Q_JunmMb1f0",
+    "durationSec": 198,
+    "channel": "Simon & Garfunkel",
+    "uploadTitle": "Fakin' It"
+  },
+  "billboard-0965-arthur-conley-sweet-soul-music": {
+    "youtubeId": "So9XIEhGrFw",
+    "durationSec": 143,
+    "channel": "Arthur Conley - Topic",
+    "uploadTitle": "Sweet Soul Music"
+  },
+  "billboard-1063-dion-this-little-girl": {
+    "youtubeId": "X-STwMriWs4",
+    "durationSec": 157,
+    "channel": "Dion",
+    "uploadTitle": "This Little Girl"
+  },
+  "billboard-0822-lavern-baker-i-cried-a-tear": {
+    "youtubeId": "gW3WO-AbGvI",
+    "durationSec": 156,
+    "channel": "Lavern Baker - Topic",
+    "uploadTitle": "I Cried a Tear"
+  },
+  "billboard-1180-emerson-lake-and-palmer-lucky-man": {
+    "youtubeId": "3ds55ii0wqc",
+    "durationSec": 280,
+    "channel": "Emerson, Lake and Palmer",
+    "uploadTitle": "Lucky Man (2012 Stereo Mix)"
+  },
+  "billboard-0294-jerry-jeff-walker-mr-bojangles": {
+    "youtubeId": "R0dbM2KJnX4",
+    "durationSec": 235,
+    "channel": "Jerry Jeff Walker",
+    "uploadTitle": "Mr. Bojangles"
+  },
+  "billboard-0524-tina-turner-private-dancer": {
+    "youtubeId": "FCMsBpkFJHM",
+    "durationSec": 435,
+    "channel": "Tina Turner",
+    "uploadTitle": "Private Dancer (2015 Remaster)"
+  },
+  "billboard-0314-james-brown-i-got-you-i-feel-good": {
+    "youtubeId": "inNTZTINTtM",
+    "durationSec": 168,
+    "channel": "James Brown",
+    "uploadTitle": "I Got You (I Feel Good)"
+  },
+  "billboard-1106-young-mc-bust-a-move": {
+    "youtubeId": "R2oEk1OVn_A",
+    "durationSec": 265,
+    "channel": "Young MC",
+    "uploadTitle": "Bust A Move"
+  },
+  "billboard-0605-b-b-king-the-thrill-is-gone": {
+    "youtubeId": "x2GjCbuQEQc",
+    "durationSec": 243,
+    "channel": "B.B. King",
+    "uploadTitle": "The Thrill Is Gone"
+  },
+  "billboard-1201-commodores-three-times-a-lady": {
+    "youtubeId": "h2IHexgN6Ns",
+    "durationSec": 218,
+    "channel": "The Commodores",
+    "uploadTitle": "Three Times A Lady"
+  },
+  "billboard-1072-fats-domino-be-my-guest": {
+    "youtubeId": "lIWLtScRQtw",
+    "durationSec": 136,
+    "channel": "Fats Domino - Topic",
+    "uploadTitle": "Be My Guest (Remastered)"
+  },
+  "billboard-0385-wilson-phillips-hold-on": {
+    "youtubeId": "sVkFo6cFegQ",
+    "durationSec": 221,
+    "channel": "Wilson Phillips",
+    "uploadTitle": "Hold On"
+  },
+  "billboard-0559-dolly-parton-baby-i-m-burnin": {
+    "youtubeId": "pl0q1x7nRf8",
+    "durationSec": 157,
+    "channel": "Dolly Parton",
+    "uploadTitle": "Baby I'm Burnin'"
+  },
+  "billboard-1033-the-byrds-goin-back": {
+    "youtubeId": "b56R_kc0ENY",
+    "durationSec": 207,
+    "channel": "THE BYRDS - Topic",
+    "uploadTitle": "Goin' Back (Single Version)"
+  },
+  "billboard-0468-the-temptations-ain-t-too-proud-to-beg": {
+    "youtubeId": "_ObVQPBD0Uw",
+    "durationSec": 154,
+    "channel": "The Temptations",
+    "uploadTitle": "Ain't Too Proud To Beg"
+  },
+  "billboard-0696-brenda-lee-too-many-rivers": {
+    "youtubeId": "Mpc8P_mpD2I",
+    "durationSec": 172,
+    "channel": "Brenda Lee",
+    "uploadTitle": "Too Many Rivers"
+  },
+  "billboard-0944-dolly-parton-starting-over-again": {
+    "youtubeId": "c7ML0V29L1c",
+    "durationSec": 239,
+    "channel": "Dolly Parton",
+    "uploadTitle": "Starting over Again"
+  },
+  "billboard-0315-redbone-come-and-get-your-love": {
+    "youtubeId": "6E188kxCs1w",
+    "durationSec": 213,
+    "channel": "Redbone",
+    "uploadTitle": "Come and Get Your Love"
+  },
+  "billboard-0126-willie-nelson-blue-eyes-crying-in-the-rain": {
+    "youtubeId": "eCXf_zEDWXg",
+    "durationSec": 141,
+    "channel": "Willie Nelson",
+    "uploadTitle": "Blue Eyes Crying In The Rain"
+  }
+}
