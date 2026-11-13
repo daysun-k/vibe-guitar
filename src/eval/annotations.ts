@@ -660,9 +660,6 @@ export function alignAnnotation(input: AlignInput, options?: Partial<AlignOption
   const build = (c0: number, r0: number, fit: RateFit | null): Built => {
     let c = c0;
     let r = r0;
-    // Pinned: the fitted rate sits at the RATE_FIT_MAX bound (the best grid rate is the bound, or the
-    // least-squares refinement asks for more and is clamped to it).
-    let pinned = r0 !== 1 && Math.abs(Math.abs(r0 - 1) - RATE_FIT_MAX) < 1e-9;
     if (r !== 1) {
       // Refine an accepted rate off the grid: least squares of the matched residuals on time.
       const pts = landmarks.map((t) => [t - pivot, nearestResidual(beats, mapAt(t, c, r, pivot))]).filter(([, e]) => Math.abs(e) <= o.tolSec + 1e-9);
@@ -672,16 +669,16 @@ export function alignAnnotation(input: AlignInput, options?: Partial<AlignOption
       const sxx = pts.reduce((sum, [x]) => sum + (x - mx) ** 2, 0);
       if (n >= 2 && sxx > 0) {
         const slope = pts.reduce((sum, [x, y]) => sum + (x - mx) * (y - my), 0) / sxx;
-        const raw = r + slope;
-        const r2 = Math.min(1 + RATE_FIT_MAX, Math.max(1 - RATE_FIT_MAX, raw));
+        const r2 = Math.min(1 + RATE_FIT_MAX, Math.max(1 - RATE_FIT_MAX, r + slope));
         const c2 = c + my - slope * mx;
         if (countMapped(landmarks, beats, c2, r2, pivot, o.tolSec) >= countMapped(landmarks, beats, c, r, pivot, o.tolSec)) {
           c = c2;
           r = r2;
-          pinned = r2 !== raw;
         }
       }
     }
+    // Pinned: the final fitted rate (after refinement and clamping) sits at the RATE_FIT_MAX bound.
+    const pinned = r !== 1 && Math.abs(r - 1) >= RATE_FIT_MAX - 1e-9;
     const res = mappedResiduals(landmarks, beats, c, r, pivot, o.tolSec);
     if (res.length) c += median(res);
     const hits = countMapped(landmarks, beats, c, r, pivot, o.tolSec);

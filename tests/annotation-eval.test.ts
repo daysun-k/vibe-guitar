@@ -473,7 +473,15 @@ describe('alignment: bounded rate and offset choice (VGT-7)', () => {
     const inside = alignAnnotation(alignInput(est, est.map((b) => (b - 0.05) / 1.0015)));
     expect(inside.excluded).toBeNull();
     expect(inside.rate).toBeCloseTo(1.0015, 4);
-  });
+    // Exactly at the bound counts as pinned (review vgt7-s3-r1 F1); just inside stays kept.
+    for (const rate of [1.002, 0.998]) {
+      const at = alignAnnotation(alignInput(est, est.map((b) => (b - 0.05) / rate)));
+      expect(at.excluded?.reason, `rate ${rate}`).toMatch(/RATE_FIT_MAX bound/);
+    }
+    const justInside = alignAnnotation(alignInput(est, est.map((b) => (b - 0.05) / 1.0019)));
+    expect(justInside.excluded).toBeNull();
+    expect(justInside.rate).toBeCloseTo(1.0019, 4);
+  }, 30_000);
 
   it('applies the near-0 rule only when the nearest other candidate is more than 2 × nearZeroSec away', () => {
 
