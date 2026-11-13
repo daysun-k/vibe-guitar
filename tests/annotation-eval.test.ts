@@ -445,6 +445,36 @@ describe('alignment: bounded rate and offset choice (VGT-7)', () => {
     expect(missing).toEqual([]);
   });
 
+  it('applies the near-0 prior among bar-phase survivors when the one near 0 stands apart (VGT-7 post-v2 rule 2a)', () => {
+    // Doubled estimate beats (0.32 s) with 4-beat implied bars (1.28 s, half a real bar): chord
+    // changes every real bar land on implied downbeats at the true offset and at +/-1.28 s.
+    const fast = grid(1, 190, 0.32, 0.005);
+    const near = grid(1, 185, 2.56).map((t) => t - 0.02);
+    const a = alignAnnotation(alignInput(fast, near, { method: 'chord-boundaries', downbeatLandmarks: near }));
+    expect(a.excluded).toBeNull();
+    expect(a.ambiguous).toBe(false);
+    expect(a.offsetSec).toBeCloseTo(0.02, 2);
+    expect(a.warnings.join(' ')).toMatch(/stands apart/);
+    // The same aliases with a 0.54 s lead-in: no survivor near 0, so the offset stays undetermined.
+    const far = grid(1, 185, 2.56).map((t) => t - 0.54);
+    const b = alignAnnotation(alignInput(fast, far, { method: 'chord-boundaries', downbeatLandmarks: far }));
+    expect(b.ambiguous).toBe(true);
+    expect(b.excluded?.code).toBe('ambiguous');
+  });
+
+  it('excludes a fitted rate pinned at the RATE_FIT_MAX bound and keeps one inside it (VGT-7 post-v2 rule 3)', () => {
+    for (const rate of [1.0023, 1.0025, 0.9975]) {
+      const ann = est.map((b) => (b - 0.05) / rate);
+      const a = alignAnnotation(alignInput(est, ann));
+      expect(a.excluded?.code, `rate ${rate}`).toBe('drift');
+    }
+    const pinned = alignAnnotation(alignInput(est, est.map((b) => (b - 0.05) / 1.0023)));
+    expect(pinned.excluded?.reason).toMatch(/RATE_FIT_MAX bound/);
+    const inside = alignAnnotation(alignInput(est, est.map((b) => (b - 0.05) / 1.0015)));
+    expect(inside.excluded).toBeNull();
+    expect(inside.rate).toBeCloseTo(1.0015, 4);
+  });
+
   it('applies the near-0 rule only when the nearest other candidate is more than 2 × nearZeroSec away', () => {
 
     // Bars of 8 estimate beats; chord changes on every bar. True offset 0.53 s (below) / 0.57 s (above).
