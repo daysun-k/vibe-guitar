@@ -1,12 +1,13 @@
 // Scores exported auto charts against public, time-aligned chord annotations and writes a JSON
 // result plus a self-contained Korean HTML report.
-//   npm run eval-annotations -- --annotations <dir> --charts <dir> [--songs <list.json>] [--out <prefix>]
+//   npm run eval-annotations -- --annotations <dir> --charts <dir> [--songs <list.json>] [--out <prefix>] [--label <text>]
 // <annotations>: one folder per dataset (the list's datasets[].folder) holding the extracted archive.
 // <charts>: uploads.json ({ songId: { youtubeId, durationSec, channel, uploadTitle } }) and one
 //   <youtubeId>.json per song (the stored auto chart, the value of autochart:youtube:<id>).
 // Default song list: docs/annotation-eval-songs.json. Default output: <charts>/annotation-eval.{json,html}.
 // Bundles src/eval/annotations.ts and annotation-report.ts in memory with esbuild; reads and writes
-// local files only (no network).
+// local files only (no network). --label stores a free-text label in the result (`label`) and shows
+// it as a banner at the top of the HTML (e.g. a post-result re-analysis).
 import * as esbuild from 'esbuild';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
@@ -17,11 +18,11 @@ import path from 'node:path';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const USAGE =
-  '사용법: npm run eval-annotations -- --annotations <주석 폴더> --charts <자동 코드표 폴더> [--songs <곡 목록.json>] [--out <결과 경로 앞부분>]';
+  '사용법: npm run eval-annotations -- --annotations <주석 폴더> --charts <자동 코드표 폴더> [--songs <곡 목록.json>] [--out <결과 경로 앞부분>] [--label <결과에 붙일 표시>]';
 
 export function parseArgs(argv) {
   const out = { songs: path.join(root, 'docs/annotation-eval-songs.json') };
-  const keys = { '--annotations': 'annotations', '--charts': 'charts', '--songs': 'songs', '--out': 'out' };
+  const keys = { '--annotations': 'annotations', '--charts': 'charts', '--songs': 'songs', '--out': 'out', '--label': 'label' };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--help' || a === '-h') return { help: true };
@@ -99,6 +100,7 @@ async function main() {
     },
   };
   const result = m.evaluateSongs(list, uploads, io, { sha256 });
+  if (args.label) result.label = args.label;
   const prefix = path.resolve(args.out ?? path.join(args.charts, 'annotation-eval'));
   await writeFile(`${prefix}.json`, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
   await writeFile(`${prefix}.html`, m.renderAnnotationReport(result), 'utf8');

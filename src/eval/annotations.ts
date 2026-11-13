@@ -353,7 +353,45 @@ export interface RateFit {
   accepted: boolean;
 }
 
-export type ExclusionCode = 'no-estimate-beats' | 'too-few-landmarks' | 'duration-mismatch' | 'landmarks-disagree' | 'drift' | 'ambiguous';
+export type ExclusionCode = 'no-estimate-beats' | 'too-few-landmarks' | 'duration-mismatch' | 'landmarks-disagree' | 'near-chance' | 'drift' | 'ambiguous';
+
+/** One window of the chance-level screen (VGT-7, PR #32). */
+export interface ChanceWindow {
+  part: 'span' | 'start' | 'middle' | 'end';
+  /** Annotation time. */
+  fromSec: number;
+  toSec: number;
+  /** The window under the chosen map (media time). */
+  mediaFromSec: number;
+  mediaToSec: number;
+  landmarks: number;
+  /** Landmarks on an estimate beat (the matching rule of the alignment). */
+  matched: number;
+  /** Share of the media window covered by the union of [beat − tol, beat + tol]: the chance a random time matches. */
+  chance: number;
+  /** P(Binomial(landmarks, chance) ≥ matched). */
+  p: number;
+  /** Even matched = landmarks cannot pass (chance^landmarks > alpha). */
+  insufficient: boolean;
+  passed: boolean;
+}
+
+/**
+ * Chance-level screen: in the whole landmark span and in each third, the landmarks must sit on
+ * beats more often than random times would (one-sided exact binomial test at `alpha`). A failure
+ * means not enough evidence above chance, not proof of a wrong map. The nominal level is not a
+ * calibrated false-acceptance rate after the offset search (measured by scripts/align-validation.mjs).
+ */
+export interface ChanceScreen {
+  alpha: number;
+  tolSec: number;
+  /** Median interval of the estimate beats. */
+  medianBeatIntervalSec: number;
+  /** Regular-grid chance min(1, 2 × tol / median beat interval), recorded next to the union chance. */
+  gridChance: number;
+  windows: ChanceWindow[];
+  passed: boolean;
+}
 
 export interface Alignment {
   method: AlignMethod;
@@ -375,6 +413,8 @@ export interface Alignment {
   /** The near-0 candidate stood apart but was not bar-eligible while bar phase was available (VGT-7 rule 4). */
   barConflict: boolean;
   segments: AlignSegmentCheck[];
+  /** Chance-level screen at the chosen map; null when no map was chosen (too few beats or landmarks). */
+  chance: ChanceScreen | null;
   driftSec: number | null;
   /** Coarse check: first estimate beat − first chord, last estimate beat − last chord end. */
   coarse: { startOffsetSec: number | null; endOffsetSec: number | null };
@@ -573,6 +613,90 @@ function crossValidateRate(landmarks: number[], beats: number[], p: number, tol:
   return { rate, heldOutGain, heldOutMatched, chanceMatched: chance, thirdGains, accepted };
 }
 
+/** Significance level of the chance-level screen, per window (VGT-7, PR #32). */
+export const CHANCE_ALPHA = 0.05;
+
+/** P(Binomial(n, p) ≥ k), exact, summed in log space (n can be several hundred). */
+export function binomialUpperTail(n: number, k: number, p: number): number {
+  if (k <= 0) return 1;
+  if (k > n) return 0;
+  if (p <= 0) return 0;
+  if (p >= 1) return 1;
+  const lp = Math.log(p);
+  const lq = Math.log1p(-p);
+  let logC = 0;
+  for (let i = 1; i <= k; i++) logC += Math.log(n - k + i) - Math.log(i);
+  const logs: number[] = [];
+  for (let j = k; j <= n; j++) {
+    logs.push(logC + j * lp + (n - j) * lq);
+    logC += Math.log(n - j) - Math.log(j + 1);
+  }
+  const top = Math.max(...logs);
+  return Math.min(1, Math.exp(top) * logs.reduce((s, x) => s + Math.exp(x - top), 0));
+}
+
+/** Share of [fromSec, toSec] covered by the union of [beat − tol, beat + tol] (1 for an empty window). */
+export function beatWindowCoverage(beats: number[], tol: number, fromSec: number, toSec: number): number {
+  if (!(toSec > fromSec)) return 1;
+  let covered = 0;
+  let curFrom = -Infinity;
+  let curTo = -Infinity;
+  for (let i = lowerBound(beats, fromSec - tol); i < beats.length && beats[i] - tol < toSec; i++) {
+    const a = Math.max(fromSec, beats[i] - tol);
+    const b = Math.min(toSec, beats[i] + tol);
+    if (b <= a) continue;
+    if (a > curTo) {
+      if (curTo > curFrom) covered += curTo - curFrom;
+      curFrom = a;
+      curTo = b;
+    } else curTo = Math.max(curTo, b);
+  }
+  if (curTo > curFrom) covered += curTo - curFrom;
+  return Math.min(1, covered / (toSec - fromSec));
+}
+
+/** Start / middle / end thirds of the landmark span (annotation time) and the landmarks in each. */
+function thirdsOf(landmarks: number[]): { part: AlignSegmentCheck['part']; fromSec: number; toSec: number; inPart: number[] }[] {
+  const first = landmarks[0];
+  const last = landmarks[landmarks.length - 1];
+  const third = (last - first) / 3;
+  const parts: AlignSegmentCheck['part'][] = ['start', 'middle', 'end'];
+  return parts.map((part, i) => {
+    const fromSec = first + i * third;
+    const toSec = i === 2 ? last + 1e-9 : first + (i + 1) * third;
+    const inPart = landmarks.filter((l) => l >= fromSec && l < toSec + (i === 2 ? 1e-9 : 0));
+    return { part, fromSec, toSec: Math.min(toSec, last), inPart };
+  });
+}
+
+/**
+ * The chance-level screen at a given map (media = offsetSec + rate × annotation time): the whole
+ * landmark span and the start / middle / end thirds, each passing when P(Binomial(n, chance) ≥ k)
+ * ≤ alpha, with chance the union coverage of the beat windows in the mapped window. The song passes
+ * only when all four windows pass (an intersection: no multiplicity correction). Windows are never
+ * merged; a window that cannot pass even with every landmark on a beat is flagged insufficient.
+ */
+export function chanceScreen(landmarksIn: number[], beatsIn: number[], offsetSec: number, rate: number, tolSec: number, alpha = CHANCE_ALPHA): ChanceScreen {
+  const landmarks = [...landmarksIn].sort((a, b) => a - b);
+  const beats = [...beatsIn].sort((a, b) => a - b);
+  const medianBeatIntervalSec = beats.length > 1 ? median(beats.slice(1).map((b, i) => b - beats[i])) : NaN;
+  const gridChance = Number.isFinite(medianBeatIntervalSec) && medianBeatIntervalSec > 0 ? Math.min(1, (2 * tolSec) / medianBeatIntervalSec) : 1;
+  const m = (t: number) => offsetSec + rate * t;
+  const window = (part: ChanceWindow['part'], fromSec: number, toSec: number, inPart: number[]): ChanceWindow => {
+    const matched = inPart.filter((l) => Math.abs(nearestResidual(beats, m(l))) <= tolSec + 1e-9).length;
+    const mediaFromSec = Math.min(m(fromSec), m(toSec));
+    const mediaToSec = Math.max(m(fromSec), m(toSec));
+    const chance = beatWindowCoverage(beats, tolSec, mediaFromSec, mediaToSec);
+    const p = binomialUpperTail(inPart.length, matched, chance);
+    const insufficient = Math.pow(chance, inPart.length) > alpha;
+    return { part, fromSec, toSec, mediaFromSec, mediaToSec, landmarks: inPart.length, matched, chance, p, insufficient, passed: p <= alpha };
+  };
+  const windows = landmarks.length
+    ? [window('span', landmarks[0], landmarks[landmarks.length - 1], landmarks), ...thirdsOf(landmarks).map((t) => window(t.part, t.fromSec, t.toSec, t.inPart))]
+    : [];
+  return { alpha, tolSec, medianBeatIntervalSec, gridChance, windows, passed: windows.length > 0 && windows.every((w) => w.passed) };
+}
+
 /**
  * The time map from landmarks that do not involve chord predictions: annotation beats (or
  * annotation chord changes) against the auto chart's Beat This! beats. The map is an offset plus a
@@ -617,6 +741,7 @@ export function alignAnnotation(input: AlignInput, options?: Partial<AlignOption
     ambiguous: false,
     barConflict: false,
     segments: [],
+    chance: null,
     driftSec: null,
     coarse,
     durationDiffSec,
@@ -818,19 +943,16 @@ export function alignAnnotation(input: AlignInput, options?: Partial<AlignOption
   if (rate !== 1 && songFit) warnings.push(`speed difference ${((rate - 1) * 100).toFixed(3)}% fitted (held-out gain ${Math.round(songFit.heldOutGain * 100)} points)`);
 
   // 4. Start / middle / end checks on the residuals after the map.
-  const third = (last - first) / 3;
-  const parts: AlignSegmentCheck['part'][] = ['start', 'middle', 'end'];
   const localResidual: (number | null)[] = [];
-  result.segments = parts.map((part, i) => {
-    const fromSec = first + i * third;
-    const toSec = i === 2 ? last + 1e-9 : first + (i + 1) * third;
-    const inPart = landmarks.filter((l) => l >= fromSec && l < toSec + (i === 2 ? 1e-9 : 0));
+  result.segments = thirdsOf(landmarks).map(({ part, fromSec, toSec, inPart }) => {
     const res = mappedResiduals(inPart, beats, chosen.c, rate, pivot, o.tolSec);
     const local = res.length ? median(res) : null;
     localResidual.push(local);
-    const mid = (fromSec + Math.min(toSec, last)) / 2;
-    return { part, fromSec, toSec: Math.min(toSec, last), landmarks: inPart.length, matched: res.length, offsetSec: local === null ? null : offsetSec + (rate - 1) * mid + local };
+    const mid = (fromSec + toSec) / 2;
+    return { part, fromSec, toSec, landmarks: inPart.length, matched: res.length, offsetSec: local === null ? null : offsetSec + (rate - 1) * mid + local };
   });
+  // Chance-level screen at the chosen map (VGT-7, PR #32), recorded whichever exclusion is primary.
+  result.chance = chanceScreen(landmarks, beats, offsetSec, rate, o.tolSec);
   const locals = localResidual.filter((x): x is number => x !== null);
   result.driftSec = locals.length === 3 ? Math.max(...locals) - Math.min(...locals) : null;
   // PR #25, unchanged: a length-ratio time scale that fits clearly more raw landmarks than scale 1
@@ -863,7 +985,15 @@ export function alignAnnotation(input: AlignInput, options?: Partial<AlignOption
     result.excluded = { code: 'landmarks-disagree', reason: `only ${Math.round(chosen.matchedFraction * 100)}% of landmarks fall on an estimated beat` };
   else {
     const weak = result.segments.find((s) => s.landmarks === 0 || s.matched / s.landmarks < o.minMatchFraction || s.matched < 4);
+    const failing = result.chance.windows.filter((w) => !w.passed);
     if (weak) result.excluded = { code: 'landmarks-disagree', reason: `${weak.part} third: ${weak.matched}/${weak.landmarks} landmarks on an estimated beat` };
+    else if (failing.length)
+      result.excluded = {
+        code: 'near-chance',
+        reason: `landmarks on a beat not clearly above chance (p > ${result.chance.alpha}): ${failing
+          .map((w) => `${w.part === 'span' ? 'whole span' : `${w.part} third`} ${w.matched}/${w.landmarks} (chance ${Math.round(w.chance * 100)}%, p ${w.p.toPrecision(2)}${w.insufficient ? ', too few landmarks to pass at this chance' : ''})`)
+          .join('; ')}`,
+      };
     else if (result.driftSec !== null && result.driftSec > o.driftLimitSec)
       result.excluded = { code: 'drift', reason: rateNote ?? `local offsets differ by ${Math.round(result.driftSec * 1000)} ms across the song${rate !== 1 ? ' after the fitted speed difference' : ''}` };
     else if (chosen.pinned)
@@ -1118,6 +1248,49 @@ export interface SongResult {
   alignment?: Alignment;
   /** Present only when scored. */
   score?: SongScore;
+  /**
+   * Candidate-offset sensitivity (VGT-7, PR #32): the song scored under every alignment candidate.
+   * Not an official score: never sets `score` or `status`, never enters totals or the analysis;
+   * for an excluded song every value is a hypothetical score under that map. Absent in results
+   * written before it existed.
+   */
+  sensitivity?: Sensitivity;
+}
+
+export interface SensitivityScore {
+  score: number;
+  evaluatedSec: number;
+  /** Overlap seconds left out of this reduction (X, unmapped, outside the reduction). */
+  excludedSec: number;
+}
+
+export interface SensitivityCandidate {
+  offsetSec: number;
+  rate: number;
+  matchedFraction: number;
+  barScore: number | null;
+  /** The alignment's chosen candidate (first in alignment.candidates). */
+  chosen: boolean;
+  majmin: SensitivityScore;
+  root: SensitivityScore;
+  sevenths: SensitivityScore;
+  /** Annotated seconds the auto chart does not cover under this map. */
+  notCoveredSec: number;
+}
+
+export type Sensitivity = { available: true; candidates: SensitivityCandidate[] } | { available: false; reason: string };
+
+/** scoreSong under every alignment candidate's map (offset, rate). */
+export function candidateSensitivity(segs: AnnotationSegment[], beats: number[] | null, auto: Chart, alignment: Alignment, mediaDurationSec: number | null): Sensitivity {
+  if (!alignment.candidates.length) return { available: false, reason: `no alignment candidates${alignment.excluded ? ` (${alignment.excluded.code})` : ''}` };
+  return {
+    available: true,
+    candidates: alignment.candidates.map((c, i) => {
+      const s = scoreSong(segs, beats, auto, c.offsetSec, mediaDurationSec, 1, c.rate);
+      const red = (k: 'majmin' | 'root' | 'sevenths'): SensitivityScore => ({ score: s.comparison[k].score, evaluatedSec: s.comparison[k].evaluatedSec, excludedSec: s.excludedSec[k] });
+      return { offsetSec: c.offsetSec, rate: c.rate, matchedFraction: c.matchedFraction, barScore: c.barScore, chosen: i === 0, majmin: red('majmin'), root: red('root'), sevenths: red('sevenths'), notCoveredSec: s.notCoveredSec };
+    }),
+  };
 }
 
 export interface GroupTotals {
@@ -1134,6 +1307,8 @@ export interface GroupTotals {
 export interface EvalResult {
   schema: string;
   generatedAt: string;
+  /** Free-text label of the run (eval-annotations --label), e.g. a post-result re-analysis; shown as a banner. */
+  label?: string;
   songList: { declaredAt: string; sha256: string | null; songs: number };
   datasets: Record<string, DatasetInfo>;
   songs: SongResult[];
@@ -1189,6 +1364,8 @@ export function groupTotals(rows: SongResult[]): GroupTotals {
   };
 }
 
+const unavailable = (reason: string): Sensitivity => ({ available: false, reason });
+
 function evaluateOne(song: SongEntry, list: SongList, upload: UploadEntry | undefined, io: EvalIo): SongResult {
   const row: SongResult = {
     id: song.id,
@@ -1202,24 +1379,25 @@ function evaluateOne(song: SongEntry, list: SongList, upload: UploadEntry | unde
   };
   const folder = list.datasets[song.dataset].folder;
   const labText = io.readAnnotation(folder, song.chords);
-  if (labText === null) return { ...row, status: 'error', reason: `annotation file not found: ${folder}/${song.chords}` };
+  if (labText === null) return { ...row, status: 'error', reason: `annotation file not found: ${folder}/${song.chords}`, sensitivity: unavailable('annotation file not found') };
   const segs = parseLab(labText);
   const annotationDurationSec = labDuration(segs);
   row.annotationDurationSec = annotationDurationSec;
-  if (!upload) return { ...row, reason: 'no upload chosen yet (uploads.json)' };
+  if (!upload) return { ...row, reason: 'no upload chosen yet (uploads.json)', sensitivity: unavailable('no upload') };
   row.youtubeId = upload.youtubeId;
   row.uploadTitle = upload.uploadTitle;
   row.channel = upload.channel;
   const raw = io.readChart(upload.youtubeId);
-  if (raw === null || raw === undefined) return { ...row, reason: `no exported auto chart: ${upload.youtubeId}.json` };
+  if (raw === null || raw === undefined) return { ...row, reason: `no exported auto chart: ${upload.youtubeId}.json`, sensitivity: unavailable('no chart') };
   const chart = chartFromExport(raw);
-  if (!chart) return { ...row, status: 'error', reason: `${upload.youtubeId}.json is not a chart` };
-  if (chart.provenance?.createdBy && chart.provenance.createdBy !== 'recognizer') return { ...row, status: 'error', reason: `${upload.youtubeId}.json is not an auto chart (createdBy ${chart.provenance.createdBy})` };
+  if (!chart) return { ...row, status: 'error', reason: `${upload.youtubeId}.json is not a chart`, sensitivity: unavailable('no chart (not a chart)') };
+  if (chart.provenance?.createdBy && chart.provenance.createdBy !== 'recognizer')
+    return { ...row, status: 'error', reason: `${upload.youtubeId}.json is not an auto chart (createdBy ${chart.provenance.createdBy})`, sensitivity: unavailable('no chart (not an auto chart)') };
 
   let beatsAnn: AnnotationBeat[] | null = null;
   if (song.beats) {
     const t = io.readAnnotation(folder, song.beats);
-    if (t === null) return { ...row, status: 'error', reason: `beat file not found: ${folder}/${song.beats}` };
+    if (t === null) return { ...row, status: 'error', reason: `beat file not found: ${folder}/${song.beats}`, sensitivity: unavailable('beat file not found') };
     beatsAnn = parseBeats(t);
   }
   const coverageEnd = chart.coverage.length ? Math.max(...chart.coverage.map((c) => c.toSec)) : null;
@@ -1242,9 +1420,12 @@ function evaluateOne(song: SongEntry, list: SongList, upload: UploadEntry | unde
   });
   if (row.mediaDurationSource === 'coverage') alignment.warnings.push('upload length taken from the auto chart coverage end');
   row.alignment = alignment;
+  const annBeats = beatsAnn?.map((b) => b.sec) ?? null;
+  // Sensitivity before the exclusion return: excluded songs get hypothetical scores, never `score`.
+  row.sensitivity = candidateSensitivity(segs, annBeats, chart, alignment, mediaDurationSec);
   // The time map (offset and rate) is frozen here; scoring never changes it, and excluded songs are not scored.
   if (alignment.excluded) return { ...row, status: 'excluded', reason: alignment.excluded.reason };
-  row.score = scoreSong(segs, beatsAnn?.map((b) => b.sec) ?? null, chart, alignment.offsetSec, mediaDurationSec, 1, alignment.rate);
+  row.score = scoreSong(segs, annBeats, chart, alignment.offsetSec, mediaDurationSec, 1, alignment.rate);
   return { ...row, status: 'scored' };
 }
 
@@ -1254,7 +1435,7 @@ export function evaluateSongs(list: SongList, uploads: Record<string, UploadEntr
     try {
       return evaluateOne(s, list, uploads[s.id], io);
     } catch (e) {
-      return { id: s.id, role: s.role, artist: s.artist, title: s.title, dataset: s.dataset, btcTraining: s.btcTraining, complexity: s.complexity, status: 'error' as const, reason: (e as Error).message };
+      return { id: s.id, role: s.role, artist: s.artist, title: s.title, dataset: s.dataset, btcTraining: s.btcTraining, complexity: s.complexity, status: 'error' as const, reason: (e as Error).message, sensitivity: unavailable('evaluation error') };
     }
   });
   const evalRows = songs.filter((r) => r.role === 'eval');
