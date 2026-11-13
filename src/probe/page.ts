@@ -139,12 +139,27 @@ async function runSession(sessionId = `s${results.length + 1}-${Date.now()}`): P
   return session;
 }
 
-/** `n` sessions, each on a fresh tab capture (the first uses the toolbar click's capture). */
-async function runAll(n = 3): Promise<ProbeDump> {
+/**
+ * Every measurement entry point (buttons and vgProbe) goes through this guard: two runs at
+ * once would share the audio element and replace each other's offscreen recording.
+ */
+async function exclusive<T>(fn: () => Promise<T>): Promise<T> {
   if (running) throw new Error('already running');
   running = true;
   lastError = null;
   try {
+    return await fn();
+  } catch (e) {
+    lastError = e instanceof Error ? e.message : String(e);
+    throw e;
+  } finally {
+    running = false;
+  }
+}
+
+/** `n` sessions, each on a fresh tab capture (the first uses the toolbar click's capture). */
+function runAll(n = 3): Promise<ProbeDump> {
+  return exclusive(async () => {
     for (let i = 0; i < n; i++) {
       if (i > 0) {
         say('recapture: restarting tab capture for a fresh session');
@@ -153,13 +168,11 @@ async function runAll(n = 3): Promise<ProbeDump> {
       await runSession();
     }
     return dump();
-  } catch (e) {
-    lastError = e instanceof Error ? e.message : String(e);
-    throw e;
-  } finally {
-    running = false;
-  }
+  });
 }
+
+const runOne = () => exclusive(() => runSession());
+const recapture = () => exclusive(() => request('recapture', undefined, 15000));
 
 function dump(): ProbeDump {
   return { tool: 'vibe-guitar latency probe', version: 1, createdAt: new Date().toISOString(), sessions: [...results] };
@@ -181,10 +194,10 @@ function wrap(fn: () => Promise<unknown>) {
     });
 }
 
-document.querySelector('#run1')!.addEventListener('click', wrap(() => runSession()));
+document.querySelector('#run1')!.addEventListener('click', wrap(runOne));
 document.querySelector('#run3')!.addEventListener('click', wrap(() => runAll(3)));
 document.querySelector('#download')!.addEventListener('click', download);
-document.querySelector('#recapture')!.addEventListener('click', wrap(() => request('recapture', undefined, 15000).then(() => say('recapture ok'))));
+document.querySelector('#recapture')!.addEventListener('click', wrap(() => recapture().then(() => say('recapture ok'))));
 
 setInterval(() => {
   const ext = document.documentElement.dataset.vgLatencyProbe === 'ready' ? 'probe build: detected' : 'probe build: NOT detected';
@@ -197,10 +210,10 @@ declare global {
   }
 }
 window.vgProbe = {
-  runSession,
+  runSession: runOne,
   runAll,
   status: () => request<ProbeStatus>('status'),
-  recapture: () => request('recapture', undefined, 15000),
+  recapture,
   dump,
   download,
   get results() {

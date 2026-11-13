@@ -317,7 +317,8 @@ export interface ProbeReport {
   driftSecPerMin: number;
   rateCheckPlaced: number;
   suggestedLatencySec: number;
-  pass: { median: boolean; p95: boolean; drift: boolean; rateNotStored: boolean };
+  /** complete: every session placed all main clicks and recorded past the 1.5x stretch. */
+  pass: { complete: boolean; median: boolean; p95: boolean; drift: boolean; rateNotStored: boolean };
   problems: string[];
 }
 
@@ -337,6 +338,7 @@ export function analyzeProbeDump(dump: ProbeDump): ProbeReport {
   const driftX: number[] = [];
   const driftY: number[] = [];
   let rateCheckPlaced = 0;
+  let incomplete = 0;
   const sessions: SessionReport[] = dump.sessions.map((s) => {
     const r = matchClicks(s.clicks, s.segments);
     const main = r.matches.filter((m) => m.kind === 'main');
@@ -369,6 +371,18 @@ export function analyzeProbeDump(dump: ProbeDump): ProbeReport {
     const ratePlaced = r.matches.filter((m) => m.kind === 'rate-check').length;
     rateCheckPlaced += ratePlaced;
     if (r.extras.length) problems.push(`${s.sessionId}: 원본에 없는 클릭 ${r.extras.length}개가 검출됐습니다`);
+    // A run that stopped early (capture ended, tab reloaded) must not pass: every main click
+    // has to be placed, and stored audio must reach past the 1.5x stretch, which proves the
+    // page played through it and resumed 1x afterwards.
+    const mainMissing = s.clicks.filter((c) => c.kind === 'main' && !placedCounts.has(c.index)).map((c) => c.index);
+    const rateEndSec = Math.max(...s.clicks.filter((c) => c.kind === 'rate-check').map((c) => c.timeSec));
+    const pastRateStretch = s.segments.some((seg) => seg.endSec >= rateEndSec + 0.5);
+    if (mainMissing.length || !pastRateStretch) {
+      incomplete++;
+      problems.push(
+        `${s.sessionId}: 측정이 끝까지 기록되지 않았습니다 (빠진 본 클릭 ${mainMissing.length}개${pastRateStretch ? '' : ', 1.5x 구간 뒤 기록 없음'}): 이 세션을 다시 측정하세요`,
+      );
+    }
     return {
       sessionId: s.sessionId,
       captureSampleRate: s.captureSampleRate,
@@ -377,7 +391,7 @@ export function analyzeProbeDump(dump: ProbeDump): ProbeReport {
         return { startSec: seg.startSec, endSec: seg.endSec, clicks: inSeg.length, medianResidualSec: median(inSeg.map((m) => m.residualSec)) };
       }),
       mainPlaced: main.length,
-      mainMissing: s.clicks.filter((c) => c.kind === 'main' && !placedCounts.has(c.index)).map((c) => c.index),
+      mainMissing,
       replays: [...placedCounts.values()].reduce((a, n) => a + Math.max(0, n - 1), 0),
       extras: r.extras.length,
       rateCheckPlaced: ratePlaced,
@@ -414,10 +428,12 @@ export function analyzeProbeDump(dump: ProbeDump): ProbeReport {
     rateCheckPlaced,
     suggestedLatencySec: used + correction,
     pass: {
+      complete: incomplete === 0,
       median: Math.abs(validation.medianSec) <= PROBE_TARGETS.medianSec,
       p95: validation.p95AbsSec <= PROBE_TARGETS.p95Sec,
       drift: Number.isFinite(drift) && Math.abs(drift) <= PROBE_TARGETS.driftSecPerMin,
-      rateNotStored: rateCheckPlaced === 0,
+      // Vacuous when the 1.5x stretch was never played, so it needs a complete run.
+      rateNotStored: rateCheckPlaced === 0 && incomplete === 0,
     },
     problems,
   };
@@ -447,7 +463,9 @@ export function formatProbeReport(r: ProbeReport): string {
   lines.push(`  0 s 시작 구간을 뺀 |잔차| p95 ${ms(r.validation.p95AbsExcludingStartSec)}; 0 s 시작 구간의 추가 지연 ${ms(r.startClampSec)}`);
   lines.push(`드리프트(연속 구간 안) ${ms(r.driftSecPerMin)}/분 [목표 |값| <= ${ms(PROBE_TARGETS.driftSecPerMin)}/분: ${ok(r.pass.drift)}]`);
   lines.push(`1x가 아닌 재생 저장 안 함: 1.5x 구간 클릭 ${r.rateCheckPlaced}개 저장 [${ok(r.pass.rateNotStored)}]`);
+  lines.push(`모든 세션이 끝까지 기록됨 [${ok(r.pass.complete)}]`);
   lines.push('');
+  if (!r.pass.complete) lines.push('끝까지 기록되지 않은 세션이 있어 아래 제안값을 쓰면 안 됩니다.');
   lines.push(`제안 CAPTURE_LATENCY_SEC = ${r.latencyUsedSec.toFixed(3)} + ${r.fit.medianResidualSec.toFixed(4)} = ${r.suggestedLatencySec.toFixed(3)} s`);
   for (const p of r.problems) lines.push(`주의: ${p}`);
   return lines.join('\n');

@@ -123,7 +123,7 @@ describe('matching and statistics', () => {
     expect(r.validation.n).toBe(30);
     expect(r.suggestedLatencySec).toBeCloseTo(0.081, 3);
     expect(Math.abs(r.validation.medianSec)).toBeLessThan(0.002);
-    expect(r.pass).toEqual({ median: true, p95: true, drift: true, rateNotStored: true });
+    expect(r.pass).toEqual({ complete: true, median: true, p95: true, drift: true, rateNotStored: true });
     expect(formatProbeReport(r)).toContain('제안 CAPTURE_LATENCY_SEC = 0.050 + ');
   });
 
@@ -163,6 +163,32 @@ describe('matching and statistics', () => {
     expect(r.driftSecPerMin).toBeCloseTo(0.011, 4);
     expect(r.sessions[0].driftSecPerMin).toBeCloseTo(0.011, 4);
     expect(r.pass.drift).toBe(false);
+  });
+
+  it('rejects a run that stopped early instead of passing it (connector review on PR #24)', () => {
+    // Capture ended after the first two clicks: only clicks 0 and 1, constant residual.
+    const early: ProbeDump = {
+      tool: 'vibe-guitar latency probe',
+      version: 1,
+      createdAt: 'x',
+      sessions: [{ sessionId: 'e', captureSampleRate: 48000, latencyUsedSec: 0.05, clicks, segments: [{ startSec: 0, endSec: 5, onsetsSec: clicks.slice(0, 2).map((c) => c.timeSec + 0.03) }] }],
+    };
+    const r = analyzeProbeDump(early);
+    expect(r.pass.complete).toBe(false);
+    expect(r.pass.rateNotStored).toBe(false);
+    expect(r.sessions[0].mainMissing).toHaveLength(18);
+    expect(r.problems.some((p) => p.includes('끝까지 기록되지 않았습니다'))).toBe(true);
+    expect(formatProbeReport(r)).toContain('아래 제안값을 쓰면 안 됩니다');
+
+    // All main clicks but nothing stored after the 1.5x stretch: the rate check never ran.
+    const noRate: ProbeDump = {
+      ...early,
+      sessions: [{ ...early.sessions[0], segments: [{ startSec: 0, endSec: 59.5, onsetsSec: clicks.filter((c) => c.kind === 'main').map((c) => c.timeSec + 0.03) }] }],
+    };
+    const r2 = analyzeProbeDump(noRate);
+    expect(r2.sessions[0].mainMissing).toEqual([]);
+    expect(r2.pass.complete).toBe(false);
+    expect(r2.pass.rateNotStored).toBe(false);
   });
 });
 
@@ -250,7 +276,7 @@ describe('end to end through AudioPlacer (simulated capture)', () => {
     }
     expect(r.suggestedLatencySec).toBeGreaterThan(0.079);
     expect(r.suggestedLatencySec).toBeLessThan(0.0815);
-    expect(r.pass).toEqual({ median: true, p95: true, drift: true, rateNotStored: true });
+    expect(r.pass).toEqual({ complete: true, median: true, p95: true, drift: true, rateNotStored: true });
     // Playback from 0 s: ListeningSession.append clamps the first segment's start to 0, so
     // that segment lands late (separate from the constant); the rest is within 2 ms.
     expect(r.startClampSec).toBeGreaterThan(0.02);
