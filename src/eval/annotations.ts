@@ -739,13 +739,16 @@ export function alignAnnotation(input: AlignInput, options?: Partial<AlignOption
       }
     }
   }
-  // A rate-1 refit can fall below the near-best threshold; keep only near-best maps. Runs that
-  // refine to maps within the matching tolerance of each other are one beat phase (landmarks
-  // cannot tell them apart): keep the one with more hits.
+  // Runs that refine to maps within the matching tolerance of each other are one beat phase
+  // (landmarks cannot tell them apart): keep the one with more hits. Only when the song's rate is
+  // accepted are the maps compared again (near-best under the fitted rate); otherwise the rate-1
+  // runs stay exactly the candidates, as before rates were fitted, even if refining a run's offset
+  // lowers its hits.
   const bestHits = Math.max(...built.map((b) => b.hits));
+  const compareAgain = songFit?.accepted === true;
   const kept: Built[] = [];
   for (const b of [...built].sort((x, y) => y.hits - x.hits))
-    if (b.hits >= bestHits * o.tieRatio && !kept.some((k) => Math.abs(k.c - b.c) <= o.tolSec)) kept.push(b);
+    if ((!compareAgain || b.hits >= bestHits * o.tieRatio) && !kept.some((k) => Math.abs(k.c - b.c) <= o.tolSec)) kept.push(b);
 
   // 3. Choose. The near-0 rule takes a candidate within nearZeroSec only when it stands apart
   // (nearest other candidate more than 2 × nearZeroSec away); bar phase then only warns, since a

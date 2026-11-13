@@ -3,7 +3,7 @@
  * scripts, phone-friendly), in the style of the accuracy overview report.
  */
 import { escapeHtml } from '../extension/sidepanel/diagram';
-import type { EvalResult, GroupTotals, SongResult } from './annotations';
+import type { EvalResult, ExclusionCode, GroupTotals, SongResult } from './annotations';
 import { durationKo } from './report';
 
 const pct = (x: number) => (Number.isFinite(x) ? `${Math.round(x * 100)}%` : '–');
@@ -18,12 +18,13 @@ const STATUS_KO: Record<SongResult['status'], string> = {
   error: '오류',
 };
 
-const REASON_KO: Record<string, string> = {
+const REASON_KO: Record<ExclusionCode, string> = {
   'no-estimate-beats': '자동 코드표에 박자 시각이 거의 없어요',
   'too-few-landmarks': '정렬에 쓸 기준점이 너무 적어요',
   'duration-mismatch': '업로드 길이가 주석의 음원 길이와 2초 넘게 달라요(다른 버전일 가능성)',
   'landmarks-disagree': '주석의 기준점이 자동 박자와 잘 맞지 않아요',
-  drift: '곡의 앞·중간·끝에서 맞춘 시차가 0.1초 넘게 달라요(속도나 편집 차이)',
+  drift: '곡의 앞·중간·끝에서 맞춘 시차가 속도 보정 뒤에도 0.1초 넘게 달라요(속도나 편집 차이)',
+  ambiguous: '1박 또는 1마디 차이 후보 가운데 시차를 하나로 정할 수 없어요',
 };
 
 function groupTiles(title: string, t: GroupTotals, help: string): string {
