@@ -41,7 +41,7 @@ For every song and every comparison the following are fixed and identical in bot
    re-fitted on new recordings or candidate charts, and never chosen by candidate scores;
 3. the annotation files (the evaluator's own loading; annotation beats, never chart beats, go to
    `scoreSong`);
-4. the scored song set (DEV after the reproduction step below; TEST = the 18);
+4. the scored song set (DEV = the 23 songs of the maps file; TEST = the 18);
 5. coverage and evaluated seconds: the scorer fails if the two arms differ in coverage or in
    evaluated seconds for majmin, root or sevenths.
 
@@ -64,9 +64,10 @@ Tooling: `docs/recognition-replay.md` (dump build, local receiver, `replay-audio
   capture-drift diagnostic, not an identity test. A song is never re-captured to make scores match.
   If R2 is not met after the cause is investigated and recorded, stop and ask the user.
 - **Capture failures.** A song whose capture saved no chart or covers less than 90% of the upload
-  length is retried up to 2 more times before any candidate is scored. Still failing: status
-  `missing`, removed from DEV, reported. DEV eligibility is then frozen and reported (listed,
-  playable, captured, R1-passed, scored counts).
+  length is retried up to 2 more times before any candidate is scored. The DEV set stays the 23
+  songs: if any song still fails after the retries, or fails R1, the campaign stops and the user
+  decides before any candidate is scored. No song is dropped by rule. The counts (listed, captured,
+  R1-passed, scored) are reported.
 - Unchanged-aligner diagnostic: the evaluator's own alignment on each replayed baseline chart is
   reported next to the frozen map (offset difference, exclusion code). It never changes the map or
   the song set.
@@ -87,7 +88,9 @@ Percentage points (pp) on a 0-100 scale; song mean = unweighted mean over songs.
 evidence, expected effect, cost and **at most 5 settings** each. A candidate's settings and code are
 committed before that candidate is scored (the commit sha is recorded with the result). Analyses of
 the baseline alone (error anatomy, oracle bounds on cached probabilities) are allowed before or
-during the loop and are recorded; they are not candidate scores.
+during the loop and are recorded; they are not candidate scores. They never change the order; they
+only apply the gate written in a candidate's entry (a gated candidate whose gate fails is skipped in
+that pass, recorded, and does not count as a scored setting).
 
 ## Promotion rule (DEV, per candidate)
 Compare each setting with the current incumbent on DEV, paired per song. A setting is **eligible**
@@ -105,11 +108,14 @@ these 23 songs but is not adjusted for the repeated, adaptive search, so the evi
 result is not chance comes from the one-shot TEST confirmation.
 
 ## Stop-and-ask alarms
-Applied to a setting that would otherwise be promoted:
-- a predeclared group loses >= 2.0 pp in mean majmin; groups are `dataset:isophonics-btc-overlap` (5),
-  `dataset:billboard` (18), `complexity:simple` (6), `complexity:moderate` (8),
+Applied to a setting that would otherwise be promoted (it is not promoted until the user decides):
+- any predeclared group has a negative mean majmin delta (below -0.05 pp, i.e. lower at one decimal)
+  either against the current incumbent or against the original baseline (main 1714f4f defaults),
+  so losses cannot accumulate across promotions unseen; groups are `dataset:isophonics-btc-overlap`
+  (5), `dataset:billboard` (18), `complexity:simple` (6), `complexity:moderate` (8),
   `complexity:complex` (9) (the `complexity` field of the song lists, fixed before this campaign);
-- any single DEV song loses >= 10 pp (losses of 5-10 pp are recorded with a diagnosis);
+- any single DEV song loses >= 10 pp against the incumbent or the original baseline (losses of
+  5-10 pp are recorded with a diagnosis);
 - a resource limit is exceeded. Baselines are measured on this Mac before the first candidate:
   packaged bytes of `dist/`, end-of-song analysis time of a replayed 4-minute song, peak resident
   memory of the replay process, and (for candidates that touch the live path) the live "인식 중"
@@ -123,7 +129,10 @@ Applied to a setting that would otherwise be promoted:
    ones included, since the incumbent changed).
 3. Stop when one complete pass over the remaining candidates promotes nothing (**converged**), or after
    **50 scored settings** in total (**budget stop** = search incomplete, reported as such). Every
-   scored setting counts, including rejected and failed ones; the counter never resets.
+   scored setting counts, including rejected and failed ones; the counter never resets. After a
+   budget stop the user decides whether to continue or to go to the final confirmation; TEST is not
+   touched before that decision. If the loop converges with no promotion at all, there is no
+   finalist: TEST is not recorded and the extension stays as it is.
 4. New candidates may be appended only between passes, with written DEV evidence, before they are
    scored; they count toward the budget.
 5. Each promotion is recorded in `docs/recognition-candidates.md` with before/after DEV song-mean
@@ -141,13 +150,15 @@ Applied to a setting that would otherwise be promoted:
 3. Replay every TEST capture with the baseline (main 1714f4f defaults) and with the finalist; score
    both with the official v2 maps. Per-song majmin delta = finalist - baseline.
 4. **Pass** iff the 2.5th percentile of the paired percentile bootstrap of the mean delta (18 songs,
-   10 000 resamples, mulberry32 seed 7007) is > 0, coverage/evaluated seconds are identical, and the
-   TEST song-mean root is not lower (one decimal). Reported alongside: mean delta, song means of both
-   arms, sevenths, boundary diagnostics, a Student t interval as sensitivity, and the
-   unchanged-aligner diagnostic.
+   10 000 resamples, mulberry32 seed 7007) is > 0 and coverage/evaluated seconds are identical.
+   **Ship** only if it passes AND the DEV secondary safeguards also hold on TEST: song-mean root and
+   song-mean sevenths not lower (one decimal) and song-mean boundary precision not lower by more
+   than 2.0 pp. Reported alongside: mean delta, song means of both arms, boundary recall and F, a
+   Student t interval as sensitivity, and the unchanged-aligner diagnostic.
 5. No second test, no switching to another finalist, no tuning after the result. A failure means
-   insufficient evidence, not proof of no benefit. On failure the extension's default stays as it is
-   and the attempt and limits are recorded.
+   insufficient evidence, not proof of no benefit. If the confirmation fails, or passes with a
+   safeguard violated, the extension's default stays as it is, the attempt and limits are recorded,
+   and the work stops for the user's decision.
 
 Power note: with a paired song-delta SD of about 5 pp, 18 songs give about 80% power only for a true
 mean gain of roughly 3 pp; smaller real gains will often fail this confirmation.

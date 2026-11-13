@@ -17,8 +17,8 @@ DEV baseline from the official charts (current evaluator, 23 songs): song-mean m
 83.5%, sevenths 69.9%; Billboard 18 songs 80.1%, Beatles 5 songs 85.7%.
 Before the loop, the replayed DEV baseline adds: the error anatomy per song, BTC top-k oracle
 bounds per beat unit, false-N vs reference-N time, and unit-grid oracle ceilings (beat vs half-beat
-vs frame). Those analyses are recorded below under "Baseline analyses" and may only reorder or gate
-candidates that are not yet scored.
+vs frame). Those analyses are recorded below under "Baseline analyses"; they never change the order
+and only apply the gates written in the candidate entries.
 
 ## Baseline analyses
 (to be filled before the first candidate is scored)

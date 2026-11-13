@@ -38,10 +38,10 @@
         "complexity:moderate"
       ],
       "officialChartScore": {
-        "majmin": 0.8914,
-        "root": 0.9384,
-        "sevenths": 0.6457,
-        "majminEvaluatedSec": 142.7935
+        "majmin": 0.8914195272012744,
+        "root": 0.9384079096580988,
+        "sevenths": 0.6456552968471385,
+        "majminEvaluatedSec": 142.79352999999998
       }
     },
     {
@@ -61,10 +61,10 @@
         "complexity:simple"
       ],
       "officialChartScore": {
-        "majmin": 0.7505,
-        "root": 0.7505,
-        "sevenths": 0.7505,
-        "majminEvaluatedSec": 214.1247
+        "majmin": 0.7505146336245431,
+        "root": 0.7505146336245431,
+        "sevenths": 0.7505146336245431,
+        "majminEvaluatedSec": 214.12467126795585
       }
     },
     {
@@ -84,10 +84,10 @@
         "complexity:complex"
       ],
       "officialChartScore": {
-        "majmin": 0.8135,
-        "root": 0.7846,
-        "sevenths": 0.7816,
-        "majminEvaluatedSec": 167.0255
+        "majmin": 0.8135469552889759,
+        "root": 0.7845560523141594,
+        "sevenths": 0.7816255173051795,
+        "majminEvaluatedSec": 167.02554100526555
       }
     },
     {
@@ -107,10 +107,10 @@
         "complexity:simple"
       ],
       "officialChartScore": {
-        "majmin": 0.8876,
-        "root": 0.9427,
-        "sevenths": 0.8535,
-        "majminEvaluatedSec": 255.3912
+        "majmin": 0.8876024000106875,
+        "root": 0.9427334997986954,
+        "sevenths": 0.8535447065217989,
+        "majminEvaluatedSec": 255.3912411350565
       }
     },
     {
@@ -130,10 +130,10 @@
         "complexity:simple"
       ],
       "officialChartScore": {
-        "majmin": 0.8487,
-        "root": 0.8487,
-        "sevenths": 0.8223,
-        "majminEvaluatedSec": 239.7376
+        "majmin": 0.8487430848777209,
+        "root": 0.8487430848777209,
+        "sevenths": 0.8222539820304683,
+        "majminEvaluatedSec": 239.73764799486023
       }
     },
     {
@@ -153,10 +153,10 @@
         "complexity:moderate"
       ],
       "officialChartScore": {
-        "majmin": 0.8448,
-        "root": 0.8448,
-        "sevenths": 0.8378,
-        "majminEvaluatedSec": 281.8862
+        "majmin": 0.8447719601502254,
+        "root": 0.8447719601502254,
+        "sevenths": 0.8377520296101859,
+        "majminEvaluatedSec": 281.8861996759
       }
     },
     {
@@ -176,10 +176,10 @@
         "complexity:complex"
       ],
       "officialChartScore": {
-        "majmin": 0.7421,
-        "root": 0.7161,
-        "sevenths": 0.5171,
-        "majminEvaluatedSec": 182.6137
+        "majmin": 0.7420591802350306,
+        "root": 0.7160718490819735,
+        "sevenths": 0.5170874084905651,
+        "majminEvaluatedSec": 182.6136542626809
       }
     },
     {
@@ -199,10 +199,10 @@
         "complexity:moderate"
       ],
       "officialChartScore": {
-        "majmin": 0.9559,
-        "root": 0.9567,
-        "sevenths": 0.8525,
-        "majminEvaluatedSec": 234.9714
+        "majmin": 0.9558884334411825,
+        "root": 0.9566580298771072,
+        "sevenths": 0.852487257059868,
+        "majminEvaluatedSec": 234.97138888949962
       }
     },
     {
@@ -222,10 +222,10 @@
         "complexity:complex"
       ],
       "officialChartScore": {
-        "majmin": 0.73,
-        "root": 0.697,
-        "sevenths": 0.5777,
-        "majminEvaluatedSec": 257.8002
+        "majmin": 0.7299967829048888,
+        "root": 0.697008141454417,
+        "sevenths": 0.5776952196244961,
+        "majminEvaluatedSec": 257.8002267574994
       }
     },
     {
@@ -245,10 +245,10 @@
         "complexity:moderate"
       ],
       "officialChartScore": {
-        "majmin": 0.8461,
-        "root": 0.9024,
-        "sevenths": 0.6717,
-        "majminEvaluatedSec": 310.2531
+        "majmin": 0.8460972627929207,
+        "root": 0.9024219573833694,
+        "sevenths": 0.6717242727073672,
+        "majminEvaluatedSec": 310.2530612250016
       }
     },
     {
@@ -268,10 +268,10 @@
         "complexity:simple"
       ],
       "officialChartScore": {
-        "majmin": 0.8468,
-        "root": 0.8529,
-        "sevenths": 0.8103,
-        "majminEvaluatedSec": 160.8539
+        "majmin": 0.8468193451033441,
+        "root": 0.8529423076806317,
+        "sevenths": 0.8103235745728364,
+        "majminEvaluatedSec": 160.85391383140015
       }
     },
     {
@@ -291,10 +291,10 @@
         "complexity:simple"
       ],
       "officialChartScore": {
-        "majmin": 0.9559,
-        "root": 0.9559,
-        "sevenths": 0.8663,
-        "majminEvaluatedSec": 215.5452
+        "majmin": 0.9559408451113778,
+        "root": 0.9559408451113778,
+        "sevenths": 0.8662679056442633,
+        "majminEvaluatedSec": 215.5451972787
       }
     },
     {
@@ -314,10 +314,10 @@
         "complexity:moderate"
       ],
       "officialChartScore": {
-        "majmin": 0.8469,
-        "root": 0.8469,
-        "sevenths": 0.7214,
-        "majminEvaluatedSec": 228.6167
+        "majmin": 0.8468982180623232,
+        "root": 0.8468982180623232,
+        "sevenths": 0.7213538193557233,
+        "majminEvaluatedSec": 228.616666666875
       }
     },
     {
@@ -337,10 +337,10 @@
         "complexity:simple"
       ],
       "officialChartScore": {
-        "majmin": 0.8781,
-        "root": 0.8781,
-        "sevenths": 0.8781,
-        "majminEvaluatedSec": 126.2992
+        "majmin": 0.8780919757525582,
+        "root": 0.8780919757525582,
+        "sevenths": 0.8780919757525582,
+        "majminEvaluatedSec": 126.29917554849605
       }
     },
     {
@@ -360,10 +360,10 @@
         "complexity:moderate"
       ],
       "officialChartScore": {
-        "majmin": 0.6423,
-        "root": 0.6423,
-        "sevenths": 0.4906,
-        "majminEvaluatedSec": 208.2648
+        "majmin": 0.6423197224997417,
+        "root": 0.6423197224997417,
+        "sevenths": 0.4905845591825373,
+        "majminEvaluatedSec": 208.26478571375014
       }
     },
     {
@@ -383,10 +383,10 @@
         "complexity:complex"
       ],
       "officialChartScore": {
-        "majmin": 0.7878,
-        "root": 0.8148,
-        "sevenths": 0.7332,
-        "majminEvaluatedSec": 172.4764
+        "majmin": 0.7878274160948127,
+        "root": 0.8147582870822528,
+        "sevenths": 0.7332178187123564,
+        "majminEvaluatedSec": 172.4764476253684
       }
     },
     {
@@ -406,10 +406,10 @@
         "complexity:moderate"
       ],
       "officialChartScore": {
-        "majmin": 0.7701,
-        "root": 0.7773,
-        "sevenths": 0.7349,
-        "majminEvaluatedSec": 310.7981
+        "majmin": 0.7700791127331177,
+        "root": 0.7772543446442587,
+        "sevenths": 0.7349456713036399,
+        "majminEvaluatedSec": 310.79806381061366
       }
     },
     {
@@ -429,10 +429,10 @@
         "complexity:complex"
       ],
       "officialChartScore": {
-        "majmin": 0.7637,
-        "root": 0.7842,
-        "sevenths": 0.3198,
-        "majminEvaluatedSec": 179.2583
+        "majmin": 0.7636600473229368,
+        "root": 0.7842268934508287,
+        "sevenths": 0.3197632853479426,
+        "majminEvaluatedSec": 179.25828227774525
       }
     },
     {
@@ -452,10 +452,10 @@
         "complexity:complex"
       ],
       "officialChartScore": {
-        "majmin": 0.9523,
-        "root": 0.9557,
-        "sevenths": 0.8357,
-        "majminEvaluatedSec": 145.572
+        "majmin": 0.952286512207119,
+        "root": 0.9556883062050313,
+        "sevenths": 0.835702510057602,
+        "majminEvaluatedSec": 145.57195011400006
       }
     },
     {
@@ -475,10 +475,10 @@
         "complexity:complex"
       ],
       "officialChartScore": {
-        "majmin": 0.8797,
-        "root": 0.8461,
-        "sevenths": 0.7975,
-        "majminEvaluatedSec": 204.0439
+        "majmin": 0.8796951452371569,
+        "root": 0.8460512137034777,
+        "sevenths": 0.7975250172129846,
+        "majminEvaluatedSec": 204.04386382630872
       }
     },
     {
@@ -498,10 +498,10 @@
         "complexity:complex"
       ],
       "officialChartScore": {
-        "majmin": 0.7629,
-        "root": 0.7629,
-        "sevenths": 0.6996,
-        "majminEvaluatedSec": 190.0298
+        "majmin": 0.762864386314189,
+        "root": 0.762864386314189,
+        "sevenths": 0.6996072270296836,
+        "majminEvaluatedSec": 190.02975736999997
       }
     },
     {
@@ -521,10 +521,10 @@
         "complexity:moderate"
       ],
       "officialChartScore": {
-        "majmin": 0.9373,
-        "root": 0.962,
-        "sevenths": 0.6686,
-        "majminEvaluatedSec": 162.8678
+        "majmin": 0.937335439337912,
+        "root": 0.9619962071288313,
+        "sevenths": 0.668649778358141,
+        "majminEvaluatedSec": 162.86775997873963
       }
     },
     {
@@ -544,10 +544,10 @@
         "complexity:complex"
       ],
       "officialChartScore": {
-        "majmin": 0.3609,
-        "root": 0.7384,
-        "sevenths": 0.2155,
-        "majminEvaluatedSec": 148.9842
+        "majmin": 0.36091450236686323,
+        "root": 0.7383768271042764,
+        "sevenths": 0.2155214731905263,
+        "majminEvaluatedSec": 148.98423922874983
       }
     }
   ]
