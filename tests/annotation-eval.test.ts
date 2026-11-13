@@ -244,6 +244,16 @@ describe('alignment', () => {
     expect(alignAnnotation(alignInput([], est)).excluded?.code).toBe('no-estimate-beats');
   });
 
+  it('excludes an upload 1% off speed as drift instead of re-snapping landmarks (connector review on PR #25)', () => {
+    // Beats every 0.5 s; chord changes every 2 s on a recording 1% slower: about 2 s apart by the
+    // end, with an upload length difference (2 s) that the duration check alone lets through.
+    const beats = Array.from({ length: 398 }, (_, k) => 1 + 0.5 * k);
+    const changes = Array.from({ length: 100 }, (_, k) => (1 + 2 * k) * 1.01);
+    const a = alignAnnotation(alignInput(beats, changes, { method: 'chord-boundaries', downbeatLandmarks: changes, annotationDurationSec: 202, mediaDurationSec: 200, estimateFirstDownbeatSec: null }));
+    expect(a.driftSec!).toBeGreaterThan(1);
+    expect(a.excluded?.code).toBe('drift');
+  });
+
   it('derives downbeats from the first downbeat and the bar length', () => {
     expect(impliedDownbeats([0, 1, 2, 3, 4, 5, 6, 7, 8], 2, 3)).toEqual([2, 5, 8]);
     expect(impliedDownbeats([0, 1, 2], 1.5, 3)).toBeNull();

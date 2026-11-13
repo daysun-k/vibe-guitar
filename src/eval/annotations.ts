@@ -384,6 +384,25 @@ function matchedResiduals(landmarks: number[], beats: number[], offset: number, 
   return out;
 }
 
+/**
+ * Local offset at each landmark, walking the landmarks in order: a landmark matches the
+ * estimated beat nearest to it under the previous match's offset. A slow rate mismatch (an
+ * upload a little faster or slower than the annotated recording) is followed this way and
+ * shows up as drift, instead of every landmark re-snapping to whichever beat lies near the
+ * global offset.
+ */
+function trackOffsets(landmarks: number[], beats: number[], startOffset: number, tol: number): { t: number; offsetSec: number }[] {
+  const out: { t: number; offsetSec: number }[] = [];
+  let cur = startOffset;
+  for (const l of landmarks) {
+    const r = nearestResidual(beats, l + cur);
+    if (Math.abs(r) > tol + 1e-9) continue;
+    cur += r;
+    out.push({ t: l, offsetSec: cur });
+  }
+  return out;
+}
+
 /** Downbeats implied by the first downbeat and a fixed bar length, or null. */
 export function impliedDownbeats(beats: number[], firstDownbeatSec: number | null, beatsPerBar: number | null): number[] | null {
   if (firstDownbeatSec === null || !beatsPerBar || beatsPerBar < 2 || !beats.length) return null;
@@ -488,12 +507,14 @@ export function alignAnnotation(input: AlignInput, options?: Partial<AlignOption
   const last = landmarks[landmarks.length - 1];
   const third = (last - first) / 3;
   const parts: AlignSegmentCheck['part'][] = ['start', 'middle', 'end'];
+  const tracked = trackOffsets(landmarks, beats, offsetSec, o.tolSec);
   result.segments = parts.map((part, i) => {
     const fromSec = first + i * third;
     const toSec = i === 2 ? last + 1e-9 : first + (i + 1) * third;
     const inPart = landmarks.filter((l) => l >= fromSec && l < toSec + (i === 2 ? 1e-9 : 0));
     const res = matchedResiduals(inPart, beats, offsetSec, o.tolSec);
-    return { part, fromSec, toSec: Math.min(toSec, last), landmarks: inPart.length, matched: res.length, offsetSec: res.length ? offsetSec + median(res) : null };
+    const local = tracked.filter((x) => x.t >= fromSec && x.t < toSec + (i === 2 ? 1e-9 : 0)).map((x) => x.offsetSec);
+    return { part, fromSec, toSec: Math.min(toSec, last), landmarks: inPart.length, matched: res.length, offsetSec: local.length ? median(local) : null };
   });
   const locals = result.segments.map((s) => s.offsetSec).filter((x): x is number => x !== null);
   result.driftSec = locals.length === 3 ? Math.max(...locals) - Math.min(...locals) : null;
