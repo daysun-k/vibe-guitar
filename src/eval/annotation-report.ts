@@ -24,7 +24,7 @@ const REASON_KO: Record<ExclusionCode, string> = {
   'duration-mismatch': '업로드 길이가 주석의 음원 길이와 2초 넘게 달라요(다른 버전일 가능성)',
   'landmarks-disagree': '주석의 기준점이 자동 박자와 잘 맞지 않아요',
   drift: '곡의 앞·중간·끝에서 맞춘 시차가 속도 보정 뒤에도 0.1초 넘게 달라요(속도나 편집 차이)',
-  ambiguous: '1박 또는 1마디 차이 후보 가운데 시차를 하나로 정할 수 없어요',
+  ambiguous: '1박 또는 1마디 차이 후보 가운데 시차를 하나로 정할 수 없어요(0초 근처 후보와 마디 위치가 서로 다른 시차를 가리키는 경우 포함)',
 };
 
 function groupTiles(title: string, t: GroupTotals, help: string): string {
@@ -43,7 +43,8 @@ function alignmentCell(r: SongResult): string {
   if (a.driftSec !== null) parts.push(`앞·중간·끝 차이 ${Math.round(a.driftSec * 1000)} ms${rate !== 1 ? '(속도 보정 뒤)' : ''}`);
   if (a.durationDiffSec !== null) parts.push(`길이 차이 ${a.durationDiffSec > 0 ? '+' : ''}${a.durationDiffSec.toFixed(1)}초`);
   parts.push(`기준점 일치 ${pct(a.matchedFraction)}`);
-  if (a.ambiguous) parts.push('<b>1박 또는 1마디 차이 후보를 가릴 수 없어 시차가 정해지지 않았어요</b>');
+  if (a.barConflict) parts.push('<b>0초 근처 후보와 마디 위치가 서로 다른 시차를 가리켜서 시차가 정해지지 않았어요</b>');
+  else if (a.ambiguous) parts.push('<b>1박 또는 1마디 차이 후보를 가릴 수 없어 시차가 정해지지 않았어요</b>');
   for (const w of a.warnings) parts.push(`<span class="muted">${escapeHtml(w)}</span>`);
   return parts.join('<br>');
 }
