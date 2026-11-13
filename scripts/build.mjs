@@ -1,11 +1,14 @@
 // Builds the unpacked MV3 extension into dist/.
+//   --latency-probe: dev-only capture-latency probe build into dist-probe/ (docs/latency-probe.md).
+//   The default build never contains the probe: __LATENCY_PROBE__ is false and dist/ is untouched.
 import * as esbuild from 'esbuild';
-import { cp, mkdir, rm } from 'node:fs/promises';
+import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const dist = path.join(root, 'dist');
+const probe = process.argv.includes('--latency-probe');
+const dist = path.join(root, probe ? 'dist-probe' : 'dist');
 const watch = process.argv.includes('--watch');
 
 const entryPoints = {
@@ -21,14 +24,22 @@ const entryPoints = {
   sidepanel: 'src/extension/sidepanel/sidepanel.ts',
   'level-worker': 'src/extension/sidepanel/level-worker.ts',
 };
+if (probe) entryPoints['probe-content'] = 'src/extension/probe/probe-content.ts';
 
 await rm(dist, { recursive: true, force: true });
 await mkdir(dist, { recursive: true });
 await cp(path.join(root, 'src/extension/static'), dist, { recursive: true });
+if (probe) {
+  // Same manifest plus one content script for the local probe page (http://127.0.0.1).
+  const built = await esbuild.build({ absWorkingDir: root, entryPoints: ['src/probe/manifest.ts'], bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'error' });
+  const { latencyProbeManifest } = await import(`data:text/javascript;base64,${Buffer.from(built.outputFiles[0].text).toString('base64')}`);
+  const manifestPath = path.join(dist, 'manifest.json');
+  const base = JSON.parse(await readFile(manifestPath, 'utf8'));
+  await writeFile(manifestPath, `${JSON.stringify(latencyProbeManifest(base), null, 2)}\n`);
+}
 
 // Recognition models (fetched by scripts/fetch-models.mjs) and the onnxruntime-web WASM binary.
 // Everything is packaged: the extension makes no network calls at runtime.
-const { readFile } = await import('node:fs/promises');
 const modelManifest = JSON.parse(await readFile(path.join(root, 'scripts/models.manifest.json'), 'utf8'));
 await mkdir(path.join(dist, 'models'), { recursive: true });
 for (const f of [...modelManifest.files.filter((m) => m.packaged).map((m) => m.file), 'MODELS.txt']) {
@@ -53,7 +64,7 @@ const options = {
   target: 'chrome116',
   sourcemap: 'linked',
   // onnxruntime-web's bundle references import.meta.url; wasmPaths is set explicitly instead.
-  define: { 'import.meta.url': '"chrome-extension://vibe-guitar/"' },
+  define: { 'import.meta.url': '"chrome-extension://vibe-guitar/"', __LATENCY_PROBE__: probe ? 'true' : 'false' },
   minify: false,
   logLevel: 'info',
 };

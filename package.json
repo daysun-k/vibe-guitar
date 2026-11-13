@@ -14,7 +14,10 @@
     "accuracy-report": "node scripts/accuracy-report.mjs",
     "phone": "node scripts/phone.mjs",
     "phone-check": "node scripts/phone-check.mjs",
-    "phone-layout": "node scripts/phone-layout.mjs"
+    "phone-layout": "node scripts/phone-layout.mjs",
+    "build:latency-probe": "node scripts/build.mjs --latency-probe",
+    "latency-probe": "node scripts/latency-probe.mjs",
+    "latency-report": "node scripts/latency-report.mjs"
   },
   "devDependencies": {
     "@types/chrome": "^0.3.7",

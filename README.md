@@ -372,6 +372,10 @@ After the toolbar click starts capture, the offscreen document also runs listeni
 - YouTube Music: the adapter reports the id of what the player is actually playing
   (`movie_player.getVideoData()`), which can differ from the URL `v=`; a yellow notice shows when it differs or
   when only the URL id was available.
+- Capture latency (`CAPTURE_LATENCY_SEC`, 50 ms, uncalibrated): a dev-only probe build measures how far
+  placed audio lands from the media element's clock with a click track (`npm run build:latency-probe`,
+  `npm run latency-probe`, `npm run latency-report`); see [docs/latency-probe.md](docs/latency-probe.md). It
+  measures placement only, not speaker or Bluetooth delay. The default build does not contain it.
 
 ## Models
 
