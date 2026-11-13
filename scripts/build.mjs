@@ -1,15 +1,18 @@
 // Builds the unpacked MV3 extension into dist/.
 //   --latency-probe: dev-only capture-latency probe build into dist-probe/ (docs/latency-probe.md).
 //   The default build never contains the probe: __LATENCY_PROBE__ is false and dist/ is untouched.
+//   --audio-dump: dev-only audio dump build into dist-dump/ (docs/recognition-replay.md). The default
+//   build does not bundle the dump hooks at all (scripts/build-config.mjs).
 import * as esbuild from 'esbuild';
 import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { audioDumpInfo, audioDumpPlugin, buildDefine, buildFlags } from './build-config.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const probe = process.argv.includes('--latency-probe');
-const dist = path.join(root, probe ? 'dist-probe' : 'dist');
-const watch = process.argv.includes('--watch');
+const flags = buildFlags(process.argv);
+const { probe, dump, watch } = flags;
+const dist = path.join(root, flags.outDir);
 
 const entryPoints = {
   background: 'src/extension/background.ts',
@@ -36,6 +39,12 @@ if (probe) {
   const manifestPath = path.join(dist, 'manifest.json');
   const base = JSON.parse(await readFile(manifestPath, 'utf8'));
   await writeFile(manifestPath, `${JSON.stringify(latencyProbeManifest(base), null, 2)}\n`);
+}
+if (dump) {
+  // Same manifest; only the name says it is the dev dump build (it POSTs to 127.0.0.1, see the doc).
+  const manifestPath = path.join(dist, 'manifest.json');
+  const base = JSON.parse(await readFile(manifestPath, 'utf8'));
+  await writeFile(manifestPath, `${JSON.stringify({ ...base, name: `${base.name} [audio dump, dev]` }, null, 2)}\n`);
 }
 
 // Recognition models (fetched by scripts/fetch-models.mjs) and the onnxruntime-web WASM binary.
@@ -64,7 +73,8 @@ const options = {
   target: 'chrome116',
   sourcemap: 'linked',
   // onnxruntime-web's bundle references import.meta.url; wasmPaths is set explicitly instead.
-  define: { 'import.meta.url': '"chrome-extension://vibe-guitar/"', __LATENCY_PROBE__: probe ? 'true' : 'false' },
+  define: buildDefine(flags, dump ? audioDumpInfo(root) : null),
+  ...(dump ? { plugins: [audioDumpPlugin(root)] } : {}),
   minify: false,
   logLevel: 'info',
 };
