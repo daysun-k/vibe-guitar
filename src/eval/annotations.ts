@@ -656,7 +656,7 @@ export function alignAnnotation(input: AlignInput, options?: Partial<AlignOption
   const down = impliedDownbeats(beats, input.estimateFirstDownbeatSec, input.estimateBeatsPerBar);
   const downLandmarks = [...input.downbeatLandmarks].sort((a, b) => a - b);
   const padSteps = Math.max(1, Math.round(o.tolSec / o.stepSec));
-  type Built = AlignCandidate & { c: number; fit: RateFit | null; hits: number };
+  type Built = AlignCandidate & { c: number; fit: RateFit | null; hits: number; pinned: boolean };
   const build = (c0: number, r0: number, fit: RateFit | null): Built => {
     let c = c0;
     let r = r0;
@@ -677,13 +677,15 @@ export function alignAnnotation(input: AlignInput, options?: Partial<AlignOption
         }
       }
     }
+    // Pinned: the final fitted rate (after refinement and clamping) sits at the RATE_FIT_MAX bound.
+    const pinned = r !== 1 && Math.abs(r - 1) >= RATE_FIT_MAX - 1e-9;
     const res = mappedResiduals(landmarks, beats, c, r, pivot, o.tolSec);
     if (res.length) c += median(res);
     const hits = countMapped(landmarks, beats, c, r, pivot, o.tolSec);
     const offsetSec = c - (r - 1) * pivot;
     const barScore =
       down && downLandmarks.length >= 4 ? downLandmarks.filter((l) => Math.abs(nearestResidual(down, offsetSec + r * l)) <= o.tolSec + 1e-9).length / downLandmarks.length : null;
-    return { offsetSec, rate: r, matchedFraction: hits / landmarks.length, barScore, c, fit, hits };
+    return { offsetSec, rate: r, matchedFraction: hits / landmarks.length, barScore, c, fit, hits, pinned };
   };
   const built: Built[] = runsOf(hitsBy[0]).map(([i, j]) => {
     let top = i;
@@ -771,6 +773,13 @@ export function alignAnnotation(input: AlignInput, options?: Partial<AlignOption
       if (nearZero) warnings.push(`candidates ${gap.toFixed(2)} s apart: a candidate near 0 is expected by chance, so bar phase decides`);
       chosen = eligible[0];
       survivors = eligible.length;
+      // Among bar-phase survivors (whole-bar aliases), the near-0 prior decides when its survivor
+      // stands apart: within nearZeroSec of 0 and more than 2 x nearZeroSec from every other one.
+      const apart = survivors > 1 && Math.abs(chosen.offsetSec) <= o.nearZeroSec && eligible.slice(1).every((e) => Math.abs(e.offsetSec - chosen.offsetSec) > 2 * o.nearZeroSec);
+      if (apart) {
+        warnings.push(`bar phase left ${survivors} candidates (${eligible.map((e) => e.offsetSec.toFixed(3)).join(', ')} s); the one near 0 stands apart`);
+        survivors = 1;
+      }
       ambiguous = survivors > 1;
       if (ambiguous)
         warnings.push(
@@ -778,7 +787,7 @@ export function alignAnnotation(input: AlignInput, options?: Partial<AlignOption
             ? `bar phase unavailable: ${eligible.length} candidates one beat apart remain; reported the one nearest 0`
             : `bar phase cannot decide between ${eligible.length} candidates (${eligible.map((e) => e.offsetSec.toFixed(3)).join(', ')} s); reported the one nearest 0`,
         );
-      else warnings.push(nearZero ? 'offset chosen by bar phase' : 'no candidate near 0: offset chosen by bar phase');
+      else if (!apart) warnings.push(nearZero ? 'offset chosen by bar phase' : 'no candidate near 0: offset chosen by bar phase');
     }
   }
   const ordered = [chosen, ...kept.filter((k) => k !== chosen)];
@@ -837,6 +846,8 @@ export function alignAnnotation(input: AlignInput, options?: Partial<AlignOption
     if (weak) result.excluded = { code: 'landmarks-disagree', reason: `${weak.part} third: ${weak.matched}/${weak.landmarks} landmarks on an estimated beat` };
     else if (result.driftSec !== null && result.driftSec > o.driftLimitSec)
       result.excluded = { code: 'drift', reason: rateNote ?? `local offsets differ by ${Math.round(result.driftSec * 1000)} ms across the song${rate !== 1 ? ' after the fitted speed difference' : ''}` };
+    else if (chosen.pinned)
+      result.excluded = { code: 'drift', reason: `speed difference ${((rate - 1) * 100).toFixed(3)}% is pinned at the RATE_FIT_MAX bound (${RATE_FIT_MAX * 100}%): the upload may run at another speed` };
     else if (ambiguous)
       result.excluded = { code: 'ambiguous', reason: `offset not determined: ${survivors} candidates remain after the near-0 rule and bar phase` };
   }
