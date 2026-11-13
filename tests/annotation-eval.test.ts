@@ -252,6 +252,16 @@ describe('alignment', () => {
     const a = alignAnnotation(alignInput(beats, changes, { method: 'chord-boundaries', downbeatLandmarks: changes, annotationDurationSec: 202, mediaDurationSec: 200, estimateFirstDownbeatSec: null }));
     expect(a.driftSec!).toBeGreaterThan(1);
     expect(a.excluded?.code).toBe('drift');
+    expect(a.excluded?.reason).toContain('time scale');
+  });
+
+  it('keeps a clean song whose chord boundaries wobble for a few changes (review s14-r2 R2)', () => {
+    const beats = Array.from({ length: 398 }, (_, k) => 1 + 0.5 * k);
+    const jitter = [0.07, 0.14, 0.21, -0.21, -0.14, -0.07];
+    const changes = Array.from({ length: 100 }, (_, k) => 1 + 2 * k + (k >= 40 && k <= 45 ? jitter[k - 40] : 0));
+    const a = alignAnnotation(alignInput(beats, changes, { method: 'chord-boundaries', downbeatLandmarks: changes, estimateFirstDownbeatSec: null }));
+    expect(a.excluded).toBeNull();
+    expect(a.driftSec!).toBeLessThan(0.1);
   });
 
   it('derives downbeats from the first downbeat and the bar length', () => {

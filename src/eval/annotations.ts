@@ -385,22 +385,38 @@ function matchedResiduals(landmarks: number[], beats: number[], offset: number, 
 }
 
 /**
- * Local offset at each landmark, walking the landmarks in order: a landmark matches the
- * estimated beat nearest to it under the previous match's offset. A slow rate mismatch (an
- * upload a little faster or slower than the annotated recording) is followed this way and
- * shows up as drift, instead of every landmark re-snapping to whichever beat lies near the
- * global offset.
+ * Playback-rate check. An upload a little faster or slower than the annotated recording drifts
+ * by whole beats across the song, and matching each landmark to its nearest beat hides that
+ * (with beats every half second, some beat is always close). So try small time scales instead:
+ * scale the landmark times about the first landmark, take the best offset for each scale, and
+ * compare the best scale with 1. Local wobble in a few chord boundaries cannot win this way,
+ * because it does not make more landmarks fall on beats across the whole song.
  */
-function trackOffsets(landmarks: number[], beats: number[], startOffset: number, tol: number): { t: number; offsetSec: number }[] {
-  const out: { t: number; offsetSec: number }[] = [];
-  let cur = startOffset;
-  for (const l of landmarks) {
-    const r = nearestResidual(beats, l + cur);
-    if (Math.abs(r) > tol + 1e-9) continue;
-    cur += r;
-    out.push({ t: l, offsetSec: cur });
+/** How much better (fraction of landmarks on beats) another time scale must fit than 1. */
+export const RATE_WIN_MARGIN = 0.15;
+export const RATE_STEPS = Array.from({ length: 81 }, (_, k) => 1 + (k - 40) * 0.0005);
+
+export function rateFit(landmarks: number[], beats: number[], o: AlignOptions): { rate: number; matchedFraction: number; matchedAtOne: number } {
+  const steps = Math.round(o.maxShiftSec / o.stepSec);
+  const t0 = landmarks[0];
+  const bestAt = (rate: number) => {
+    const scaled = landmarks.map((l) => t0 + (l - t0) * rate);
+    let best = 0;
+    for (let k = -steps; k <= steps; k++) best = Math.max(best, matchedResiduals(scaled, beats, k * o.stepSec, o.tolSec).length);
+    return best / landmarks.length;
+  };
+  const atOne = bestAt(1);
+  let rate = 1;
+  let matchedFraction = atOne;
+  for (const r of RATE_STEPS) {
+    if (r === 1) continue;
+    const f = bestAt(r);
+    if (f > matchedFraction) {
+      matchedFraction = f;
+      rate = r;
+    }
   }
-  return out;
+  return { rate, matchedFraction, matchedAtOne: atOne };
 }
 
 /** Downbeats implied by the first downbeat and a fixed bar length, or null. */
@@ -507,17 +523,24 @@ export function alignAnnotation(input: AlignInput, options?: Partial<AlignOption
   const last = landmarks[landmarks.length - 1];
   const third = (last - first) / 3;
   const parts: AlignSegmentCheck['part'][] = ['start', 'middle', 'end'];
-  const tracked = trackOffsets(landmarks, beats, offsetSec, o.tolSec);
   result.segments = parts.map((part, i) => {
     const fromSec = first + i * third;
     const toSec = i === 2 ? last + 1e-9 : first + (i + 1) * third;
     const inPart = landmarks.filter((l) => l >= fromSec && l < toSec + (i === 2 ? 1e-9 : 0));
     const res = matchedResiduals(inPart, beats, offsetSec, o.tolSec);
-    const local = tracked.filter((x) => x.t >= fromSec && x.t < toSec + (i === 2 ? 1e-9 : 0)).map((x) => x.offsetSec);
-    return { part, fromSec, toSec: Math.min(toSec, last), landmarks: inPart.length, matched: res.length, offsetSec: local.length ? median(local) : null };
+    return { part, fromSec, toSec: Math.min(toSec, last), landmarks: inPart.length, matched: res.length, offsetSec: res.length ? offsetSec + median(res) : null };
   });
   const locals = result.segments.map((s) => s.offsetSec).filter((x): x is number => x !== null);
   result.driftSec = locals.length === 3 ? Math.max(...locals) - Math.min(...locals) : null;
+  // A time scale other than 1 that fits clearly more landmarks means the upload runs at another
+  // speed; its displacement across the landmarks counts as drift.
+  const rf = rateFit(landmarks, beats, o);
+  let rateNote: string | null = null;
+  const rateDrift = Math.abs(rf.rate - 1) * (last - first);
+  if (rf.rate !== 1 && rf.matchedFraction >= rf.matchedAtOne + RATE_WIN_MARGIN && rateDrift > o.driftLimitSec) {
+    result.driftSec = Math.max(result.driftSec ?? 0, rateDrift);
+    rateNote = `landmarks fit a ${(rf.rate * 100).toFixed(2)}% time scale (${Math.round(rf.matchedFraction * 100)}% on beats vs ${Math.round(rf.matchedAtOne * 100)}% at 100%): about ${Math.round(rateDrift * 1000)} ms apart by the end`;
+  }
   for (const c of [coarse.startOffsetSec, coarse.endOffsetSec]) {
     if (c !== null && Math.abs(c - offsetSec) > 2) {
       result.warnings.push(`coarse check differs from the offset by ${(c - offsetSec).toFixed(1)} s`);
@@ -534,7 +557,7 @@ export function alignAnnotation(input: AlignInput, options?: Partial<AlignOption
     const weak = result.segments.find((s) => s.landmarks === 0 || s.matched / s.landmarks < o.minMatchFraction || s.matched < 4);
     if (weak) result.excluded = { code: 'landmarks-disagree', reason: `${weak.part} third: ${weak.matched}/${weak.landmarks} landmarks on an estimated beat` };
     else if (result.driftSec !== null && result.driftSec > o.driftLimitSec)
-      result.excluded = { code: 'drift', reason: `local offsets differ by ${Math.round(result.driftSec * 1000)} ms across the song` };
+      result.excluded = { code: 'drift', reason: rateNote ?? `local offsets differ by ${Math.round(result.driftSec * 1000)} ms across the song` };
   }
   if (durationDiffSec === null) result.warnings.push('upload length unknown; duration check skipped');
   return result;
