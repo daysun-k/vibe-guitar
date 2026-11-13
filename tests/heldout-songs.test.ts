@@ -17,6 +17,7 @@ import {
   type RankedSong,
 } from '../src/eval/heldout-draw';
 import { checkResult, chooseUpload, cleanUploadTitle, excludedWord, parseLength, searchQueries, type SearchResult } from '../src/eval/heldout-uploads';
+import { betaBinomialAtLeast, betaBinomialPmf, buildHeldoutV2List, heldoutV2Size, logGamma, V2_START_RANK, type V2SizeRule } from '../src/eval/heldout-v2';
 import { amendLog, buildHeldoutList, heldoutSongId, NOT_NEEDED_REASON, SEARCH_LOG_SCHEMA, selectionDiff, TARGET_SONGS, type SearchLog, type SearchLogEntry } from '../src/eval/heldout-list';
 
 /** A lab with n chord changes (alternating C and G, 2 s each) and trailing silence. */
@@ -452,5 +453,168 @@ describe('committed held-out list (VGT-7, PR #31 and its amendment)', () => {
     const seen = new Set(existing.songs.map((s) => s.chords));
     expect(list.songs.filter((s) => seen.has(s.chords))).toEqual([]);
     expect(new Set(list.songs.map((s) => s.id)).size).toBe(25);
+  });
+});
+
+describe('held-out v2 size rule (VGT-7, PR #33)', () => {
+  it('reproduces the predeclared N: k = 12 -> 51, 13 -> 46, 14 -> 42, 15 -> 38', () => {
+    const got = [12, 13, 14, 15].map((k) => heldoutV2Size(k));
+    expect(got.map((s) => s.n)).toEqual([51, 46, 42, 38]);
+    for (const s of got) {
+      expect(s.a).toBe(1 + s.k);
+      expect(s.b).toBe(1 + 25 - s.k);
+      expect(s.probability).toBeGreaterThanOrEqual(0.95);
+      expect(betaBinomialAtLeast(15, s.n - 1, s.a, s.b)).toBeLessThan(0.95);
+    }
+    // Exact rational values (Python fractions) of P(X >= 15) at N for k = 12 and 13.
+    expect(got[0].probability).toBeCloseTo(0.9553610832853788, 11);
+    expect(got[1].probability).toBeCloseTo(0.9555488162303252, 11);
+  });
+
+  it('computes log-gamma and a beta-binomial that sums to 1', () => {
+    expect(logGamma(1)).toBeCloseTo(0, 12);
+    expect(logGamma(11)).toBeCloseTo(Math.log(3628800), 10);
+    expect(logGamma(0.5)).toBeCloseTo(Math.log(Math.sqrt(Math.PI)), 12);
+    let total = 0;
+    for (let x = 0; x <= 40; x++) total += betaBinomialPmf(x, 40, 14, 13);
+    expect(total).toBeCloseTo(1, 12);
+    // a = b = 1 is uniform on 0..n.
+    expect(betaBinomialPmf(3, 9, 1, 1)).toBeCloseTo(0.1, 12);
+    expect(betaBinomialAtLeast(15, 14, 2, 2)).toBe(0);
+  });
+
+  it('rejects k outside 0..25 or not a whole number', () => {
+    for (const k of [-1, 26, 12.5, Number.NaN]) expect(() => heldoutV2Size(k)).toThrow(/k must be an integer/);
+  });
+});
+
+describe('held-out v2 list builder (PR #33)', () => {
+  const dataset: DatasetInfo = { name: 'BB', page: 'p', downloads: [], folder: 'billboard-2.0.1-lab', licence: 'CC0', licenceQuote: 'q', attribution: 'a', btcTraining: 'not listed' };
+  const order: RankedSong[] = Array.from({ length: 30 }, (_, i) => ({
+    rank: i + 1,
+    id: 300 + i,
+    ids: [300 + i],
+    artist: `Artist ${i}`,
+    title: `Title ${i}`,
+    chartDate: '1985-01-01',
+    annotationDurationSec: 200.4,
+    complexity: 'moderate',
+    changes: 30,
+    key: String(i).padStart(64, '0'),
+  }));
+  const skipRanks = new Set([3, 12, 13, 17]);
+  const entry = (s: RankedSong): SearchLogEntry => {
+    const q = searchQueries(s.artist, s.title);
+    const hit: SearchResult = { rank: 1, videoId: `w${String(s.id).padStart(10, '0')}`, title: s.title, channel: `${s.artist} - Topic`, lengthText: skipRanks.has(s.rank) ? '3:40' : '3:20' };
+    return { rank: s.rank, id: s.id, queries: [{ label: 'Q1', query: q.Q1, results: [hit] }, { label: 'Q2', query: q.Q2, results: [] }] };
+  };
+  const log = (n = order.length): SearchLog => ({ schema: SEARCH_LOG_SCHEMA, entries: order.slice(0, n).map(entry) });
+  const size = (n: number): V2SizeRule => ({ ...heldoutV2Size(13), n });
+
+  it('starts at the start rank and stops at the first N songs with an upload', () => {
+    expect(V2_START_RANK).toBe(33);
+    const r = buildHeldoutV2List({ order, log: log(), dataset, declaredAt: '2026-11-13', size: size(6), startRank: 10 });
+    expect(r.chosen.map((c) => c.rank)).toEqual([10, 11, 14, 15, 16, 18]);
+    expect(r.skipped.map((s) => s.rank)).toEqual([12, 13, 17]);
+    expect(r.stopRank).toBe(18);
+    expect(r.list.songs).toHaveLength(6);
+    expect(Object.keys(r.uploads)).toEqual(r.list.songs.map((s) => s.id));
+    expect(r.list.v2).toMatchObject({ protocol: 'PR #33', uploadRule: 'amended-v1', startRank: 10, stopRank: 18, searchedFromStart: 9 });
+    expect(r.list.v2.skipped.map((s) => s.id)).toEqual(['0311', '0312', '0316']);
+    expect(r.list.v2.sizeRule.n).toBe(6);
+    expect(r.list.songs[0]).toMatchObject({ role: 'eval', btcTraining: 'not-known', dataset: 'billboard-2.0.1-lab', chords: 'McGill-Billboard/0309/full.lab' });
+    expect(r.list.songs[0].uploadHint).toContain('walked for the v2 batch (PR #33), rule amended-v1');
+    expect(r.list.purpose).toContain('PR #33');
+    expect(r.list.purpose).toContain('from rank 10');
+    expect(parseSongList(r.list).songs).toHaveLength(6);
+    expect(parseUploads(r.uploads)).toEqual(r.uploads);
+  });
+
+  it('decides from the raw results only: logged decisions and not-needed marks are ignored', () => {
+    const plain = buildHeldoutV2List({ order, log: log(), dataset, declaredAt: 'x', size: size(6), startRank: 10 });
+    const marked = log();
+    const wrong = chooseUpload(order[0], { Q1: [], Q2: [] });
+    for (const e of marked.entries) {
+      e.decision = wrong;
+      e.decisionAmended = e.rank >= 10 ? { status: 'not-needed', reason: NOT_NEEDED_REASON } : wrong;
+    }
+    expect(buildHeldoutV2List({ order, log: marked, dataset, declaredAt: 'x', size: size(6), startRank: 10 })).toEqual(plain);
+  });
+
+  it('never decides entries before the start rank or after the stop', () => {
+    const l = log();
+    l.entries[1].queries[0].query = 'changed before the start';
+    l.entries[25].queries[0].query = 'changed after the stop';
+    expect(buildHeldoutV2List({ order, log: l, dataset, declaredAt: 'x', size: size(6), startRank: 10 }).stopRank).toBe(18);
+    l.entries[13].queries[0].query = 'changed inside the walk';
+    expect(() => buildHeldoutV2List({ order, log: l, dataset, declaredAt: 'x', size: size(6), startRank: 10 })).toThrow(/frozen query/);
+  });
+
+  it('fails when the log ends before N songs qualify, or does not follow the pool order', () => {
+    expect(() => buildHeldoutV2List({ order, log: log(20), dataset, declaredAt: 'x', size: size(9), startRank: 10 })).toThrow(/only 8 of 9 songs .*\(rank 20\); stop and ask the user/);
+    expect(() => buildHeldoutV2List({ order, log: log(9), dataset, declaredAt: 'x', size: size(1), startRank: 10 })).toThrow(/no entry at or after rank 10/);
+    const gap = log();
+    gap.entries.splice(4, 1);
+    expect(() => buildHeldoutV2List({ order, log: gap, dataset, declaredAt: 'x', size: size(6), startRank: 10 })).toThrow(/pool order has rank 5/);
+  });
+
+  it('leaves the v1 builder output as it was', () => {
+    const v1 = buildHeldoutList({ order, log: log(29), dataset, declaredAt: 'x', rule: 'amended-v1' });
+    expect(v1.list.songs[0].uploadHint).toMatch(/^Chosen by the PR #31 search, rule amended-v1 \(/);
+    expect(v1.list.purpose).not.toContain('PR #33');
+    expect('v2' in v1.list).toBe(false);
+  });
+
+  it('walks the committed v1 pool and log from rank 33 (capacity check of PR #33)', () => {
+    const read = (f: string) => JSON.parse(readFileSync(f, 'utf8'));
+    const pool = read('docs/annotation-heldout-v1-pool.json');
+    const committed: RankedSong[] = pool.order.map((s: RankedSong & { id: string; ids: string[] }) => ({ ...s, id: Number(s.id), ids: s.ids.map(Number) }));
+    const committedLog = read('docs/annotation-heldout-v1-search-log.json');
+    const bb = parseSongList(read('docs/annotation-eval-songs.json')).datasets['billboard-2.0.1-lab'];
+    const r = buildHeldoutV2List({ order: committed, log: committedLog, dataset: bb, declaredAt: 'x', size: heldoutV2Size(13) });
+    expect(r.list.songs).toHaveLength(46);
+    expect(r.stopRank).toBe(92);
+    expect(Math.min(...r.chosen.map((c) => c.rank))).toBeGreaterThanOrEqual(33);
+    const v1 = new Set(parseSongList(read('docs/annotation-eval-songs-heldout-v1.json')).songs.map((s) => s.chords));
+    expect(r.list.songs.filter((s) => v1.has(s.chords))).toEqual([]);
+    expect(() => buildHeldoutV2List({ order: committed, log: committedLog, dataset: bb, declaredAt: 'x', size: { ...heldoutV2Size(13), n: 73 } })).toThrow(/only 72 of 73/);
+  });
+});
+
+describe('heldout-songs script list-v2', () => {
+  it('writes the v2 list and uploads with the size rule, and needs --eligible-k', () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'vgt-heldout-v2-'));
+    try {
+      const order = Array.from({ length: 80 }, (_, i) => ({ rank: i + 1, id: String(400 + i).padStart(4, '0'), ids: [String(400 + i).padStart(4, '0')], artist: `B${i}`, title: `U${i}`, chartDate: '1980-01-01', annotationDurationSec: 180.2, complexity: 'simple', changes: 20, key: 'k' }));
+      writeFileSync(path.join(dir, 'pool.json'), JSON.stringify({ schema: 'vibe-guitar-annotation-heldout-pool/1', order }));
+      const entries = order.map((s, i) => {
+        const q = searchQueries(s.artist, s.title);
+        const results = i === 40 ? [] : [{ rank: 1, videoId: `y${String(i).padStart(10, '0')}`, title: s.title, channel: `${s.artist} - Topic`, lengthText: '3:00' }];
+        return { rank: s.rank, id: Number(s.id), queries: [{ label: 'Q1', query: q.Q1, results }, { label: 'Q2', query: q.Q2, results: [] }], decisionAmended: { status: 'not-needed', reason: NOT_NEEDED_REASON } };
+      });
+      writeFileSync(path.join(dir, 'log.json'), JSON.stringify({ schema: SEARCH_LOG_SCHEMA, entries }));
+      const args = ['--pool', path.join(dir, 'pool.json'), '--log', path.join(dir, 'log.json'), '--declared-at', '2026-11-13', '--out', path.join(dir, 'list.json'), '--uploads-out', path.join(dir, 'uploads.json')];
+      const run = spawnSync(process.execPath, ['scripts/heldout-songs.mjs', 'list-v2', '--start-rank', '33', '--eligible-k', '15', ...args], { encoding: 'utf8' });
+      expect(run.status, run.stderr).toBe(0);
+      expect(run.stdout).toContain('N 38');
+      expect(run.stdout).toContain('stop rank 71');
+      const list = JSON.parse(readFileSync(path.join(dir, 'list.json'), 'utf8'));
+      expect(parseSongList(list).songs).toHaveLength(38);
+      expect(list.v2).toMatchObject({ startRank: 33, stopRank: 71, sizeRule: { k: 15, n: 38, a: 16, b: 11 } });
+      expect(list.declaredAt).toBe('2026-11-13');
+      const uploads = JSON.parse(readFileSync(path.join(dir, 'uploads.json'), 'utf8'));
+      expect(uploads.$comment).toMatch(/PR #33/);
+      expect(Object.keys(parseUploads(uploads))).toHaveLength(38);
+      const noK = spawnSync(process.execPath, ['scripts/heldout-songs.mjs', 'list-v2', ...args], { encoding: 'utf8' });
+      expect(noK.status).toBe(1);
+      expect(noK.stderr).toContain('needs --eligible-k');
+      const badK = spawnSync(process.execPath, ['scripts/heldout-songs.mjs', 'list-v2', '--eligible-k', '13.5', ...args], { encoding: 'utf8' });
+      expect(badK.status).toBe(1);
+      const short = spawnSync(process.execPath, ['scripts/heldout-songs.mjs', 'list-v2', '--eligible-k', '0', ...args], { encoding: 'utf8' });
+      expect(short.status).toBe(1);
+      expect(short.stderr).toContain('stop and ask the user');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
