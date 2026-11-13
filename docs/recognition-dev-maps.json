@@ -1,0 +1,554 @@
+{
+  "schema": "vibe-guitar-recognition-dev-maps/1",
+  "purpose": "VGT-18 DEV set and frozen time maps (media = offsetSec + rate x annotation time). Fixed before any candidate is scored; see docs/recognition-improvement-protocol.md.",
+  "source": {
+    "evaluator": "main 1714f4f, npm run eval-annotations (unchanged)",
+    "results": [
+      {
+        "file": "~/Documents/paseo-briefings/vibe-guitar-recognition-improvement/rescore-dev0.json",
+        "sha256": "a32a8f3eec12661433fe419b2a23ee153a77b3f23b2384b8e2cab344950a2aa7",
+        "songList": "docs/annotation-eval-songs.json",
+        "charts": "~/Documents/paseo-briefings/vibe-guitar-acc-charts-2026-11-13"
+      },
+      {
+        "file": "~/Documents/paseo-briefings/vibe-guitar-recognition-improvement/rescore-dev1.json",
+        "sha256": "8c5dac942a92f6ec8ce37ea3bfa858f23dba6d675a11df4077f673ed8e38624a",
+        "songList": "docs/annotation-eval-songs-heldout-v1.json",
+        "charts": "~/Documents/paseo-briefings/vibe-guitar-acc-charts-heldout-v1"
+      }
+    ],
+    "note": "Re-score of the official stored dev charts with the current evaluator; status scored only. officialChartScore is that re-score (WCSR fractions) and serves the drift check, never acceptance."
+  },
+  "count": 23,
+  "songs": [
+    {
+      "id": "pilot-beatles-drive-my-car",
+      "songList": "docs/annotation-eval-songs.json",
+      "dataset": "isophonics-the-beatles",
+      "youtubeId": "kfSQkZuIx84",
+      "offsetSec": 0.1670000000000141,
+      "rate": 1,
+      "mediaDurationSec": 148.901,
+      "alignMethod": "beats",
+      "alignStrength": "strong",
+      "btcTraining": "likely",
+      "complexity": "moderate",
+      "groups": [
+        "dataset:isophonics-btc-overlap",
+        "complexity:moderate"
+      ],
+      "officialChartScore": {
+        "majmin": 0.8914195272012744,
+        "root": 0.9384079096580988,
+        "sevenths": 0.6456552968471385,
+        "majminEvaluatedSec": 142.79352999999998
+      }
+    },
+    {
+      "id": "pilot-talking-heads-and-she-was",
+      "songList": "docs/annotation-eval-songs.json",
+      "dataset": "billboard-2.0.1-lab",
+      "youtubeId": "Q4W8RY3fxdI",
+      "offsetSec": 0.07689909375001946,
+      "rate": 1,
+      "mediaDurationSec": 217.821,
+      "alignMethod": "chord-boundaries",
+      "alignStrength": "weak",
+      "btcTraining": "not-known",
+      "complexity": "simple",
+      "groups": [
+        "dataset:billboard",
+        "complexity:simple"
+      ],
+      "officialChartScore": {
+        "majmin": 0.7505146336245431,
+        "root": 0.7505146336245431,
+        "sevenths": 0.7505146336245431,
+        "majminEvaluatedSec": 214.12467126795585
+      }
+    },
+    {
+      "id": "beatles-something",
+      "songList": "docs/annotation-eval-songs.json",
+      "dataset": "isophonics-the-beatles",
+      "youtubeId": "VWO3nEuWo4k",
+      "offsetSec": 0.13600690152858147,
+      "rate": 1.0008069165319702,
+      "mediaDurationSec": 182.301,
+      "alignMethod": "beats",
+      "alignStrength": "strong",
+      "btcTraining": "likely",
+      "complexity": "complex",
+      "groups": [
+        "dataset:isophonics-btc-overlap",
+        "complexity:complex"
+      ],
+      "officialChartScore": {
+        "majmin": 0.8135469552889759,
+        "root": 0.7845560523141594,
+        "sevenths": 0.7816255173051795,
+        "majminEvaluatedSec": 167.02554100526555
+      }
+    },
+    {
+      "id": "beatles-come-together",
+      "songList": "docs/annotation-eval-songs.json",
+      "dataset": "isophonics-the-beatles",
+      "youtubeId": "oolpPmuK2I8",
+      "offsetSec": 0.10373663121704169,
+      "rate": 1.0011274521723632,
+      "mediaDurationSec": 259.961,
+      "alignMethod": "beats",
+      "alignStrength": "strong",
+      "btcTraining": "likely",
+      "complexity": "simple",
+      "groups": [
+        "dataset:isophonics-btc-overlap",
+        "complexity:simple"
+      ],
+      "officialChartScore": {
+        "majmin": 0.8876024000106875,
+        "root": 0.9427334997986954,
+        "sevenths": 0.8535447065217989,
+        "majminEvaluatedSec": 255.3912411350565
+      }
+    },
+    {
+      "id": "beatles-let-it-be",
+      "songList": "docs/annotation-eval-songs.json",
+      "dataset": "isophonics-the-beatles",
+      "youtubeId": "QDYfEBY9NM4",
+      "offsetSec": -0.041077918116020684,
+      "rate": 1.001558163566381,
+      "mediaDurationSec": 243.041,
+      "alignMethod": "beats",
+      "alignStrength": "strong",
+      "btcTraining": "likely",
+      "complexity": "simple",
+      "groups": [
+        "dataset:isophonics-btc-overlap",
+        "complexity:simple"
+      ],
+      "officialChartScore": {
+        "majmin": 0.8487430848777209,
+        "root": 0.8487430848777209,
+        "sevenths": 0.8222539820304683,
+        "majminEvaluatedSec": 239.73764799486023
+      }
+    },
+    {
+      "id": "beatles-while-my-guitar-gently-weeps",
+      "songList": "docs/annotation-eval-songs.json",
+      "dataset": "isophonics-the-beatles",
+      "youtubeId": "bI8P6ZSHSvE",
+      "offsetSec": 0.07976079773504498,
+      "rate": 1.0006587727496437,
+      "mediaDurationSec": 285.021,
+      "alignMethod": "beats",
+      "alignStrength": "strong",
+      "btcTraining": "likely",
+      "complexity": "moderate",
+      "groups": [
+        "dataset:isophonics-btc-overlap",
+        "complexity:moderate"
+      ],
+      "officialChartScore": {
+        "majmin": 0.8447719601502254,
+        "root": 0.8447719601502254,
+        "sevenths": 0.8377520296101859,
+        "majminEvaluatedSec": 281.8861996759
+      }
+    },
+    {
+      "id": "billboard-police-every-little-thing-she-does-is-magic",
+      "songList": "docs/annotation-eval-songs.json",
+      "dataset": "billboard-2.0.1-lab",
+      "youtubeId": "Il2biXNYQ-s",
+      "offsetSec": 0.019637189000000214,
+      "rate": 1,
+      "mediaDurationSec": 260.921,
+      "alignMethod": "chord-boundaries",
+      "alignStrength": "weak",
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "groups": [
+        "dataset:billboard",
+        "complexity:complex"
+      ],
+      "officialChartScore": {
+        "majmin": 0.7420591802350306,
+        "root": 0.7160718490819735,
+        "sevenths": 0.5170874084905651,
+        "majminEvaluatedSec": 182.6136542626809
+      }
+    },
+    {
+      "id": "billboard-abba-knowing-me-knowing-you",
+      "songList": "docs/annotation-eval-songs.json",
+      "dataset": "billboard-2.0.1-lab",
+      "youtubeId": "_oAnFBiQng4",
+      "offsetSec": -0.04900982566661014,
+      "rate": 1,
+      "mediaDurationSec": 241.941,
+      "alignMethod": "chord-boundaries",
+      "alignStrength": "weak",
+      "btcTraining": "not-known",
+      "complexity": "moderate",
+      "groups": [
+        "dataset:billboard",
+        "complexity:moderate"
+      ],
+      "officialChartScore": {
+        "majmin": 0.9558884334411825,
+        "root": 0.9566580298771072,
+        "sevenths": 0.852487257059868,
+        "majminEvaluatedSec": 234.97138888949962
+      }
+    },
+    {
+      "id": "billboard-eagles-best-of-my-love",
+      "songList": "docs/annotation-eval-songs.json",
+      "dataset": "billboard-2.0.1-lab",
+      "youtubeId": "kAvwl-W68aw",
+      "offsetSec": 0.030532880500001056,
+      "rate": 1,
+      "mediaDurationSec": 274.901,
+      "alignMethod": "chord-boundaries",
+      "alignStrength": "weak",
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "groups": [
+        "dataset:billboard",
+        "complexity:complex"
+      ],
+      "officialChartScore": {
+        "majmin": 0.7299967829048888,
+        "root": 0.697008141454417,
+        "sevenths": 0.5776952196244961,
+        "majminEvaluatedSec": 257.8002267574994
+      }
+    },
+    {
+      "id": "billboard-david-bowie-space-oddity",
+      "songList": "docs/annotation-eval-songs.json",
+      "dataset": "billboard-2.0.1-lab",
+      "youtubeId": "F-ZVfpdkFsI",
+      "offsetSec": -0.10161904699990146,
+      "rate": 1,
+      "mediaDurationSec": 316.661,
+      "alignMethod": "chord-boundaries",
+      "alignStrength": "weak",
+      "btcTraining": "not-known",
+      "complexity": "moderate",
+      "groups": [
+        "dataset:billboard",
+        "complexity:moderate"
+      ],
+      "officialChartScore": {
+        "majmin": 0.8460972627929207,
+        "root": 0.9024219573833694,
+        "sevenths": 0.6717242727073672,
+        "majminEvaluatedSec": 310.2530612250016
+      }
+    },
+    {
+      "id": "billboard-1190-dr-hook-only-sixteen",
+      "songList": "docs/annotation-eval-songs-heldout-v1.json",
+      "dataset": "billboard-2.0.1-lab",
+      "youtubeId": "FUr7lC3631Q",
+      "offsetSec": 0.11761904800000367,
+      "rate": 1,
+      "mediaDurationSec": 166,
+      "alignMethod": "chord-boundaries",
+      "alignStrength": "weak",
+      "btcTraining": "not-known",
+      "complexity": "simple",
+      "groups": [
+        "dataset:billboard",
+        "complexity:simple"
+      ],
+      "officialChartScore": {
+        "majmin": 0.8468193451033441,
+        "root": 0.8529423076806317,
+        "sevenths": 0.8103235745728364,
+        "majminEvaluatedSec": 160.85391383140015
+      }
+    },
+    {
+      "id": "billboard-0591-eagles-the-long-run",
+      "songList": "docs/annotation-eval-songs-heldout-v1.json",
+      "dataset": "billboard-2.0.1-lab",
+      "youtubeId": "f6liGUpVuP8",
+      "offsetSec": 0.1411337875000072,
+      "rate": 1,
+      "mediaDurationSec": 222,
+      "alignMethod": "chord-boundaries",
+      "alignStrength": "weak",
+      "btcTraining": "not-known",
+      "complexity": "simple",
+      "groups": [
+        "dataset:billboard",
+        "complexity:simple"
+      ],
+      "officialChartScore": {
+        "majmin": 0.9559408451113778,
+        "root": 0.9559408451113778,
+        "sevenths": 0.8662679056442633,
+        "majminEvaluatedSec": 215.5451972787
+      }
+    },
+    {
+      "id": "billboard-0542-wham-wake-me-up-before-you-go-go",
+      "songList": "docs/annotation-eval-songs-heldout-v1.json",
+      "dataset": "billboard-2.0.1-lab",
+      "youtubeId": "17t7SEsoKfE",
+      "offsetSec": -0.05809523737500854,
+      "rate": 1,
+      "mediaDurationSec": 233,
+      "alignMethod": "chord-boundaries",
+      "alignStrength": "weak",
+      "btcTraining": "not-known",
+      "complexity": "moderate",
+      "groups": [
+        "dataset:billboard",
+        "complexity:moderate"
+      ],
+      "officialChartScore": {
+        "majmin": 0.8468982180623232,
+        "root": 0.8468982180623232,
+        "sevenths": 0.7213538193557233,
+        "majminEvaluatedSec": 228.616666666875
+      }
+    },
+    {
+      "id": "billboard-0891-the-who-happy-jack",
+      "songList": "docs/annotation-eval-songs-heldout-v1.json",
+      "dataset": "billboard-2.0.1-lab",
+      "youtubeId": "_64CuYwlmT4",
+      "offsetSec": 0.15299799032953282,
+      "rate": 0.9992029624990824,
+      "mediaDurationSec": 132,
+      "alignMethod": "chord-boundaries",
+      "alignStrength": "weak",
+      "btcTraining": "not-known",
+      "complexity": "simple",
+      "groups": [
+        "dataset:billboard",
+        "complexity:simple"
+      ],
+      "officialChartScore": {
+        "majmin": 0.8780919757525582,
+        "root": 0.8780919757525582,
+        "sevenths": 0.8780919757525582,
+        "majminEvaluatedSec": 126.29917554849605
+      }
+    },
+    {
+      "id": "billboard-1232-bonnie-pointer-heaven-must-have-sent-you",
+      "songList": "docs/annotation-eval-songs-heldout-v1.json",
+      "dataset": "billboard-2.0.1-lab",
+      "youtubeId": "owiYwYdjgM8",
+      "offsetSec": -0.033044216750147945,
+      "rate": 1,
+      "mediaDurationSec": 215,
+      "alignMethod": "chord-boundaries",
+      "alignStrength": "weak",
+      "btcTraining": "not-known",
+      "complexity": "moderate",
+      "groups": [
+        "dataset:billboard",
+        "complexity:moderate"
+      ],
+      "officialChartScore": {
+        "majmin": 0.6423197224997417,
+        "root": 0.6423197224997417,
+        "sevenths": 0.4905845591825373,
+        "majminEvaluatedSec": 208.26478571375014
+      }
+    },
+    {
+      "id": "billboard-1126-genesis-invisible-touch",
+      "songList": "docs/annotation-eval-songs-heldout-v1.json",
+      "dataset": "billboard-2.0.1-lab",
+      "youtubeId": "MHSGsIPMQIo",
+      "offsetSec": 0.14596938800009782,
+      "rate": 1,
+      "mediaDurationSec": 209,
+      "alignMethod": "chord-boundaries",
+      "alignStrength": "weak",
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "groups": [
+        "dataset:billboard",
+        "complexity:complex"
+      ],
+      "officialChartScore": {
+        "majmin": 0.7878274160948127,
+        "root": 0.8147582870822528,
+        "sevenths": 0.7332178187123564,
+        "majminEvaluatedSec": 172.4764476253684
+      }
+    },
+    {
+      "id": "billboard-0010-billy-joel-an-innocent-man",
+      "songList": "docs/annotation-eval-songs-heldout-v1.json",
+      "dataset": "billboard-2.0.1-lab",
+      "youtubeId": "zx9-3On46-c",
+      "offsetSec": -0.06826530599989837,
+      "rate": 1,
+      "mediaDurationSec": 318,
+      "alignMethod": "chord-boundaries",
+      "alignStrength": "weak",
+      "btcTraining": "not-known",
+      "complexity": "moderate",
+      "groups": [
+        "dataset:billboard",
+        "complexity:moderate"
+      ],
+      "officialChartScore": {
+        "majmin": 0.7700791127331177,
+        "root": 0.7772543446442587,
+        "sevenths": 0.7349456713036399,
+        "majminEvaluatedSec": 310.79806381061366
+      }
+    },
+    {
+      "id": "billboard-0879-run-d-m-c-walk-this-way",
+      "songList": "docs/annotation-eval-songs-heldout-v1.json",
+      "dataset": "billboard-2.0.1-lab",
+      "youtubeId": "dLB0P8nT2w8",
+      "offsetSec": -0.1453641375327921,
+      "rate": 1.001566211934454,
+      "mediaDurationSec": 311,
+      "alignMethod": "chord-boundaries",
+      "alignStrength": "weak",
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "groups": [
+        "dataset:billboard",
+        "complexity:complex"
+      ],
+      "officialChartScore": {
+        "majmin": 0.7636600473229368,
+        "root": 0.7842268934508287,
+        "sevenths": 0.3197632853479426,
+        "majminEvaluatedSec": 179.25828227774525
+      }
+    },
+    {
+      "id": "billboard-0864-oak-ridge-boys-elvira",
+      "songList": "docs/annotation-eval-songs-heldout-v1.json",
+      "dataset": "billboard-2.0.1-lab",
+      "youtubeId": "2mgxsXu3D9A",
+      "offsetSec": 0.048061224749998396,
+      "rate": 1,
+      "mediaDurationSec": 162,
+      "alignMethod": "chord-boundaries",
+      "alignStrength": "weak",
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "groups": [
+        "dataset:billboard",
+        "complexity:complex"
+      ],
+      "officialChartScore": {
+        "majmin": 0.952286512207119,
+        "root": 0.9556883062050313,
+        "sevenths": 0.835702510057602,
+        "majminEvaluatedSec": 145.57195011400006
+      }
+    },
+    {
+      "id": "billboard-1145-tevin-campbell-tell-me-what-you-want-me-to-do",
+      "songList": "docs/annotation-eval-songs-heldout-v1.json",
+      "dataset": "billboard-2.0.1-lab",
+      "youtubeId": "LpMlZCXPYRQ",
+      "offsetSec": -0.1343537409999547,
+      "rate": 1,
+      "mediaDurationSec": 257,
+      "alignMethod": "chord-boundaries",
+      "alignStrength": "weak",
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "groups": [
+        "dataset:billboard",
+        "complexity:complex"
+      ],
+      "officialChartScore": {
+        "majmin": 0.8796951452371569,
+        "root": 0.8460512137034777,
+        "sevenths": 0.7975250172129846,
+        "majminEvaluatedSec": 204.04386382630872
+      }
+    },
+    {
+      "id": "billboard-0393-genesis-misunderstanding",
+      "songList": "docs/annotation-eval-songs-heldout-v1.json",
+      "dataset": "billboard-2.0.1-lab",
+      "youtubeId": "tVQHWKfzYEM",
+      "offsetSec": 0.06589569200000311,
+      "rate": 1,
+      "mediaDurationSec": 194,
+      "alignMethod": "chord-boundaries",
+      "alignStrength": "weak",
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "groups": [
+        "dataset:billboard",
+        "complexity:complex"
+      ],
+      "officialChartScore": {
+        "majmin": 0.762864386314189,
+        "root": 0.762864386314189,
+        "sevenths": 0.6996072270296836,
+        "majminEvaluatedSec": 190.02975736999997
+      }
+    },
+    {
+      "id": "billboard-0577-canned-heat-let-s-work-together",
+      "songList": "docs/annotation-eval-songs-heldout-v1.json",
+      "dataset": "billboard-2.0.1-lab",
+      "youtubeId": "L5O0rPsfFmM",
+      "offsetSec": 0.10191610000002527,
+      "rate": 1,
+      "mediaDurationSec": 170,
+      "alignMethod": "chord-boundaries",
+      "alignStrength": "weak",
+      "btcTraining": "not-known",
+      "complexity": "moderate",
+      "groups": [
+        "dataset:billboard",
+        "complexity:moderate"
+      ],
+      "officialChartScore": {
+        "majmin": 0.937335439337912,
+        "root": 0.9619962071288313,
+        "sevenths": 0.668649778358141,
+        "majminEvaluatedSec": 162.86775997873963
+      }
+    },
+    {
+      "id": "billboard-0261-iron-butterfly-in-a-gadda-da-vida",
+      "songList": "docs/annotation-eval-songs-heldout-v1.json",
+      "dataset": "billboard-2.0.1-lab",
+      "youtubeId": "XugIsZbTFy0",
+      "offsetSec": -0.04016439875000487,
+      "rate": 1,
+      "mediaDurationSec": 174,
+      "alignMethod": "chord-boundaries",
+      "alignStrength": "weak",
+      "btcTraining": "not-known",
+      "complexity": "complex",
+      "groups": [
+        "dataset:billboard",
+        "complexity:complex"
+      ],
+      "officialChartScore": {
+        "majmin": 0.36091450236686323,
+        "root": 0.7383768271042764,
+        "sevenths": 0.2155214731905263,
+        "majminEvaluatedSec": 148.98423922874983
+      }
+    }
+  ]
+}
