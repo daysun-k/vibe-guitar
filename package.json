@@ -18,8 +18,13 @@
     "phone-check": "node scripts/phone-check.mjs",
     "phone-layout": "node scripts/phone-layout.mjs",
     "build:latency-probe": "node scripts/build.mjs --latency-probe",
+    "build:audio-dump": "node scripts/build.mjs --audio-dump",
     "latency-probe": "node scripts/latency-probe.mjs",
-    "latency-report": "node scripts/latency-report.mjs"
+    "latency-report": "node scripts/latency-report.mjs",
+    "audio-dump-receiver": "node scripts/audio-dump-receiver.mjs",
+    "replay-audio": "node scripts/replay-audio.mjs",
+    "replay-parity": "node scripts/replay-parity.mjs",
+    "paired-eval": "node scripts/paired-eval.mjs"
   },
   "devDependencies": {
     "@types/chrome": "^0.3.7",

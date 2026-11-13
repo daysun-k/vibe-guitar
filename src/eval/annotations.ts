@@ -1119,7 +1119,7 @@ export function annotationChart(segs: AnnotationSegment[], offsetSec: number, be
   };
 }
 
-function changeTimes(events: { startSec: number; chord: string }[], ranges: CoverageRange[]): number[] {
+export function changeTimes(events: { startSec: number; chord: string }[], ranges: CoverageRange[]): number[] {
   const sorted = [...events].sort((a, b) => a.startSec - b.startSec);
   const out: number[] = [];
   for (let i = 1; i < sorted.length; i++) {
@@ -1129,7 +1129,7 @@ function changeTimes(events: { startSec: number; chord: string }[], ranges: Cove
   return out;
 }
 
-function overlapRanges(a: CoverageRange[], b: CoverageRange[]): CoverageRange[] {
+export function overlapRanges(a: CoverageRange[], b: CoverageRange[]): CoverageRange[] {
   const out: CoverageRange[] = [];
   for (const x of normalizeCoverage(a))
     for (const y of normalizeCoverage(b)) {
