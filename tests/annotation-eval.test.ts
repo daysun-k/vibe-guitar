@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import type { Chart } from '../src/chart/types';
 import { renderAnnotationReport } from '../src/eval/annotation-report';
 import {
+  RATE_FIT_MAX,
   SONG_LIST_SCHEMA,
   alignAnnotation,
   annotationChart,
@@ -211,12 +212,16 @@ describe('alignment', () => {
     expect(a.warnings.join(' ')).toMatch(/bar phase prefers offset 0\.38/);
   });
 
-  it('excludes a song whose local offsets drift', () => {
-    // Annotation runs 0.1% slow: about 0.19 s of drift over the song.
+  it('fits a linear 0.1% speed difference instead of excluding it as drift (VGT-7)', () => {
+    // Was 'excludes a song whose local offsets drift': a constant speed difference inside
+    // RATE_FIT_MAX is now modelled as a rate, so the same input is kept. Non-linear section
+    // offsets are still excluded (see the VGT-7 tests below).
     const ann = est.map((b) => (b - 0.05) * 1.001);
     const a = alignAnnotation(alignInput(est, ann));
-    expect(a.excluded?.code).toBe('drift');
-    expect(a.driftSec!).toBeGreaterThan(0.1);
+    expect(a.excluded).toBeNull();
+    expect(a.rate).toBeCloseTo(1 / 1.001, 4);
+    expect(a.offsetSec).toBeCloseTo(0.05, 2);
+    expect(a.driftSec!).toBeLessThan(0.03);
   });
 
   it('excludes a song whose upload length differs by more than 2 s', () => {
@@ -232,11 +237,13 @@ describe('alignment', () => {
   });
 
   it('marks chord-boundary alignment as weak and reports the coarse check', () => {
-    const changes = grid(3, 180, 2).map((t) => t - 0.2);
+    // True offset 0.15 s, clear of the nearZeroSec boundary (0.2 s): exactly at the boundary the
+    // candidate 0.2 and its whole-bar alias -1.8 are now an ambiguous pair (VGT-7).
+    const changes = grid(3, 180, 2).map((t) => t - 0.15);
     const a = alignAnnotation(alignInput(est, changes, { method: 'chord-boundaries', downbeatLandmarks: changes }));
     expect(a.strength).toBe('weak');
     expect(a.excluded).toBeNull();
-    expect(a.offsetSec).toBeCloseTo(0.2, 2);
+    expect(a.offsetSec).toBeCloseTo(0.15, 2);
     expect(a.coarse.startOffsetSec).toBeCloseTo(est[0] - changes[0], 5);
   });
 
@@ -271,6 +278,7 @@ describe('alignment', () => {
     const a = alignAnnotation(alignInput(beats, changes, { method: 'chord-boundaries', downbeatLandmarks: changes, estimateFirstDownbeatSec: null }));
     expect(a.excluded).toBeNull();
     expect(a.driftSec!).toBeLessThan(0.1);
+    expect(a.rate).toBe(1);
   });
 
   it('does not fit the length-ratio scale to sparse noisy boundaries (review s14-r4 R3)', () => {
@@ -280,6 +288,7 @@ describe('alignment', () => {
     const a = alignAnnotation(alignInput(beats, changes, { method: 'chord-boundaries', downbeatLandmarks: changes, annotationDurationSec: 200, mediaDurationSec: 201.5, estimateFirstDownbeatSec: null }));
     expect(a.excluded).toBeNull();
     expect(a.driftSec!).toBeLessThan(0.1);
+    expect(a.rate).toBe(1);
   });
 
   it('keeps a same-speed upload whose length differs by a longer intro or outro', () => {
@@ -292,6 +301,161 @@ describe('alignment', () => {
   it('derives downbeats from the first downbeat and the bar length', () => {
     expect(impliedDownbeats([0, 1, 2, 3, 4, 5, 6, 7, 8], 2, 3)).toEqual([2, 5, 8]);
     expect(impliedDownbeats([0, 1, 2], 1.5, 3)).toBeNull();
+  });
+});
+
+/** Deterministic PRNG (mulberry32) for the fixed-seed chance-match cases. */
+function rng(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+describe('alignment: bounded rate and offset choice (VGT-7)', () => {
+  const est = grid(1, 190, 0.5, 0.01);
+  const slow = grid(1, 190, 0.8, 0.01);
+
+  it('recovers a linear speed difference in both directions, with the lead-in chosen by bar phase and a misleading length ratio', () => {
+    for (const rate of [1.0008, 0.9992, 1.0018]) {
+      // media = 0.5 + rate × annotation time; no candidate is near 0, so bar phase picks 0.5 s.
+      // The upload is 1.5 s longer (a longer outro): the length ratio suggests 0.75%, which is wrong.
+      const ann = slow.map((b) => (b - 0.5) / rate);
+      const a = alignAnnotation(alignInput(slow, ann, { mediaDurationSec: 201.5 }));
+      expect(a.excluded, `rate ${rate}`).toBeNull();
+      expect(a.rate).toBeCloseTo(rate, 4);
+      expect(a.offsetSec).toBeCloseTo(0.5, 2);
+      expect(a.rateFit?.accepted).toBe(true);
+      expect(a.driftSec!).toBeLessThan(0.03);
+    }
+  });
+
+  it('does not keep speed differences beyond RATE_FIT_MAX when the lengths agree', () => {
+    for (const rate of [1.005, 0.995, 1.01, 0.99]) {
+      const ann = est.map((b) => (b - 0.05) / rate);
+      const a = alignAnnotation(alignInput(est, ann));
+      expect(a.excluded, `rate ${rate}`).not.toBeNull();
+      expect(Math.abs(a.rate - 1)).toBeLessThanOrEqual(RATE_FIT_MAX + 1e-12);
+    }
+  });
+
+  it('still excludes a non-linear section offset (middle third 150 ms late)', () => {
+    const ann = est.map((b) => b - 0.05 - (b > 66 && b < 128 ? 0.15 : 0));
+    const a = alignAnnotation(alignInput(est, ann));
+    expect(['landmarks-disagree', 'drift']).toContain(a.excluded?.code);
+    expect(a.rate).toBe(1);
+  });
+
+  it('keeps every beat phase as a candidate when drift and tempo wander make raw hit counts trend', () => {
+    // Tempo wanders around 0.52 s per beat; the upload runs 0.07% fast and starts 0.14 s later.
+    const ann: number[] = [];
+    for (let t = 0.3; t < 280; t += 0.52 + 0.012 * Math.sin((2 * Math.PI * t) / 97)) ann.push(t);
+    const media = ann.map((t, k) => 0.14 + 1.0007 * t + 0.008 * Math.sin(k * 1.3));
+    const a = alignAnnotation(alignInput(media, ann, { annotationDurationSec: 285, mediaDurationSec: 285 }));
+    expect(a.excluded).toBeNull();
+    expect(a.offsetSec).toBeCloseTo(0.14, 1);
+    expect(a.rate).toBeCloseTo(1.0007, 4);
+  });
+
+  it('fits no rate to chance matches (fixed seeds): doubled beats, clustered landmarks, missing beats, random landmarks', () => {
+    let runs = 0;
+    let fitted = 0;
+    for (let seed = 1; seed <= 12; seed++) {
+      const rand = rng(seed);
+      const real = grid(1, 200, 0.64);
+      const doubled = grid(1, 200, 0.32, 0.008);
+      const bars = real.filter((_, k) => k % 4 === 0).map((t) => t - 0.1 + (rand() - 0.5) * 0.08);
+      const clustered = bars.filter((t) => t < 85);
+      const missing = doubled.filter(() => rand() > 0.15);
+      const random = Array.from({ length: 80 }, () => 1 + rand() * 198).sort((x, y) => x - y);
+      const cases: [number[], number[]][] = [
+        [doubled, bars],
+        [doubled, clustered],
+        [missing, bars],
+        [doubled, random],
+      ];
+      for (const [beats, lm] of cases) {
+        const a = alignAnnotation(alignInput(beats, lm, { method: 'chord-boundaries', downbeatLandmarks: lm, estimateFirstDownbeatSec: null }));
+        runs++;
+        if (a.rate !== 1 || a.candidates.some((c) => c.rate !== 1)) fitted++;
+      }
+    }
+    expect(runs).toBe(48);
+    expect(fitted).toBe(0);
+  });
+
+  it('keeps separate rate-1 beat phases when no rate is accepted (review vgt7-s1-r1 F1)', () => {
+    // Beats every 0.21 s leave rate-1 phases 0.01 s apart; a maximum over rejected rates bridged
+    // them into one candidate, so an undetermined offset was scored.
+    const beats = Array.from({ length: 899 }, (_, k) => 1 + k * 0.21);
+    const lm = Array.from({ length: 214 }, (_, k) => 1 + k * 0.84 - 0.33);
+    const a = alignAnnotation(alignInput(beats, lm, { method: 'chord-boundaries', downbeatLandmarks: lm, estimateFirstDownbeatSec: null }));
+    expect(a.rate).toBe(1);
+    expect(a.candidates.length).toBeGreaterThan(1);
+    expect(a.excluded?.code).toBe('ambiguous');
+  });
+
+  it('fits no rate to random landmarks on dense beats, where chance matching is high (seeds 1-40)', () => {
+    // Doubled beats every 0.32 s with a 0.1 s tolerance: a random landmark matches 62.5% of the
+    // time, so a chance configuration can reach 80% on every fold (2 of 160 random cases of the
+    // fixed-seed generator above did before the held-out share was measured above chance).
+    const doubled = grid(1, 200, 0.32, 0.008);
+    let fitted = 0;
+    for (let seed = 1; seed <= 40; seed++) {
+      const rand = rng(1000 + seed);
+      const random = Array.from({ length: 80 }, () => 1 + rand() * 198).sort((x, y) => x - y);
+      const a = alignAnnotation(alignInput(doubled, random, { method: 'chord-boundaries', downbeatLandmarks: random, estimateFirstDownbeatSec: null }));
+      if (a.rate !== 1 || a.candidates.some((c) => c.rate !== 1)) fitted++;
+    }
+    expect(fitted).toBe(0);
+  });
+
+  it('applies the near-0 rule only when the nearest other candidate is more than 2 × nearZeroSec away', () => {
+    // Bars of 8 estimate beats; chord changes on every bar. True offset 0.53 s (below) / 0.57 s (above).
+    const below = grid(1, 190, 0.38, 0.005);
+    const changesBelow = grid(1, 185, 8 * 0.38).map((t) => t - 0.53);
+    const a = alignAnnotation(alignInput(below, changesBelow, { method: 'chord-boundaries', downbeatLandmarks: changesBelow, estimateBeatsPerBar: 8 }));
+    expect(a.excluded).toBeNull();
+    expect(a.offsetSec).toBeCloseTo(0.53, 2);
+    expect(a.warnings.join(' ')).toMatch(/bar phase decides/);
+
+    const above = grid(1, 190, 0.42, 0.005);
+    const changesAbove = grid(1, 185, 8 * 0.42).map((t) => t - 0.57);
+    const b = alignAnnotation(alignInput(above, changesAbove, { method: 'chord-boundaries', downbeatLandmarks: changesAbove, estimateBeatsPerBar: 8 }));
+    expect(b.offsetSec).toBeCloseTo(0.15, 2);
+    expect(b.warnings.join(' ')).toMatch(/kept the one near 0/);
+  });
+
+  it('lets bar phase override a near-0 candidate on doubled estimate beats', () => {
+    // Estimate beats every 0.32 s (double tempo) put a candidate within 0.2 s of 0 whatever the
+    // offset (here 0.01 s). True offset 0.33 s; its whole-bar alias -2.23 s is outside the search.
+    const fast = grid(1, 190, 0.32, 0.005);
+    const changes = grid(1, 185, 2.56).map((t) => t - 0.33);
+    const a = alignAnnotation(alignInput(fast, changes, { method: 'chord-boundaries', downbeatLandmarks: changes, estimateBeatsPerBar: 8 }));
+    expect(a.excluded).toBeNull();
+    expect(a.offsetSec).toBeCloseTo(0.33, 2);
+    expect(a.candidates.some((c) => Math.abs(c.offsetSec) <= 0.2)).toBe(true);
+  });
+
+  it('excludes as ambiguous when candidates are close and bar phase is unavailable', () => {
+    const fast = grid(1, 190, 0.32, 0.005);
+    const changes = grid(1, 185, 2.56).map((t) => t - 0.53);
+    const a = alignAnnotation(alignInput(fast, changes, { method: 'chord-boundaries', downbeatLandmarks: changes, estimateFirstDownbeatSec: null }));
+    expect(a.ambiguous).toBe(true);
+    expect(a.excluded?.code).toBe('ambiguous');
+  });
+
+  it('excludes as ambiguous when bar phase leaves whole-bar aliases and no candidate stands apart near 0', () => {
+    // 120 bpm, bars of 2 s, true offset 0.75 s: 0.75 and -1.25 both put changes on implied downbeats.
+    const changes = grid(3, 180, 2).map((t) => t - 0.75);
+    const a = alignAnnotation(alignInput(est, changes, { method: 'chord-boundaries', downbeatLandmarks: changes }));
+    expect(a.ambiguous).toBe(true);
+    expect(a.excluded?.code).toBe('ambiguous');
+    expect(a.candidates.length).toBeGreaterThan(1);
   });
 });
 
@@ -337,6 +501,22 @@ describe('scoring', () => {
     const ref = annotationChart(SEGS, off, null, 30);
     expect(ref.coverage).toEqual([{ fromSec: 2.3, toSec: 24.3 }]);
     expect(ref.events.find((e) => e.startSec === 6.3)?.chord).toBe('Am7/G');
+  });
+
+  it('maps segments, coverage and beats through the rate, clips at 0 s, and defaults to rate 1 (VGT-7)', () => {
+    const m = (t: number) => -2.5 + 1.001 * t;
+    const ref = annotationChart(SEGS, -2.5, [1, 2, 3], 30, false, 1.001);
+    // The first chord starts at 2 s: m(2) < 0, so coverage and that chord start at 0 s.
+    expect(ref.coverage[0].fromSec).toBe(0);
+    expect(ref.coverage[0].toSec).toBeCloseTo(m(24), 9);
+    expect(ref.events[0]).toMatchObject({ startSec: 0, chord: 'C' });
+    expect(ref.events.find((e) => e.chord === 'Am7/G')!.startSec).toBeCloseTo(m(6), 9);
+    expect(ref.events.at(-1)!.startSec).toBeCloseTo(m(26), 9);
+    expect(ref.timing.beatTimes).toEqual([1, 2, 3].map(m));
+    expect(annotationChart(SEGS, off, [1, 2], 30)).toEqual(annotationChart(SEGS, off, [1, 2], 30, false, 1));
+    expect(scoreSong(SEGS, null, auto, off, 30)).toEqual(scoreSong(SEGS, null, auto, off, 30, 1, 1));
+    // Unknown (X) seconds are media seconds under the map.
+    expect(scoreSong(SEGS, null, auto, off, 30, 1, 1.001).unknownSec).toBeCloseTo(2 * 1.001, 9);
   });
 
   it('scores with compareCharts and reports evaluated and excluded seconds', () => {
@@ -443,6 +623,18 @@ describe('evaluateSongs', () => {
   });
   const res = evaluateSongs(list(), uploads, io, { sha256: 'f'.repeat(64), now: new Date('2026-11-14T00:00:00Z') });
   const by = (id: string) => res.songs.find((s) => s.id === id)!;
+
+  it('aligns from landmarks only: changing the predicted chord labels leaves every alignment identical (VGT-7)', () => {
+    const relabel = (c: Chart): Chart => ({ ...c, events: c.events.map((e) => ({ ...e, chord: e.chord === 'N' ? 'N' : 'E' })) });
+    const other = relabel(chart);
+    const io2 = memoryIo(
+      { 'iso/song.lab': lab, 'iso/song.txt': beatsTxt, 'bb/song.lab': lab },
+      { aaaaaaaaaaa: other, bbbbbbbbbbb: other, ccccccccccc: { chart: other }, ppppppppppp: other },
+    );
+    const res2 = evaluateSongs(list(), uploads, io2, { sha256: 'f'.repeat(64), now: new Date('2026-11-14T00:00:00Z') });
+    for (const s of res.songs) expect(res2.songs.find((x) => x.id === s.id)!.alignment).toEqual(s.alignment);
+    expect(res2.songs.find((x) => x.id === 'a')!.score!.comparison.majmin.score).toBeLessThan(by('a').score!.comparison.majmin.score);
+  });
 
   it('scores songs with frozen offsets, excludes and reports missing songs', () => {
     expect(by('a').status).toBe('scored');
