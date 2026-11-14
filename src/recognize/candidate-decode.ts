@@ -61,7 +61,7 @@ export interface RepetitionOptions {
 }
 
 /** RecognizerOptions plus the candidate options (replay config `recognizer`, bench --config). */
-export interface CandidateRecognizerOptions extends Omit<RecognizerOptions, 'decode'> {
+export interface CandidateRecognizerOptions extends Omit<RecognizerOptions, 'decode' | 'emission'> {
   decode?: CandidateDecodeOptions;
   units?: HalfBeatOptions;
   emission?: EmissionMode;
@@ -77,15 +77,14 @@ export interface CandidateRecognizerOptions extends Omit<RecognizerOptions, 'dec
   repetition?: RepetitionOptions;
 }
 
-/** True when an option outside the plain Recognizer (vocabulary, decode.changePenalty, noBeats) is set. */
+/** True when an option outside the plain Recognizer (vocabulary, decode.changePenalty, noBeats, emission meanLog, pitchShift) is set. */
 export function hasCandidateOptions(o: CandidateRecognizerOptions): boolean {
   return (
     o.decode?.familyFirst !== undefined ||
     o.units !== undefined ||
-    o.emission !== undefined ||
+    (o.emission !== undefined && o.emission !== 'meanLog') ||
     o.majmin !== undefined ||
     o.nLogPrior !== undefined ||
-    o.pitchShift !== undefined ||
     o.keyPrior !== undefined ||
     o.bassRoot !== undefined ||
     o.repetition !== undefined
@@ -99,6 +98,8 @@ export function plainRecognizerOptions(o: CandidateRecognizerOptions): Recognize
   if (o.vocabulary !== undefined) out.vocabulary = o.vocabulary;
   if (o.noBeats !== undefined) out.noBeats = o.noBeats;
   if (o.decode?.changePenalty) out.decode = { changePenalty: [...o.decode.changePenalty] };
+  if (o.emission === 'meanLog') out.emission = 'meanLog';
+  if (o.pitchShift !== undefined) out.pitchShift = [...o.pitchShift];
   return out;
 }
 
@@ -194,45 +195,8 @@ export function isDiatonicChord(symbol: string, key: Pick<KeyEstimate, 'tonic' |
   return (key.mode === 'major' ? MAJOR_TRIADS : MINOR_TRIADS)[deg] === fam || (key.mode === 'minor' && deg === 4 && fam === 'maj');
 }
 
-// ---------------------------------------------------------------- C6 pitch shift
-
-/** Bins per semitone of the log-CQT (24 bins per octave). */
-export const BINS_PER_SEMITONE = CQT.binsPerOctave / 12;
-
-/**
- * Log-CQT frames shifted up by `semitones` (2 bins each), repeating the edge bin (never circular):
- * out[k] = in[clamp(k − 2·semitones)]. Shifting before or after normalisation is the same (affine per bin).
- */
-export function shiftCqt(cqt: Float32Array, frames: number, semitones: number, nBins = CQT.nBins): Float32Array {
-  const d = Math.round(semitones * BINS_PER_SEMITONE);
-  const out = new Float32Array(frames * nBins);
-  for (let f = 0; f < frames; f++) {
-    const o = f * nBins;
-    for (let k = 0; k < nBins; k++) out[o + k] = cqt[o + Math.min(nBins - 1, Math.max(0, k - d))];
-  }
-  return out;
-}
-
-/**
- * For model labels ("C#:min7", "C", "N", "X"): index of the label with the root moved by `delta`
- * semitones and the same quality; N and X map to themselves.
- */
-export function rootRotation(labels: string[], delta: number): Int32Array {
-  const index = new Map<string, number>();
-  const parsed = labels.map((l, i) => {
-    if (l === 'N' || l === 'X') return null;
-    const [root, q = 'maj'] = l.split(':');
-    if (PC[root] === undefined) throw new Error(`candidate decode: unexpected label ${l}`);
-    index.set(`${PC[root]}|${q}`, i);
-    return { pc: PC[root], q };
-  });
-  return Int32Array.from(parsed, (p, i) => {
-    if (!p) return i;
-    const j = index.get(`${(((p.pc + delta) % 12) + 12) % 12}|${p.q}`);
-    if (j === undefined) throw new Error(`candidate decode: no rotated label for ${labels[i]}`);
-    return j;
-  });
-}
+// C6 pitch shift (shiftCqt, rootRotation) lives in chords.ts, shared with the extension's Recognizer.
+export { BINS_PER_SEMITONE, rootRotation, shiftCqt } from './chords';
 
 // ---------------------------------------------------------------- C10 / C8 chroma
 

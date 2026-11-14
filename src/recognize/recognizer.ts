@@ -10,6 +10,7 @@ import {
   decodeUnits,
   DEFAULT_DECODE,
   predictChordProbs,
+  predictChordProbsShifted,
   reduceProbs,
   topOfLastFrames,
   type BtcModelMeta,
@@ -44,6 +45,10 @@ export interface SegmentAnalysis {
 export interface RecognizerOptions {
   vocabulary?: Vocabulary;
   decode?: DecodeOptions;
+  /** Unit emission for decoding (VGT-18 E): the mean of frame log-probabilities instead of log of the mean. */
+  emission?: 'meanLog';
+  /** Semitone shifts of the log-CQT averaged with the unshifted BTC run (VGT-18 C6); not used by live(). */
+  pitchShift?: number[];
   /** Skip the beat model (benchmark ablation): decode on fixed 0.5 s units. */
   noBeats?: boolean;
 }
@@ -102,9 +107,15 @@ export class Recognizer {
     this.map = v.map;
   }
 
-  /** Reduced class probabilities [frames * symbols.length] for log-CQT frames. */
+  private decodeOptions(): DecodeOptions {
+    const d = this.opts.decode ?? DEFAULT_DECODE;
+    return this.opts.emission ? { ...d, emission: this.opts.emission } : d;
+  }
+
+  /** Reduced class probabilities [frames * symbols.length] for log-CQT frames (pitch-shift averaged when set). */
   async chordProbs(cqt: Float32Array, frames: number): Promise<Float32Array> {
-    const raw = await predictChordProbs(this.chordRunner, cqt, frames, this.chordMeta);
+    const shifts = this.opts.pitchShift ?? [];
+    const raw = shifts.length ? await predictChordProbsShifted(this.chordRunner, cqt, frames, this.chordMeta, shifts) : await predictChordProbs(this.chordRunner, cqt, frames, this.chordMeta);
     return reduceProbs(raw, frames, this.chordMeta.num_chords, this.map, this.symbols.length);
   }
 
@@ -142,7 +153,7 @@ export class Recognizer {
     const t3 = now();
     const bpb = estimateBeatsPerBar(beats, downbeats);
     const units = beats.length >= 4 ? unitsFromBeats(startSec, endSec, beats, downbeats, bpb) : fixedUnits(startSec, endSec);
-    const decoded = decodeUnits(probs, f.cqtFrames, this.symbols.length, CQT_FRAME_SEC, startSec, units, this.symbols, this.opts.decode ?? DEFAULT_DECODE);
+    const decoded = decodeUnits(probs, f.cqtFrames, this.symbols.length, CQT_FRAME_SEC, startSec, units, this.symbols, this.decodeOptions());
     const t4 = now();
     return { startSec, endSec, beats, downbeats, units: decoded, probs: keepProbs ? probs : undefined, timingsMs: { features: t1 - t0, beats: t2 - t1, chords: t3 - t2, decode: t4 - t3 } };
   }

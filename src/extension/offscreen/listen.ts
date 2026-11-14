@@ -10,6 +10,7 @@ import { CQT_FRAME_SEC } from '../../audio/features';
 import type { Recording } from '../../chart/types';
 import { buildAutoChart } from '../../recognize/autochart';
 import type { BtcMeta } from '../../recognize/chords';
+import { EXTENSION_RECOGNIZER_OPTIONS } from '../../recognize/extension-options';
 import { Recognizer, type SegmentAnalysis } from '../../recognize/recognizer';
 import { ModelWorkerClient } from '../../recognize/model-worker-client';
 import { MODEL_FILES, type ModelRunner } from '../../recognize/runner';
@@ -82,7 +83,7 @@ async function createModels(): Promise<ListenModels> {
       }
     }
     return {
-      recognizer: new Recognizer(beat, chords, meta.models.large),
+      recognizer: new Recognizer(beat, chords, meta.models.large, EXTENSION_RECOGNIZER_OPTIONS),
       beat,
       backend,
       onFailure: (l) => client.onFailure(l),

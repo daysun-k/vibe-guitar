@@ -14,6 +14,7 @@ import {
   emissions,
   familyOf,
   hasCandidateOptions,
+  plainRecognizerOptions,
   isDiatonicChord,
   largeToMajmin,
   majminLabelFamily,
@@ -26,6 +27,7 @@ import {
   type CandidateRecognizerOptions,
 } from '../src/recognize/candidate-decode';
 import { CandidateRecognizer } from '../src/recognize/candidate-recognizer';
+import { EXTENSION_RECOGNIZER_OPTIONS } from '../src/recognize/extension-options';
 import { buildVocabulary, decodeUnits, DEFAULT_DECODE, type BtcModelMeta, type DecodeUnit } from '../src/recognize/chords';
 import { Recognizer } from '../src/recognize/recognizer';
 import type { ModelRunner } from '../src/recognize/runner';
@@ -112,7 +114,10 @@ describe('candidate decode: defaults', () => {
   it('counts only non-plain options as candidate options', () => {
     expect(hasCandidateOptions({})).toBe(false);
     expect(hasCandidateOptions({ vocabulary: 'full', decode: { changePenalty: [1, 2, 3] } })).toBe(false);
-    for (const o of [{ decode: { familyFirst: { penaltyScale: 1 } } }, { units: { halfBeat: true, offbeatExtraPenalty: 2 } }, { emission: 'meanLog' }, { majmin: 'average' }, { nLogPrior: -1 }, { pitchShift: [1] }, { keyPrior: { bonus: 1, margin: 0.15 } }] as CandidateRecognizerOptions[])
+    // meanLog and pitchShift moved into the extension's Recognizer (finalist): plain options now.
+    expect(hasCandidateOptions({ emission: 'meanLog', pitchShift: [-1, 1] })).toBe(false);
+    expect(plainRecognizerOptions({ emission: 'meanLog', pitchShift: [-1, 1], decode: { changePenalty: [1, 2, 3] } })).toEqual({ emission: 'meanLog', pitchShift: [-1, 1], decode: { changePenalty: [1, 2, 3] } });
+    for (const o of [{ decode: { familyFirst: { penaltyScale: 1 } } }, { units: { halfBeat: true, offbeatExtraPenalty: 2 } }, { emission: 'durationWeighted' }, { majmin: 'average' }, { nLogPrior: -1 }, { keyPrior: { bonus: 1, margin: 0.15 } }] as CandidateRecognizerOptions[])
       expect(hasCandidateOptions(o)).toBe(true);
   });
 });
@@ -609,5 +614,56 @@ describe('C8 repetition smoothing', () => {
       [{ repetition: { k: 2, weight: 0.3, exclude: 4 } }, /unknown field recognizer.repetition.exclude/],
     ];
     for (const [r, re] of bad) expect(() => parseReplayConfig({ recognizer: r })).toThrow(re);
+  });
+});
+
+describe('finalist in the extension recognizer (meanLog + pitchShift)', () => {
+  it('decodeUnits with emission meanLog equals the candidate meanLog decode', () => {
+    for (let seed = 1; seed <= 8; seed++) {
+      const K = 6 + (seed % 5);
+      const frames = 50 + seed * 9;
+      const symbols = Array.from({ length: K }, (_, j) => (j === K - 1 ? 'N' : `S${j}`));
+      const probs = randomProbs(frames, K, seed + 40);
+      const units = randomUnits(frames, seed + 140);
+      expect(decodeUnits(probs, frames, K, FS, 0, units, symbols, { ...DEFAULT_DECODE, emission: 'meanLog' })).toEqual(decodeCandidate(input(symbols, probs, units), { emission: 'meanLog' }));
+    }
+  });
+
+  it('Recognizer with the extension options equals CandidateRecognizer with the same options; live() is unchanged', async () => {
+    const B = CQT.nBins;
+    const roots = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    const labels = [...roots.flatMap((r) => [`${r}:min`, r, `${r}:7`]), 'N', 'X'];
+    const meta: BtcModelMeta = { file: 'fake', mean: -3, std: 2, timestep: 108, num_chords: labels.length, labels };
+    const runner: ModelRunner = {
+      async run(_n, data, dims) {
+        const T = dims[1];
+        const C = labels.length;
+        const logits = new Float32Array(T * C);
+        for (let t = 0; t < T; t++) for (let c = 0; c < C; c++) logits[t * C + c] = 3 * Math.sin(data[t * B + ((c * 7) % B)] * 1.7 + c + t * 0.04);
+        return { logits };
+      },
+    };
+    const beats: ModelRunner = {
+      async run(_n, _d, dims) {
+        const T = dims[1];
+        const beat = new Float32Array(T).fill(-5);
+        const downbeat = new Float32Array(T).fill(-5);
+        for (let t = 25; t < T; t += 25) {
+          beat[t] = 5;
+          if (t % 100 === 0) downbeat[t] = 5;
+        }
+        return { beat, downbeat };
+      },
+    };
+    expect(EXTENSION_RECOGNIZER_OPTIONS).toEqual({ emission: 'meanLog', pitchShift: [-1, 1] });
+    const audio = testAudio(9, 5);
+    const plain = await new Recognizer(beats, runner, meta, EXTENSION_RECOGNIZER_OPTIONS).analyzeSegment(audio, 1.5, undefined, true);
+    const cand = await new CandidateRecognizer(beats, runner, meta, { emission: 'meanLog', pitchShift: [-1, 1] }).analyzeSegment(audio, 1.5, undefined, true);
+    expect(plain.units).toEqual(cand.units);
+    expect(plain.probs).toEqual(cand.probs);
+    const original = await new Recognizer(beats, runner, meta).analyzeSegment(audio, 1.5, undefined, true);
+    expect(plain.probs).not.toEqual(original.probs);
+    const cqt = new Float32Array(30 * B).map((_, i) => Math.sin(i * 0.37) - 3);
+    expect(await new Recognizer(beats, runner, meta, EXTENSION_RECOGNIZER_OPTIONS).live(cqt, 30)).toEqual(await new Recognizer(beats, runner, meta).live(cqt, 30));
   });
 });
