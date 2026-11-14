@@ -1,0 +1,235 @@
+{
+ "schema": "vibe-guitar-annotation-eval-songs/1",
+ "declaredAt": "2026-11-14",
+ "purpose": "VGT-21 K-pop evaluation set (docs/kpop-eval-protocol.md). Measurement only: never training data. References are local consensus LAB files built from public chord sheets; they stay outside the repository. Two annotation roots share these relative paths: the majmin view (majmin, root) and the sevenths view (sevenths).",
+ "datasets": {
+  "vgt21-kpop-v1": {
+   "name": "VGT-21 K-pop consensus references v1 (local, not distributed)",
+   "page": "docs/kpop-eval-protocol.md",
+   "downloads": [],
+   "folder": "vgt21-kpop-v1",
+   "licence": "personal use only; derived from public chord sheets; never committed or shared",
+   "licenceQuote": "",
+   "attribution": "Consensus of public human-made chord sheets (sources recorded locally), timed to the capture by the VGT-21 alignment tool, differences resolved by the user",
+   "btcTraining": "not-known (recent Korean releases; BTC training lists do not include them)"
+  }
+ },
+ "songs": [
+  {
+   "id": "jbj-cherry",
+   "role": "eval",
+   "artist": "Busker Busker",
+   "title": "벚꽃 엔딩",
+   "release": "버스커 버스커 1집 (℗ 2012 Stone Music Entertainment)",
+   "dataset": "vgt21-kpop-v1",
+   "chords": "jbj-cherry.lab",
+   "beats": null,
+   "annotationDurationSec": 261,
+   "btcTraining": "not-known",
+   "complexity": "moderate",
+   "search": [
+    "YouTube Music song search: Busker Busker 벚꽃 엔딩"
+   ],
+   "uploadHint": "Art track KvthiAoGTfo on '버스커버스커 BuskerBusker - Topic' (261 s); synced lyrics LRCLIB 5230958"
+  },
+  {
+   "id": "jbj-shampoo",
+   "role": "eval",
+   "artist": "Jang Beom June",
+   "title": "흔들리는 꽃들 속에서 네 샴푸향이 느껴진거야",
+   "release": "멜로가 체질 Be melodramatic OST Part 3 (℗ Genie Music Corporation, Stone Music Entertainment)",
+   "dataset": "vgt21-kpop-v1",
+   "chords": "jbj-shampoo.lab",
+   "beats": null,
+   "annotationDurationSec": 169,
+   "btcTraining": "not-known",
+   "complexity": "moderate",
+   "search": [
+    "YouTube Music song search: Jang Beom June 흔들리는 꽃들 속에서 네 샴푸향이 느껴진거야"
+   ],
+   "uploadHint": "Art track _pcl_JPqMfw on 'Jang Beom June - Topic' (169 s); synced lyrics LRCLIB 21970603"
+  },
+  {
+   "id": "jbj-karaoke",
+   "role": "eval",
+   "artist": "Jang Beom June",
+   "title": "노래방에서",
+   "release": "Jang Beom June 3rd (℗ 2019 BuskerBusker,under license to Kakao M Corp.)",
+   "dataset": "vgt21-kpop-v1",
+   "chords": "jbj-karaoke.lab",
+   "beats": null,
+   "annotationDurationSec": 240,
+   "btcTraining": "not-known",
+   "complexity": "moderate",
+   "search": [
+    "YouTube Music song search: Jang Beom June 노래방에서"
+   ],
+   "uploadHint": "Art track zeIOhIpQ-oI on 'Jang Beom June - Topic' (240 s); synced lyrics LRCLIB 23805361"
+  },
+  {
+   "id": "ssk-moment",
+   "role": "eval",
+   "artist": "Sung Si Kyung",
+   "title": "너의 모든 순간",
+   "release": "My Love From the Star (Original Soundtrack) Part 7 (℗ 2014 Studio S Co.,Ltd under licence to Genie Music Corporation)",
+   "dataset": "vgt21-kpop-v1",
+   "chords": "ssk-moment.lab",
+   "beats": null,
+   "annotationDurationSec": 243,
+   "btcTraining": "not-known",
+   "complexity": "moderate",
+   "search": [
+    "YouTube Music song search: Sung Si Kyung 너의 모든 순간"
+   ],
+   "uploadHint": "Art track OdFVPP_Rcos on 'Sung Si Kyung - Topic' (243 s); synced lyrics LRCLIB 31330606"
+  },
+  {
+   "id": "ssk-street",
+   "role": "eval",
+   "artist": "Sung Si Kyung",
+   "title": "거리에서",
+   "release": "The Ballads (℗ 2006 더늠이엔티)",
+   "dataset": "vgt21-kpop-v1",
+   "chords": "ssk-street.lab",
+   "beats": null,
+   "annotationDurationSec": 279,
+   "btcTraining": "not-known",
+   "complexity": "moderate",
+   "search": [
+    "YouTube Music song search: Sung Si Kyung 거리에서"
+   ],
+   "uploadHint": "Art track mLwfuskNDOo on 'Sung Si Kyung - Topic' (279 s); synced lyrics LRCLIB 11405036"
+  },
+  {
+   "id": "ssk-heejae",
+   "role": "eval",
+   "artist": "Sung Si Kyung",
+   "title": "희재",
+   "release": "HeeJae (Original Motion Picture Soundtrack) (℗ 2003 CS HAPPY ENTERTAINMENT,under license to Kakao M Corp.)",
+   "dataset": "vgt21-kpop-v1",
+   "chords": "ssk-heejae.lab",
+   "beats": null,
+   "annotationDurationSec": 281,
+   "btcTraining": "not-known",
+   "complexity": "moderate",
+   "search": [
+    "YouTube Music song search: Sung Si Kyung 희재"
+   ],
+   "uploadHint": "Art track nD1p_H3qo_A on 'Sung Si Kyung - Topic' (281 s); synced lyrics LRCLIB 18228386"
+  },
+  {
+   "id": "iu-night",
+   "role": "eval",
+   "artist": "IU",
+   "title": "밤편지",
+   "release": "Through the Night (℗ 2018 Fave Entertainment,under license to Kakao Entertainment)",
+   "dataset": "vgt21-kpop-v1",
+   "chords": "iu-night.lab",
+   "beats": null,
+   "annotationDurationSec": 253,
+   "btcTraining": "not-known",
+   "complexity": "moderate",
+   "search": [
+    "YouTube Music song search: IU 밤편지"
+   ],
+   "uploadHint": "Art track NnRjwEhFU70 on 'IU - Topic' (253 s); synced lyrics LRCLIB 7750035"
+  },
+  {
+   "id": "iu-goodday",
+   "role": "eval",
+   "artist": "IU",
+   "title": "좋은 날",
+   "release": "REAL (℗ 2010 Kakao Entertainment,under license to Kakao Entertainment)",
+   "dataset": "vgt21-kpop-v1",
+   "chords": "iu-goodday.lab",
+   "beats": null,
+   "annotationDurationSec": 236,
+   "btcTraining": "not-known",
+   "complexity": "moderate",
+   "search": [
+    "YouTube Music song search: IU 좋은 날"
+   ],
+   "uploadHint": "Art track OIHlzvEKncQ on 'IU - Topic' (236 s); synced lyrics LRCLIB 21366077"
+  },
+  {
+   "id": "iu-lovepoem",
+   "role": "eval",
+   "artist": "IU",
+   "title": "Love poem",
+   "release": "Love poem (℗ 2019 Kakao Entertainment,under license to Kakao Entertainment)",
+   "dataset": "vgt21-kpop-v1",
+   "chords": "iu-lovepoem.lab",
+   "beats": null,
+   "annotationDurationSec": 258,
+   "btcTraining": "not-known",
+   "complexity": "moderate",
+   "search": [
+    "YouTube Music song search: IU Love poem"
+   ],
+   "uploadHint": "Art track kcx0a2OAhN0 on 'IU - Topic' (258 s); synced lyrics LRCLIB 2207238"
+  },
+  {
+   "id": "akmu-lastgoodbye",
+   "role": "eval",
+   "artist": "AKMU",
+   "title": "오랜 날 오랜 밤",
+   "release": "WINTER (℗ YG ENTERTAINMENT)",
+   "dataset": "vgt21-kpop-v1",
+   "chords": "akmu-lastgoodbye.lab",
+   "beats": null,
+   "annotationDurationSec": 284,
+   "btcTraining": "not-known",
+   "complexity": "moderate",
+   "search": [
+    "YouTube Music song search: AKMU 오랜 날 오랜 밤"
+   ],
+   "uploadHint": "Art track G7TqsFwWTM0 on 'AKMU - Topic' (284 s); synced lyrics LRCLIB 5294633"
+  },
+  {
+   "id": "akmu-heartbreak",
+   "role": "eval",
+   "artist": "AKMU",
+   "title": "어떻게 이별까지 사랑하겠어, 널 사랑하는 거지",
+   "release": "SAILING (℗ YG ENTERTAINMENT)",
+   "dataset": "vgt21-kpop-v1",
+   "chords": "akmu-heartbreak.lab",
+   "beats": null,
+   "annotationDurationSec": 290,
+   "btcTraining": "not-known",
+   "complexity": "moderate",
+   "search": [
+    "YouTube Music song search: AKMU 어떻게 이별까지 사랑하겠어, 널 사랑하는 거지"
+   ],
+   "uploadHint": "Art track KczYjTVrK_o on 'AKMU - Topic' (290 s); synced lyrics LRCLIB 4745375"
+  },
+  {
+   "id": "akmu-200",
+   "role": "eval",
+   "artist": "AKMU",
+   "title": "200%",
+   "release": "PLAY (℗ YG ENTERTAINMENT)",
+   "dataset": "vgt21-kpop-v1",
+   "chords": "akmu-200.lab",
+   "beats": null,
+   "annotationDurationSec": 193,
+   "btcTraining": "not-known",
+   "complexity": "moderate",
+   "search": [
+    "YouTube Music song search: AKMU 200%"
+   ],
+   "uploadHint": "Art track 5UrL0CM2uQA on 'AKMU - Topic' (193 s); synced lyrics LRCLIB 18453021"
+  }
+ ],
+ "reserves": [
+  {
+   "id": "iu-autumn",
+   "youtubeId": "ZDoH5dQ58ps",
+   "lrclibId": 4544325
+  },
+  {
+   "id": "akmu-nakka",
+   "youtubeId": "uaejCvCMu5I",
+   "lrclibId": 38659178
+  }
+ ]
+}
