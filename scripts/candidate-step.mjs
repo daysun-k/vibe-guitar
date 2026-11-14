@@ -73,18 +73,24 @@ export function groupMeans(paired) {
 }
 
 /**
- * Resource checks against the measured baseline. Limits: packaged bytes +10%; analysis time +50% and at
- * least +1 s (allowed increase = max(50%, 1 s)); peak memory +20%. Live latency is not measured here.
+ * Resource checks against the measured baseline. Limits: packaged bytes +10%; analysis time of the
+ * 4-minute song +50% and at least +1 s (allowed increase = max(50%, 1 s)); peak memory +20%. Live latency
+ * is not measured here. A required measurement that is missing is "not verified": ok is false and
+ * missing is true, so it fails P6 and raises an alarm instead of passing silently. The median analyze
+ * time is a diagnostic only (the protocol names the 4-minute song): it is reported, never gates.
  */
 export function resourceChecks(baseline, measured) {
   const timeLimit = (b) => b + Math.max(0.5 * b, 1000);
   const checks = {
     packagedBytes: { baseline: baseline.distBytesExclMaps, value: measured.packagedBytes, limit: baseline.distBytesExclMaps * 1.1 },
     analysisTime4minMs: { baseline: baseline.replay4min.tot, value: measured.total4minMs, limit: timeLimit(baseline.replay4min.tot) },
-    medianAnalyzeMs: { baseline: baseline.medianAnalyzeMs, value: measured.medianAnalyzeMs, limit: timeLimit(baseline.medianAnalyzeMs) },
+    medianAnalyzeMs: { baseline: baseline.medianAnalyzeMs, value: measured.medianAnalyzeMs, limit: timeLimit(baseline.medianAnalyzeMs), diagnostic: true },
     peakRssBytes: { baseline: baseline.wholeRun.peakRssBytes, value: measured.peakRssBytes, limit: baseline.wholeRun.peakRssBytes * 1.2 },
   };
-  for (const c of Object.values(checks)) c.ok = c.value === null ? null : c.value <= c.limit;
+  for (const c of Object.values(checks)) {
+    c.missing = !Number.isFinite(c.value);
+    c.ok = !c.missing && c.value <= c.limit;
+  }
   return checks;
 }
 
@@ -105,7 +111,8 @@ export function evaluateStep({ vsIncumbent, vsBaseline, benchIncumbent, benchCan
   );
   const precisionDeltaPp = pp(a.boundaries.precision.delta);
   const flicker = { precisionIncumbent: pp(a.boundaries.precision.baseline), precisionCandidate: pp(a.boundaries.precision.candidate), deltaPp: precisionDeltaPp, ok: precisionDeltaPp >= -2.0 };
-  const resourceOk = Object.values(resources).every((c) => c.ok !== false);
+  const required = Object.entries(resources).filter(([, c]) => !c.diagnostic);
+  const resourceOk = required.every(([, c]) => c.ok === true);
   const P = {
     P1: pp(a.meanDelta.majmin) >= 0.5,
     P2: a.majminDeltaCi.lower > 0,
@@ -127,7 +134,8 @@ export function evaluateStep({ vsIncumbent, vsBaseline, benchIncumbent, benchCan
     groups: groupAlarms,
     songLoss10: losses.filter((l) => l.deltaPp <= -10),
     songLoss5to10: losses.filter((l) => l.deltaPp <= -5 && l.deltaPp > -10),
-    resources: Object.entries(resources).filter(([, c]) => c.ok === false).map(([k]) => k),
+    resources: required.filter(([, c]) => c.ok !== true && !c.missing).map(([k]) => k),
+    resourcesNotVerified: required.filter(([, c]) => c.missing).map(([k]) => k),
   };
   return {
     meanDeltaPp: pp(a.meanDelta.majmin),
@@ -145,7 +153,7 @@ export function evaluateStep({ vsIncumbent, vsBaseline, benchIncumbent, benchCan
     P,
     eligible: Object.values(P).every(Boolean),
     alarms,
-    anyAlarm: groupAlarms.length > 0 || alarms.songLoss10.length > 0 || alarms.resources.length > 0,
+    anyAlarm: groupAlarms.length > 0 || alarms.songLoss10.length > 0 || alarms.resources.length > 0 || alarms.resourcesNotVerified.length > 0,
   };
 }
 
@@ -163,12 +171,12 @@ export function stepSummary(label, r) {
     `root ${f1(r.secondary.root.incumbent)} → ${f1(r.secondary.root.candidate)} (${yes(r.secondary.root.ok)}), sevenths ${f1(r.secondary.sevenths.incumbent)} → ${f1(r.secondary.sevenths.candidate)} (${yes(r.secondary.sevenths.ok)})`,
     `boundary precision ${f1(r.flicker.precisionIncumbent)} → ${f1(r.flicker.precisionCandidate)} (Δ ${f2(r.flicker.deltaPp)}, ok ${yes(r.flicker.ok)}); changes ${r.changes.incumbent} → ${r.changes.candidate} (annotated ${r.changes.annotated})`,
     `synthetic majmin ${f1(r.synthetic.majmin.incumbent)} → ${f1(r.synthetic.majmin.candidate)}, root ${f1(r.synthetic.root.incumbent)} → ${f1(r.synthetic.root.candidate)}, sevenths ${f1(r.synthetic.sevenths.incumbent)} → ${f1(r.synthetic.sevenths.candidate)} (ok ${yes(Object.values(r.synthetic).every((s) => s.ok))})`,
-    `resources: bytes ${res.packagedBytes.value} (limit ${Math.round(res.packagedBytes.limit)}), 4-min total ${res.analysisTime4minMs.value} ms (limit ${res.analysisTime4minMs.limit}), median analyze ${res.medianAnalyzeMs.value} ms (limit ${res.medianAnalyzeMs.limit}), peak RSS ${res.peakRssBytes.value ?? 'n/a'} (limit ${Math.round(res.peakRssBytes.limit)})`,
+    `resources: bytes ${res.packagedBytes.value} (limit ${Math.round(res.packagedBytes.limit)}), 4-min total ${res.analysisTime4minMs.value} ms (limit ${res.analysisTime4minMs.limit}), median analyze ${res.medianAnalyzeMs.value} ms (diagnostic, reference ${res.medianAnalyzeMs.limit}), peak RSS ${res.peakRssBytes.value ?? 'n/a'} (limit ${Math.round(res.peakRssBytes.limit)})`,
     `P1 ${yes(r.P.P1)} P2 ${yes(r.P.P2)} P3 ${yes(r.P.P3)} P4 ${yes(r.P.P4)} P5 ${yes(r.P.P5)} P6 ${yes(r.P.P6)} → eligible ${yes(r.eligible)} (not a promotion decision)`,
   ];
   const al = r.alarms;
   lines.push(`alarms: groups ${al.groups.length ? al.groups.map((g) => `${g.group} vs ${g.against} ${f1(g.reference)}→${f1(g.candidate)}`).join('; ') : 'none'}`);
-  lines.push(`  song losses >= 10 pp: ${al.songLoss10.length ? al.songLoss10.map((l) => `${l.id} vs ${l.against} ${f2(l.deltaPp)}`).join('; ') : 'none'}; resources: ${al.resources.length ? al.resources.join(', ') : 'none'}`);
+  lines.push(`  song losses >= 10 pp: ${al.songLoss10.length ? al.songLoss10.map((l) => `${l.id} vs ${l.against} ${f2(l.deltaPp)}`).join('; ') : 'none'}; resources: ${al.resources.length ? al.resources.join(', ') : 'none'}; not verified: ${al.resourcesNotVerified.length ? al.resourcesNotVerified.join(', ') : 'none'}`);
   lines.push(`  losses 5-10 pp (diagnose): ${al.songLoss5to10.length ? al.songLoss5to10.map((l) => `${l.id} vs ${l.against} ${f2(l.deltaPp)}`).join('; ') : 'none'}`);
   return lines.join('\n');
 }
