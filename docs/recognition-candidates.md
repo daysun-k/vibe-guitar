@@ -217,3 +217,35 @@ pass-2 c6-shift-1; alarms against the incumbent and the original baseline:
 - 2026-11-14, da21561, c4-bonus1.0: +0.07 [-0.24], Billboard +0.03, min LOO -0.07, precision +0.42; not eligible (P1, P2, P4, P5); group alarm complex, moderate; rejected.
 - Main list converged after pass 3 (no promotion); incumbent inc2 (`{"emission":"meanLog","pitchShift":[-1,1]}`,
   DEV majmin 83.41). Scored settings: 28 of 50.
+
+Pass 4 (appended candidates only), incumbent = inc2, charts of pass-2 c6-shift-1; alarms against the
+incumbent and the original baseline:
+- 2026-11-14, 4cb38cf, c10-m0.15: -0.44 [-0.74], Billboard -0.54, min LOO -0.46, precision -3.91; not eligible (P1, P2, P3, P4, P5); group alarm billboard, complex, isophonics-btc-overlap, moderate, simple; rejected.
+- 2026-11-14, 4cb38cf, c10-m0.30: -0.77 [-1.24], Billboard -0.94, min LOO -0.82, precision -6.11; not eligible (P1, P2, P3, P4, P5); group alarm billboard, complex, isophonics-btc-overlap, moderate, simple; rejected.
+- 2026-11-14, 4cb38cf, c8-k2-w0.3: -0.17 [-0.78], Billboard -0.15, min LOO -0.36, precision +1.22; not eligible (P1, P2, P3, P4, P5); group alarm billboard, complex, isophonics-btc-overlap; 1 song loses 5-10 pp; rejected.
+- 2026-11-14, 4cb38cf, c8-k4-w0.5: -0.78 [-1.88], Billboard -0.97, min LOO -1.07, precision +1.73; not eligible (P1, P2, P3, P4, P5); group alarm billboard, complex, isophonics-btc-overlap, simple; 2 songs lose 5-10 pp; rejected.
+- C10 check (synthetic, not a scored setting): on 6 synthetic clips with a root-position bass line (92
+  chords), the bass-chroma argmax of bins 0-47 equals the chord root 92/92, so the bin-to-pitch-class
+  mapping is right; on DEV the rule changed no song for the better at margin 0.15 (14 lower, 9 equal),
+  i.e. the strongest low pitch class is often not the annotated root in real recordings (inversions,
+  pedal points, kick drum energy).
+- Pass 4 promoted nothing. Scored settings: 32 of 50.
+
+**Search end (2026-11-14): converged.** The main list converged after pass 3 and the two appended
+candidates (C10, C8) promoted nothing in pass 4. The remaining later candidates are not appended:
+C3 median smoothing (deprioritised; C8 already showed that extra smoothing hurts), C9 HPSS (changes
+the model's input features; no DEV evidence), a tuning candidate (the baseline analyses found no
+detuning errors), C11 (no public chord model with a checkpoint-specific training list that excludes
+the Billboard TEST songs), C12 fine-tuning (waiting on the user's decision). Budget used: 32 of 50.
+
+Finalist: inc2 = `{"recognizer":{"emission":"meanLog","pitchShift":[-1,1]}}` (promotion 1 e-meanLog,
+promotion 2 c6-shift-1; code at da21561). DEV song means (23 songs, frozen maps, replayed charts):
+
+| Arm | majmin | root | sevenths | boundary F |
+|---|---|---|---|---|
+| Original baseline (main defaults) | 81.01 | 83.1 | 69.1 | 74.1 |
+| Promotion 1: e-meanLog | 81.92 | 83.9 | 70.1 | 76.0 |
+| Promotion 2: c6-shift-1 (finalist) | 83.41 | 85.5 | 71.3 | 76.7 |
+
+Finalist vs original baseline: +2.41 pp mean majmin. These are provisional DEV choices; the one-shot
+TEST confirmation of the protocol decides whether the result holds.
