@@ -93,7 +93,7 @@ export function uncertainSpanEvent(chart: Chart, span: UncertainSpan): number {
 }
 
 const sameSpan = (a: UncertainSpan, b: UncertainSpan): boolean =>
-  a.fromSec === b.fromSec && a.toSec === b.toSec && sameChordSymbol(a.chord, b.chord) && sameChordSymbol(a.alt, b.alt);
+  a.fromSec === b.fromSec && a.toSec === b.toSec && sameChordSymbol(a.chord, b.chord) && sameChordSymbol(a.alt, b.alt) && a.replace === b.replace;
 
 /**
  * "2순위로 바꾸기": a copy of the chart where the span's stretch of the event plays the span's
@@ -110,6 +110,9 @@ export function acceptUncertainAlt(chart: Chart, ref: EventRef, span: UncertainS
   const si = (chart.uncertain ?? []).findIndex((s) => sameSpan(s, span));
   if (si < 0) throw conflict();
   const stored = chart.uncertain![si];
+  // Only the replace tier offers the replacement (Amendment 1); a later analysis may have moved the
+  // stretch out of it while the panel still showed the button (review vgt19-flags-ui-r4 F4).
+  if (stored.replace !== true) throw conflict();
   if (uncertainSpanEvent(chart, stored) !== i) throw conflict();
   const e = chart.events[i];
   const end = eventEndSec(chart, i);

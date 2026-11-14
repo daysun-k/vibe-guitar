@@ -93,6 +93,12 @@ freeze commit bf3e79b was pushed. Two fixed runs of `uncertainty-analysis` on ma
 - TEST has more missed-change error time than different-chord error time (264.8 s vs 171.1 s), unlike DEV; the
   flags catch 70.9% of it.
 
+## Measured vs shown
+The panel draws no stretch on a no-chord (N) event (the lane shows no chord there), but the measurement counts
+those spans. Share of span time (whole charts) whose shown chord is N: DEV 2.5% (27.1 of 1086.2 s) and TEST
+2.1% (17.3 of 811.8 s) at the flag threshold; TEST 0.6% (1.0 of 174.2 s) at the replace threshold. The shown
+marks are therefore slightly fewer than the measured flags (review vgt19-flags-ui-r4 F5, follow-up).
+
 ## K-pop (12 songs, chord order, reference only)
 (pending)
 

@@ -20,6 +20,7 @@ const MAIN = chartStorageKey('youtube', rec.id);
 const NOW = new Date('2026-11-14T10:00:00.000Z');
 
 const span = (fromSec: number, toSec: number, chord: string, alt: string): UncertainSpan => ({ fromSec, toSec, chord, alt });
+const rspan = (fromSec: number, toSec: number, chord: string, alt: string): UncertainSpan => ({ ...span(fromSec, toSec, chord, alt), replace: true });
 
 function chart(events: [number, string, number?][], coverage: [number, number][], uncertain?: UncertainSpan[], createdAt = '2026-11-10T00:00:00.000Z'): Chart {
   const c: Chart = {
@@ -124,8 +125,8 @@ describe('visible spans', () => {
 
 describe('acceptUncertainAlt: one action, stored like a chord fix', () => {
   it('a span covering the whole event replaces it (no head, no tail)', () => {
-    const before = base([span(4, 8, 'G', 'Em')]);
-    const after = acceptUncertainAlt(before, { startSec: 4, chord: 'G' }, span(4, 8, 'G', 'Em'), NOW);
+    const before = base([rspan(4, 8, 'G', 'Em')]);
+    const after = acceptUncertainAlt(before, { startSec: 4, chord: 'G' }, rspan(4, 8, 'G', 'Em'), NOW);
     expect(after.events.map((e) => [e.startSec, e.chord, e.confidence, e.source])).toEqual([
       [0, 'C', 0.9, 'auto'],
       [4, 'Em', 1, 'manual'],
@@ -140,7 +141,7 @@ describe('acceptUncertainAlt: one action, stored like a chord fix', () => {
   });
 
   it('a span inside the event splits it into head, second choice and tail (a missed change)', () => {
-    const after = acceptUncertainAlt(base([span(5, 6, 'G', 'D')]), { startSec: 4, chord: 'G' }, span(5, 6, 'G', 'D'), NOW);
+    const after = acceptUncertainAlt(base([rspan(5, 6, 'G', 'D')]), { startSec: 4, chord: 'G' }, rspan(5, 6, 'G', 'D'), NOW);
     expect(after.events.map((e) => [e.startSec, e.chord, e.confidence, e.source])).toEqual([
       [0, 'C', 0.9, 'auto'],
       [4, 'G', 0.45, 'auto'],
@@ -153,36 +154,36 @@ describe('acceptUncertainAlt: one action, stored like a chord fix', () => {
   });
 
   it('no head at the event start, no tail at the event end or the heard end', () => {
-    const atStart = acceptUncertainAlt(base([span(4, 6, 'G', 'D')]), { startSec: 4, chord: 'G' }, span(4, 6, 'G', 'D'), NOW);
+    const atStart = acceptUncertainAlt(base([rspan(4, 6, 'G', 'D')]), { startSec: 4, chord: 'G' }, rspan(4, 6, 'G', 'D'), NOW);
     expect(atStart.events.slice(1, 4).map((e) => [e.startSec, e.chord])).toEqual([[4, 'D'], [6, 'G'], [8, 'Am']]);
-    const atEnd = acceptUncertainAlt(base([span(6, 8, 'G', 'D')]), { startSec: 4, chord: 'G' }, span(6, 8, 'G', 'D'), NOW);
+    const atEnd = acceptUncertainAlt(base([rspan(6, 8, 'G', 'D')]), { startSec: 4, chord: 'G' }, rspan(6, 8, 'G', 'D'), NOW);
     expect(atEnd.events.slice(1, 4).map((e) => [e.startSec, e.chord])).toEqual([[4, 'G'], [6, 'D'], [8, 'Am']]);
-    const lastHeard = acceptUncertainAlt(base([span(22, 24, 'F', 'Dm')]), { startSec: 20, chord: 'F' }, span(22, 24, 'F', 'Dm'), NOW);
+    const lastHeard = acceptUncertainAlt(base([rspan(22, 24, 'F', 'Dm')]), { startSec: 20, chord: 'F' }, rspan(22, 24, 'F', 'Dm'), NOW);
     expect(lastHeard.events.slice(3).map((e) => [e.startSec, e.chord])).toEqual([[20, 'F'], [22, 'Dm']]);
     expect(validateChart(lastHeard).ok).toBe(true);
   });
 
   it('another span of the same event keeps showing on the untouched part', () => {
-    const c = base([span(4, 5, 'G', 'Em'), span(6, 7, 'G', 'D')]);
-    const after = acceptUncertainAlt(c, { startSec: 4, chord: 'G' }, span(4, 5, 'G', 'Em'), NOW);
-    expect(after.uncertain).toEqual([span(6, 7, 'G', 'D')]);
+    const c = base([rspan(4, 5, 'G', 'Em'), rspan(6, 7, 'G', 'D')]);
+    const after = acceptUncertainAlt(c, { startSec: 4, chord: 'G' }, rspan(4, 5, 'G', 'Em'), NOW);
+    expect(after.uncertain).toEqual([rspan(6, 7, 'G', 'D')]);
     expect(visibleSpans(after, true).map((v) => v.ref)).toEqual([{ startSec: 5, chord: 'G' }]);
   });
 
   it('a hand-made chart stays manual', () => {
-    const c = base([span(4, 8, 'G', 'Em')]);
+    const c = base([rspan(4, 8, 'G', 'Em')]);
     c.provenance.createdBy = 'manual';
-    expect(acceptUncertainAlt(c, { startSec: 4, chord: 'G' }, span(4, 8, 'G', 'Em'), NOW).provenance.createdBy).toBe('manual');
+    expect(acceptUncertainAlt(c, { startSec: 4, chord: 'G' }, rspan(4, 8, 'G', 'Em'), NOW).provenance.createdBy).toBe('manual');
   });
 
   it('a changed chart is a CorrectionConflict', () => {
-    const c = base([span(4, 8, 'G', 'Em')]);
-    expect(() => acceptUncertainAlt(c, { startSec: 4, chord: 'D' }, span(4, 8, 'G', 'Em'), NOW)).toThrow(CorrectionConflict); // event changed
-    expect(() => acceptUncertainAlt(c, { startSec: 4, chord: 'G' }, span(4, 8, 'G', 'D'), NOW)).toThrow(CorrectionConflict); // span gone
+    const c = base([rspan(4, 8, 'G', 'Em')]);
+    expect(() => acceptUncertainAlt(c, { startSec: 4, chord: 'D' }, rspan(4, 8, 'G', 'Em'), NOW)).toThrow(CorrectionConflict); // event changed
+    expect(() => acceptUncertainAlt(c, { startSec: 4, chord: 'G' }, rspan(4, 8, 'G', 'D'), NOW)).toThrow(CorrectionConflict); // span gone
     const fixed = correctChordEvent(c, { startSec: 4, chord: 'G' }, 'G', NOW);
-    expect(() => acceptUncertainAlt(fixed, { startSec: 4, chord: 'G' }, span(4, 8, 'G', 'Em'), NOW)).toThrow(CorrectionConflict); // fixed by hand
-    const done = acceptUncertainAlt(c, { startSec: 4, chord: 'G' }, span(4, 8, 'G', 'Em'), NOW);
-    expect(() => acceptUncertainAlt(done, { startSec: 4, chord: 'G' }, span(4, 8, 'G', 'Em'), NOW)).toThrow(CorrectionConflict); // pressed twice
+    expect(() => acceptUncertainAlt(fixed, { startSec: 4, chord: 'G' }, rspan(4, 8, 'G', 'Em'), NOW)).toThrow(CorrectionConflict); // fixed by hand
+    const done = acceptUncertainAlt(c, { startSec: 4, chord: 'G' }, rspan(4, 8, 'G', 'Em'), NOW);
+    expect(() => acceptUncertainAlt(done, { startSec: 4, chord: 'G' }, rspan(4, 8, 'G', 'Em'), NOW)).toThrow(CorrectionConflict); // pressed twice
   });
 });
 
@@ -190,8 +191,8 @@ describe('ChartStore: the second choice goes through the serialized writes and u
   it('stores, survives a later auto analysis as pending, and undo restores the auto chart', async () => {
     const area = new MemArea();
     const store = new ChartStore(area);
-    await store.saveAuto(base([span(4, 8, 'G', 'Em')]));
-    const r = await handleChartWrite(store, { type: 'chart-write', op: 'accept-alt', source: 'youtube', id: rec.id, event: { startSec: 4, chord: 'G' }, span: span(4, 8, 'G', 'Em'), at: NOW.toISOString() });
+    await store.saveAuto(base([rspan(4, 8, 'G', 'Em')]));
+    const r = await handleChartWrite(store, { type: 'chart-write', op: 'accept-alt', source: 'youtube', id: rec.id, event: { startSec: 4, chord: 'G' }, span: rspan(4, 8, 'G', 'Em'), at: NOW.toISOString() });
     expect(r.ok).toBe(true);
     const after = area.data[MAIN] as Chart;
     expect(after.events[1]).toEqual({ startSec: 4, chord: 'Em', confidence: 1, source: 'manual' });
@@ -199,15 +200,29 @@ describe('ChartStore: the second choice goes through the serialized writes and u
     const before = (r as { before: Chart }).before;
     const restored = await store.undoCorrection('youtube', rec.id, before, after);
     expect(restored.events.map((e) => e.chord)).toEqual(['C', 'G', 'Am', 'F', 'D']);
-    expect(restored.uncertain).toEqual([span(4, 8, 'G', 'Em')]);
+    expect(restored.uncertain).toEqual([rspan(4, 8, 'G', 'Em')]);
   });
 
   it('a stale request is refused with the conflict message', async () => {
     const store = new ChartStore(new MemArea());
-    await store.saveAuto(base([span(4, 8, 'G', 'Em')]));
-    await store.acceptAlt('youtube', rec.id, { startSec: 4, chord: 'G' }, span(4, 8, 'G', 'Em'), NOW);
-    const r = await handleChartWrite(store, { type: 'chart-write', op: 'accept-alt', source: 'youtube', id: rec.id, event: { startSec: 4, chord: 'G' }, span: span(4, 8, 'G', 'Em'), at: NOW.toISOString() });
+    await store.saveAuto(base([rspan(4, 8, 'G', 'Em')]));
+    await store.acceptAlt('youtube', rec.id, { startSec: 4, chord: 'G' }, rspan(4, 8, 'G', 'Em'), NOW);
+    const r = await handleChartWrite(store, { type: 'chart-write', op: 'accept-alt', source: 'youtube', id: rec.id, event: { startSec: 4, chord: 'G' }, span: rspan(4, 8, 'G', 'Em'), at: NOW.toISOString() });
     expect(r).toEqual({ ok: false, error: '코드표가 그 사이에 바뀌었어요. 다시 골라 주세요.' });
+  });
+
+  it('a request from the replace tier is refused after a new analysis made the stretch info-only (review r4 F4)', async () => {
+    const area = new MemArea();
+    const store = new ChartStore(area);
+    await store.saveAuto(base([rspan(4, 8, 'G', 'Em')])); // the panel showed the button
+    await store.saveAuto(base([span(4, 8, 'G', 'Em')])); // a new analysis: same stretch, info only
+    const r = await handleChartWrite(store, { type: 'chart-write', op: 'accept-alt', source: 'youtube', id: rec.id, event: { startSec: 4, chord: 'G' }, span: rspan(4, 8, 'G', 'Em'), at: NOW.toISOString() });
+    expect(r).toEqual({ ok: false, error: '코드표가 그 사이에 바뀌었어요. 다시 골라 주세요.' });
+    const stored = area.data[MAIN] as Chart;
+    expect(stored.events[1]).toMatchObject({ startSec: 4, chord: 'G', source: 'auto' });
+    expect(stored.uncertain).toEqual([span(4, 8, 'G', 'Em')]);
+    // an info-only stretch is never replaced, even when asked for it directly
+    expect(() => acceptUncertainAlt(stored, { startSec: 4, chord: 'G' }, span(4, 8, 'G', 'Em'), NOW)).toThrow(CorrectionConflict);
   });
 });
 
