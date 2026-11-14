@@ -612,10 +612,11 @@ export function testReading(s: SettingResult, dev: DevReference | null): TestRea
   if (!dev) return { reading: 'not assessable', dev, detail: 'no DEV result given (--dev-result)', alarms };
   if (cap === null || share === null) return { reading: 'not assessable', dev, detail: 'TEST capture or flagged share not assessable', alarms };
   const similar = cap >= dev.capture - 0.1 - 1e-12 && share <= dev.share + 0.05 + 1e-12;
+  const differs = dev.signal !== s.signal || dev.threshold !== s.threshold ? `; WARNING: the fixed setting ${s.signal} < ${s.threshold} is not the DEV operating point ${dev.signal} < ${dev.threshold}` : '';
   return {
     reading: similar ? 'similar' : 'different',
     dev,
-    detail: `TEST capture ${fmt(cap)} vs DEV ${fmt(dev.capture)} − 10 pp; TEST share ${fmt(share)} vs DEV ${fmt(dev.share)} + 5 pp`,
+    detail: `TEST capture ${fmt(cap)} vs DEV ${fmt(dev.capture)} − 10 pp; TEST share ${fmt(share)} vs DEV ${fmt(dev.share)} + 5 pp${differs}`,
     alarms,
   };
 }

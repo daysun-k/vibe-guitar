@@ -12,7 +12,7 @@
  */
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import type { Chart } from '../chart/types';
 import { validateChart } from '../chart/validate';
@@ -160,7 +160,11 @@ export async function runUncertaintyAnalysis(args: UncertaintyArgs, models: Repl
     const p = inside(args.annotations, folder, rel);
     return p && existsSync(p) ? readFileSync(p, 'utf8') : null;
   };
-  const { captures } = selectCaptures(path.resolve(args.audio));
+  // Only the map songs' capture folders are read (other songs' charts stay unread).
+  const audioDir = path.resolve(args.audio);
+  if (!existsSync(audioDir)) throw new Error(`--audio ${audioDir} does not exist`);
+  const present = new Set(readdirSync(audioDir).filter((k) => statSync(path.join(audioDir, k)).isDirectory()));
+  const { captures } = selectCaptures(audioDir, [...new Set(maps.songs.map((s) => s.youtubeId).filter((id) => present.has(id)))]);
   const missing = maps.songs.filter((m) => !captures.some((c) => c.key === m.youtubeId)).map((m) => m.id);
   // The criterion needs every DEV song; a TEST check with a missing song is reported as incomplete.
   if (missing.length && !args.fixed) throw new Error(`DEV sweep: no capture for ${missing.join(', ')} (the user decides before anything is measured)`);
