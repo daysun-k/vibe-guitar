@@ -289,5 +289,5 @@ commit 6638ae0, config `{"emission":"meanLog","pitchShift":[-1,1]}`, packaged mo
   accuracy for false chord changes, and fine-tuning was deferred by the user (reserved ranks 93+ untouched).
 - Follow-ups from the PR #36 review, fixed afterwards in `scripts/candidate-step.mjs`: a missing required
   resource measurement is now "not verified" (fails P6 and raises an alarm; F1), and the median analyze time
-  is reported as a diagnostic only (F2). No recorded step had a missing measurement, and the only setting
-  the median limit affected (C5 in pass 3) also failed the size limit and P1-P4, so no decision changes.
+  is reported as a diagnostic only (F2). No recorded step had a missing measurement, and the two settings
+  the median limit affected (both C5 settings in pass 3) also failed the size limit and P1-P4, so no decision changes.
