@@ -7,6 +7,7 @@ import type { Arrangement } from '../../arrange/arrange';
 import { prettyChord, shapeName } from '../../music/key';
 import { bigBeatSeconds } from '../../music/meter';
 import { barsForHardChord, changeConcertLabel, frameAt, upcomingShapes, type PlayModel } from '../../play/model';
+import { withRo } from '../../play/uncertain';
 import { bassHTML, slashChordHTML, splitSlashBass } from './chord-name';
 import { escapeHtml, renderShapeDiagram, shapeDiagramHeight } from './diagram';
 import { ScrubState } from './scrub';
@@ -30,6 +31,26 @@ export interface PlayHost {
   setRate?(rate: number): void;
   /** A lane bar was pressed: true when the host used it (choosing loop bars), else it seeks. */
   barClick?(index: number): boolean;
+  /** 불확실한 곳 (VGT-19): play model.uncertain[index] as its second choice. */
+  acceptAlt?(index: number): void;
+}
+
+/**
+ * Temporary visual variants of the uncertain marks (dev query `uv=A|B|C`, default A); the
+ * visibility, names and replacement are shared, only the drawing below differs.
+ * A: dashed amber outline and "?" on the lane, second choice + button under the strip.
+ * B: "또는 Am" chip on the lane (its own button), only a "?" on the current card.
+ * C: thin amber underline on the lane, second choice + button under the strip.
+ */
+export type UncertainVariant = 'A' | 'B' | 'C';
+
+export function uncertainVariant(q: string | null): UncertainVariant {
+  return q === 'B' || q === 'C' ? q : 'A';
+}
+
+/** Screen-reader / status wording of a mark: "확실하지 않아요, 다른 후보 Am". */
+export function uncertainText(alt: string): string {
+  return `확실하지 않아요, 다른 후보 ${alt}`;
 }
 
 /** Lane marks of the practice loop: the looped bar indexes, and the A bar while B is being chosen. */
@@ -117,17 +138,26 @@ export class PlayScreen {
   private slots: HTMLElement[] = [];
   private barEls: HTMLElement[] = [];
   private secEls: HTMLElement[] = [];
-  private last = { bar: -2, up: '', soon: '', line: -2, section: -2, cd: -1 };
+  private last = { bar: -2, up: '', soon: '', line: -2, section: -2, cd: -1, unc: '' };
   private readonly fol;
   private readonly dias = $('dias');
   private readonly lane = $('lane');
   private readonly lyCur = $('ly-cur');
   private readonly seek = $('seek') as HTMLInputElement;
   private readonly scrub = new ScrubState();
+  private readonly uncRow = $('unc-row');
 
-  constructor(private readonly host: PlayHost) {
+  constructor(
+    private readonly host: PlayHost,
+    private readonly uv: UncertainVariant = 'A',
+  ) {
+    document.documentElement.dataset.uv = uv;
     this.fol = follower(this.lane, $('follow'));
     // Tap or Enter on a changed chord's "F→Fmaj7" button shows or hides its reason.
+    this.uncRow.addEventListener('click', (e) => {
+      const b = (e.target as HTMLElement).closest<HTMLElement>('[data-u]');
+      if (b) this.host.acceptAlt?.(Number(b.dataset.u));
+    });
     this.dias.addEventListener('click', (e) => {
       const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('.chg-btn');
       if (!btn) return;
@@ -136,7 +166,21 @@ export class PlayScreen {
       li?.classList.toggle('open', open);
       btn.setAttribute('aria-expanded', String(open));
     });
+    // Variant B: the "또는 Am" chip is its own button; the rest of the bar still only seeks.
+    this.lane.addEventListener('keydown', (e) => {
+      const chip = (e.target as HTMLElement).closest<HTMLElement>('.unc-chip');
+      if (!chip || (e.key !== 'Enter' && e.key !== ' ')) return;
+      e.preventDefault();
+      e.stopPropagation();
+      this.host.acceptAlt?.(Number(chip.dataset.u));
+    });
     this.lane.addEventListener('click', (e) => {
+      const chip = (e.target as HTMLElement).closest<HTMLElement>('.unc-chip');
+      if (chip) {
+        e.preventDefault();
+        this.host.acceptAlt?.(Number(chip.dataset.u));
+        return;
+      }
       const b = (e.target as HTMLElement).closest<HTMLElement>('.bar');
       if (!b) return;
       if (this.host.barClick?.(Number(b.dataset.k))) return;
@@ -235,8 +279,12 @@ export class PlayScreen {
   setModel(m: PlayModel | null): void {
     this.clearHardChord();
     this.m = m;
-    this.last = { bar: -2, up: 'x', soon: 'x', line: -2, section: -2, cd: -1 };
+    this.last = { bar: -2, up: 'x', soon: 'x', line: -2, section: -2, cd: -1, unc: 'x' };
     for (const id of ['dias-wrap', 'lane-wrap', 'transport']) $(id).hidden = !m;
+    // A and C: the second-choice line under the strip keeps its height for the whole song, so the
+    // lane does not jump when the playhead enters or leaves a stretch.
+    this.uncRow.hidden = !m?.uncertain.length || this.uv === 'B';
+    this.uncRow.innerHTML = '';
     $('pin').hidden = !m?.lyrics;
     if (!m) {
       this.dias.innerHTML = '';
@@ -286,7 +334,7 @@ export class PlayScreen {
     });
   }
 
-  private segHTML(m: PlayModel, ev: number, weight: number, repeat: boolean): string {
+  private segHTML(m: PlayModel, ev: number, weight: number, repeat: boolean, flag = -1): string {
     if (repeat) return `<span class="sg rep" style="flex:${weight} 1 0" title="앞 마디와 같아요">${REPEAT_SVG}</span>`;
     if (ev < 0) return `<span class="sg" style="flex:${weight} 1 0"><span class="cn muted">—</span></span>`;
     const lab = m.labels[ev];
@@ -294,8 +342,30 @@ export class PlayScreen {
     const alt = lab.hint ? `<small class="alt">${escapeHtml(lab.hint)}</small>` : '';
     const ch = lab.change;
     const mark = ch ? `<i class="chg${ch.root ? ' root' : ''}" aria-hidden="true">${ch.root ? '◆' : '●'}</i>` : '';
-    const title = ch ? ` title="${escapeHtml(`${ch.badge} · ${ch.text}${this.concert(ch) ? ` · ${this.concert(ch)}` : ''}`)}"` : '';
-    return `<span class="sg${ch ? ' changed' : ''}" style="flex:${weight} 1 0"${title}>${chordHTML(lab.name)}${mark}${alt}${snd}</span>`;
+    const u = flag >= 0 ? m.uncertain[flag] : undefined;
+    const tipText = [ch ? `${ch.badge} · ${ch.text}${this.concert(ch) ? ` · ${this.concert(ch)}` : ''}` : '', u ? uncertainText(u.alt) : ''].filter(Boolean).join(' · ');
+    const title = tipText ? ` title="${escapeHtml(tipText)}"` : '';
+    let unc = '';
+    if (u && this.uv === 'A') unc = '<i class="unc-q" aria-hidden="true">?</i>';
+    if (u && this.uv === 'B') unc = `<i class="unc-br" aria-hidden="true"></i><span class="unc-chip" role="button" tabindex="0" data-u="${flag}" aria-label="${escapeHtml(`${withRo(u.alt)} 바꾸기`)}">또는 ${chordHTML(u.alt)}</span>`;
+    return `<span class="sg${ch ? ' changed' : ''}${u ? ' unc' : ''}" style="flex:${weight} 1 0"${title}>${chordHTML(lab.name)}${mark}${this.uv === 'B' ? `${alt}${snd}${unc}` : `${unc}${alt}${snd}`}</span>`;
+  }
+
+  /** The second-choice line under the strip (A, C) or the "?" on the current card (B). */
+  private renderUncertain(m: PlayModel, i: number, onCard: boolean): void {
+    const u = i >= 0 && onCard ? m.uncertain[i] : undefined;
+    if (this.uv === 'B') {
+      const li = this.slots[0];
+      li?.querySelector('.unc-q')?.remove();
+      if (u && li) li.querySelector('.nm')?.insertAdjacentHTML('beforeend', `<i class="unc-q" title="${escapeHtml(uncertainText(u.alt))}" aria-label="확실하지 않아요">?</i>`);
+      return;
+    }
+    if (!u) {
+      this.uncRow.innerHTML = '';
+      return;
+    }
+    const snd = this.showSounding && u.altSounding !== u.alt ? ` <small class="snd">실제 ${escapeHtml(u.altSounding)}</small>` : '';
+    this.uncRow.innerHTML = `<span class="unc-line">확실하지 않아요 · 다른 후보 <b>${slashChordHTML(u.alt)}</b>${snd}</span><button class="unc-btn" data-u="${i}">${escapeHtml(withRo(u.alt))} 바꾸기</button>`;
   }
 
   private buildLane(m: PlayModel): void {
@@ -312,17 +382,18 @@ export class PlayScreen {
         for (let k = i; k < Math.min(end, i + 4); k++) {
           const b = m.bars[k];
           const col = k - i;
-          const segs = b.segments.map((s) => this.segHTML(m, s.event, s.weight, b.repeat && col !== 0)).join('');
+          const segs = b.segments.map((s) => this.segHTML(m, s.event, s.weight, b.repeat && col !== 0, s.flag)).join('');
           const aria = b.segments
             .map((s) => {
               if (s.event < 0) return '코드 없음';
               const lab = m.labels[s.event];
-              return lab.change ? `${lab.name}, ${changeLabel(lab.change)}${this.concert(lab.change) ? `. ${this.concert(lab.change)}` : ''}` : lab.name;
+              const unc = s.flag >= 0 ? `, ${uncertainText(m.uncertain[s.flag].alt)}` : '';
+              return (lab.change ? `${lab.name}, ${changeLabel(lab.change)}${this.concert(lab.change) ? `. ${this.concert(lab.change)}` : ''}` : lab.name) + unc;
             })
             .join(', ');
           const changes = [...new Set(b.segments.filter((s) => s.event >= 0 && m.labels[s.event].change).map((s) => s.event))].map((ev) => m.labels[ev].change!);
           const tip = changes.length ? `<span class="chg-tip" aria-hidden="true">${changes.map((c) => `<b>${escapeHtml(c.badge)}</b> ${escapeHtml(c.text)}${this.concert(c) ? `<small class="snd">${escapeHtml(this.concert(c))}</small>` : ''}`).join('<br>')}</span>` : '';
-          row.push(`<button class="bar${changes.length ? ' has-chg' : ''}" data-k="${k}" data-t="${b.startSec.toFixed(3)}" aria-label="${k + 1}마디, ${escapeHtml(aria)}"><span class="segs">${segs}</span><span class="ticks">${ticks}</span><span class="ph"></span>${tip}</button>`);
+          row.push(`<button class="bar${changes.length ? ' has-chg' : ''}${b.segments.some((s) => s.flag >= 0) ? ' has-unc' : ''}" data-k="${k}" data-t="${b.startSec.toFixed(3)}" aria-label="${k + 1}마디, ${escapeHtml(aria)}"><span class="segs">${segs}</span><span class="ticks">${ticks}</span><span class="ph"></span>${tip}</button>`);
         }
         h += `<div class="row4">${row.join('')}</div>`;
       }
@@ -420,6 +491,12 @@ export class PlayScreen {
       this.last.up = upKey;
       this.last.soon = 'x';
       this.last.cd = -1;
+    }
+    const onCard = f.event >= 0 && up[0] === f.event;
+    const uncKey = `${onCard ? f.uncertain : -1}|${upKey}`;
+    if (uncKey !== this.last.unc) {
+      this.renderUncertain(m, f.uncertain, onCard);
+      this.last.unc = uncKey;
     }
     const lookBig = Math.max(1, Math.round(this.lookBars * m.big.bigPerBar));
     const soon = f.next >= 0 && f.bigLeft > 0 && f.bigLeft <= lookBig;

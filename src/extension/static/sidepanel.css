@@ -4,7 +4,7 @@
 :root{
   --bg:#F3EFE7; --surface:#FFFCF6; --sunk:#EAE4D8; --ink:#1D1A15; --ink-2:#575045; --ink-3:#7F776A;
   --line:#DDD5C6; --accent:#B13E12; --accent-ink:#FFF7EF; --accent-soft:#F7DCCB; --accent-line:#E7A383;
-  --ok:#2F6B4F; --warn:#9A3412; --shadow:0 1px 0 rgba(40,30,20,.04),0 6px 18px -10px rgba(60,40,20,.25);
+  --ok:#2F6B4F; --warn:#9A3412; --unc:#A86A07; --unc-soft:#FBEFD6; --shadow:0 1px 0 rgba(40,30,20,.04),0 6px 18px -10px rgba(60,40,20,.25);
   --f-ui:system-ui,-apple-system,"Apple SD Gothic Neo","Noto Sans KR","Segoe UI",sans-serif;
   --f-chord:ui-rounded,"SF Pro Rounded","Arial Rounded MT Bold",system-ui,-apple-system,"Apple SD Gothic Neo",sans-serif;
   --f-lyric:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,ui-serif,serif;
@@ -15,13 +15,13 @@
   :root:not([data-theme=light]){
     --bg:#131210; --surface:#1C1A17; --sunk:#100F0D; --ink:#F2ECE1; --ink-2:#BDB4A5; --ink-3:#8E8679;
     --line:#2F2B26; --accent:#F28C4E; --accent-ink:#1B0E06; --accent-soft:#3B2417; --accent-line:#8A4A27;
-    --ok:#7FC3A0; --warn:#F4A27A; --shadow:0 1px 0 rgba(0,0,0,.4),0 10px 24px -14px rgba(0,0,0,.8); color-scheme:dark;
+    --ok:#7FC3A0; --warn:#F4A27A; --unc:#E2B04A; --unc-soft:#3A2E14; --shadow:0 1px 0 rgba(0,0,0,.4),0 10px 24px -14px rgba(0,0,0,.8); color-scheme:dark;
   }
 }
 :root[data-theme=dark]{
   --bg:#131210; --surface:#1C1A17; --sunk:#100F0D; --ink:#F2ECE1; --ink-2:#BDB4A5; --ink-3:#8E8679;
   --line:#2F2B26; --accent:#F28C4E; --accent-ink:#1B0E06; --accent-soft:#3B2417; --accent-line:#8A4A27;
-  --ok:#7FC3A0; --warn:#F4A27A; --shadow:0 1px 0 rgba(0,0,0,.4),0 10px 24px -14px rgba(0,0,0,.8); color-scheme:dark;
+  --ok:#7FC3A0; --warn:#F4A27A; --unc:#E2B04A; --unc-soft:#3A2E14; --shadow:0 1px 0 rgba(0,0,0,.4),0 10px 24px -14px rgba(0,0,0,.8); color-scheme:dark;
 }
 
 /* ---------- base ---------- */
@@ -369,3 +369,24 @@ textarea{width:100%;resize:vertical}
 .bar.loop-a.loop-b::after{right:15px}
 .lane.loop-picking .bar{cursor:crosshair}
 .lane.loop-picking .bar:hover{border-color:var(--ok)}
+
+/* ---------- uncertain stretches (VGT-19; variants via ?uv=A|B|C, temporary) ---------- */
+.sg.unc{position:relative}
+.sg .unc-q,.dias .unc-q{font-style:normal;font-weight:700;font-size:12px;line-height:1;color:var(--unc);align-self:flex-start;margin-left:-2px}
+[data-uv=A] .sg.unc{outline:1.5px dashed var(--unc);outline-offset:-3px;border-radius:8px}
+[data-uv=A] .sg.unc+.sg,[data-uv=A] .sg+.sg.unc{border-left-color:transparent}
+[data-uv=C] .sg.unc::after{content:"";position:absolute;left:6px;right:6px;bottom:2px;height:2px;border-radius:2px;background:var(--unc)}
+[data-uv=B] .row4:has(.has-unc) .bar{height:58px}
+[data-uv=B] .sg.unc{flex-wrap:wrap;align-content:flex-start;row-gap:3px}
+.sg .unc-br{flex-basis:100%;height:0}
+.unc-chip{flex:none;display:inline-flex;align-items:center;gap:2px;height:17px;padding:0 6px;border-radius:99px;
+  border:1px solid var(--unc);background:var(--unc-soft);color:var(--ink);font-size:11px;line-height:1;cursor:pointer;white-space:nowrap}
+.unc-chip .cn{font-size:11px;line-height:1}
+.unc-chip:hover{background:var(--unc);color:var(--surface)}
+.dias .nm .unc-q{font-size:.5em;margin-left:2px;vertical-align:super}
+.unc-row{display:flex;align-items:center;gap:8px;min-height:32px;margin:-4px 8px 6px;padding:0 4px 0 10px;border-left:3px solid transparent;font-size:12.5px;color:var(--ink-2)}
+.unc-row:not(:empty){border-left-color:var(--unc);background:var(--unc-soft);border-radius:0 10px 10px 0}
+.unc-row .unc-line{flex:1;min-width:0}
+.unc-row b{color:var(--ink);font-size:14px}
+.unc-btn{flex:none;height:26px;padding:0 10px;border-radius:99px;border:1px solid var(--unc);background:var(--surface);color:var(--ink);font-size:12.5px;font-weight:600;cursor:pointer}
+.unc-btn:hover{background:var(--unc);color:var(--surface)}
