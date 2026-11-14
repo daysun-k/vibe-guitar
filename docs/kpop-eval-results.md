@@ -83,8 +83,8 @@ evidence of a domain gap.
 - 12 songs from 4 artists, one capture each: the interval of G is wide (about 17 pp). The data rule out a large K-pop
   deficit on this measure; they cannot resolve differences of a few points.
 - The two sets use different references: curated, time-aligned Billboard annotations against a consensus of public web
-  sheets in chord order. Web sheets may write fewer changes, which would lower the recognizer's misses on K-pop, so part
-  of the -5.2 pp may come from the reference method rather than the music; its size is unknown. A same-method comparison (web sheets for the
+  sheets in chord order. Web sheets may write fewer changes, which would lower the recognizer's misses on K-pop. A
+  follow-up check (below) measured this effect on the Billboard songs as small: -0.9 pp [-4.3, +2.7]. A same-method comparison (web sheets for the
   Billboard songs) was not run (scope; advisor round 1).
 - Chord order ignores timing and duration: a chord shown at the wrong moment still counts as right. Timing accuracy and
   top-k could not be measured reliably on these songs.
@@ -93,3 +93,26 @@ evidence of a domain gap.
   99% of positions (probably related copies). No human listening check was possible.
 - The captured audio is deleted at the end of this campaign as planned, so a later fine-tuning trial must capture these
   12 uploads again and compare its baseline and candidate on that new capture with the same frozen references.
+
+## Follow-up: reference-method check (2026-11-14, after scoring, exploratory; user-requested)
+Not part of the predeclared protocol; it does not change the recommendation. On the same 18 Billboard TEST songs and the
+same official v2 charts (original recognizer), references were rebuilt from public web chord sheets with the K-pop
+rules (lineages, majority/tie wildcards, duplicated-half rule) and compared with the curated McGill references.
+Raw results stay outside the repository (`~/vgt-kpop-eval/billboard-websheets/summary.json`).
+
+| Measure | Value |
+| --- | --- |
+| Billboard majmin F, web-sheet vs curated references | 77.4 vs 78.3: effect -0.9 pp [-4.3, +2.7] (paired bootstrap, seed 7007; 10 songs up, 8 down) |
+| Same, root F | -2.9 pp [-4.9, -1.0] |
+| Same, songs with >= 2 sheet lineages (12) | +1.6 pp [-2.3, +5.7] |
+| Same-method gap: Billboard (web) - K-pop (web), majmin F | -6.1 pp [-16.4, +3.1]; any one artist left out -5.0 to -8.5 |
+| Same-method gap, Billboard songs with >= 2 lineages | -4.3 pp [-18.1, +6.8] |
+| Reference tokens, web / curated | 0.87 (1674 vs 1958); web wildcards 10.7% (K-pop 12.9%) |
+
+Reading: swapping the reference method moves the Billboard score by about one point, and the K-pop advantage remains
+with web-sheet references on both sides, so the reference method does not explain it. Limits: keys were decided by the
+sheets' stated keys only when they matched the transposition that best fits the curated annotation (a literal
+stated-key majority mis-keys 3 songs and would give an effect of -12.4 pp), so the Billboard side partly used its
+known key; 6 songs had a single sheet lineage and many web sheets are copies of each other (Ultimate Guitar,
+guitartabs.cc, guitaretab.com); per-song differences range from -14.9 to +16.6 pp, so single songs can move a lot.
+
