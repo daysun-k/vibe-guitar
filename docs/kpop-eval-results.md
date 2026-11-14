@@ -69,20 +69,22 @@ no reason to start one now.
 | Billboard A | 1.2 | 0.5 | 0.2 | 0.1 | 3.3 | 23.7 | 0.9 |
 
 The largest error type in both sets is a missed chord (the chart holds one chord where the reference changes). Billboard
-misses about twice as often, which fits its curated annotations writing changes more densely than web chord sheets.
+misses about twice as often; one possible reason is that curated annotations write changes more densely than web chord
+sheets (this was not measured separately).
 
 ## Reference only: timing validation failed
 These numbers use references timed by the lyric-anchored prototype aligner, whose validation failed; they never entered
 the decision. K-pop time-weighted majmin 68.9 (A) -> 69.7 (B), root 71.6 -> 71.5, sevenths 56.7 -> 58.3 (11 songs),
 chord-change F (+-250 ms) 53.8 -> 54.4, top-1/2/3 family oracle 69.1/81.7/86.6 -> 69.8/82.3/86.9. The gap to the
-Billboard time-weighted results (83.3 majmin) is dominated by reference timing error and is not evidence of a domain gap.
+Billboard time-weighted results (83.3 majmin) is confounded with reference timing error of unknown size, so it is not
+evidence of a domain gap.
 
 ## How far to trust this
 - 12 songs from 4 artists, one capture each: the interval of G is wide (about 17 pp). The data rule out a large K-pop
   deficit on this measure; they cannot resolve differences of a few points.
 - The two sets use different references: curated, time-aligned Billboard annotations against a consensus of public web
-  sheets in chord order. Web sheets are simpler (fewer written changes), which lowers the recognizer's misses on K-pop.
-  Part of the -5.2 pp is therefore the reference method, not the music. A same-method comparison (web sheets for the
+  sheets in chord order. Web sheets may write fewer changes, which would lower the recognizer's misses on K-pop, so part
+  of the -5.2 pp may come from the reference method rather than the music; its size is unknown. A same-method comparison (web sheets for the
   Billboard songs) was not run (scope; advisor round 1).
 - Chord order ignores timing and duration: a chord shown at the wrong moment still counts as right. Timing accuracy and
   top-k could not be measured reliably on these songs.
