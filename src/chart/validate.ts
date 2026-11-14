@@ -28,7 +28,7 @@ export function validateChart(input: unknown): ValidationResult {
   const warnings: string[] = [];
   if (!isObj(input)) return { ok: false, errors: ['chart must be an object'], warnings };
 
-  checkKeys(input, 'chart', ['schemaVersion', 'recording', 'timing', 'events', 'coverage', 'provenance'], ['schemaVersion', 'recording', 'timing', 'events', 'coverage', 'provenance'], errors);
+  checkKeys(input, 'chart', ['schemaVersion', 'recording', 'timing', 'events', 'coverage', 'provenance', 'uncertain'], ['schemaVersion', 'recording', 'timing', 'events', 'coverage', 'provenance'], errors);
   if (input.schemaVersion !== 1) errors.push('chart.schemaVersion must be 1');
 
   const rec = input.recording;
@@ -108,6 +108,38 @@ export function validateChart(input: unknown): ValidationResult {
       checkKeys(c, p, ['fromSec', 'toSec'], ['fromSec', 'toSec'], errors);
       if (!isNum(c.fromSec) || !isNum(c.toSec) || c.fromSec < 0 || c.toSec <= c.fromSec) errors.push(`${p} must satisfy 0 <= fromSec < toSec`);
     });
+  }
+
+  const unc = input.uncertain;
+  if (unc !== undefined) {
+    if (!Array.isArray(unc)) errors.push('chart.uncertain must be an array');
+    else {
+      let prevTo = -Infinity;
+      unc.forEach((s, i) => {
+        const p = `uncertain[${i}]`;
+        if (!isObj(s)) {
+          errors.push(`${p} must be an object`);
+          return;
+        }
+        checkKeys(s, p, ['fromSec', 'toSec', 'chord', 'alt'], ['fromSec', 'toSec', 'chord', 'alt'], errors);
+        if (!isNum(s.fromSec) || !isNum(s.toSec) || s.fromSec < 0 || s.toSec <= s.fromSec) errors.push(`${p} must satisfy 0 <= fromSec < toSec`);
+        else {
+          if (s.fromSec < prevTo) errors.push(`${p} must start at or after the previous span's end`);
+          prevTo = s.toSec;
+        }
+        for (const k of ['chord', 'alt'] as const) {
+          const c = s[k];
+          if (!isStr(c) || c.length === 0) errors.push(`${p}.${k} must be a non-empty string`);
+          else if (!isNoChord(c)) {
+            try {
+              parseChord(c);
+            } catch (err) {
+              errors.push(`${p}.${k}: ${(err as Error).message}`);
+            }
+          }
+        }
+      });
+    }
   }
 
   if (Array.isArray(events) && Array.isArray(cov) && cov.length && errors.length === 0) {

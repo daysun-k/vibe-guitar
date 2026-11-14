@@ -54,6 +54,20 @@ export interface Provenance {
   example?: boolean;
 }
 
+/**
+ * A stretch of an auto event where the recognizer was unsure, with its second choice (VGT-19,
+ * docs/uncertainty-protocol.md). Chords are stored at sounding pitch like events. A span applies
+ * only while the event under it is still an auto event showing `chord`.
+ */
+export interface UncertainSpan {
+  fromSec: number;
+  toSec: number;
+  /** The event's chord when the span was computed. */
+  chord: string;
+  /** The recognizer's second choice there, from another chord family than `chord`. */
+  alt: string;
+}
+
 export interface Chart {
   schemaVersion: 1;
   recording: Recording;
@@ -61,6 +75,8 @@ export interface Chart {
   events: ChordEvent[];
   coverage: CoverageRange[];
   provenance: Provenance;
+  /** Uncertain stretches of auto events (absent on charts made before VGT-19 and on hand-made charts). */
+  uncertain?: UncertainSpan[];
 }
 
 export const NO_CHORD = 'N';
