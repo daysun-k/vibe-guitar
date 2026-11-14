@@ -15,8 +15,10 @@ export interface LaneSegment {
   event: number;
   startSec: number;
   endSec: number;
-  /** Width in big beats (≥ 1). */
+  /** Width in big beats (≥ 1; fractional, ≥ 1/3, in a bar cut at an uncertain stretch). */
   weight: number;
+  /** Index into the `flags` passed to buildLane of the uncertain stretch this segment draws, -1 when none. */
+  flag: number;
 }
 
 export interface LaneBar {
@@ -52,8 +54,10 @@ const isActive = (e: ArrangedEvent | undefined, t: number) => !!e && t >= e.star
  * Bars with their chord segments. `keyOf` names an event's displayed shape, used to mark
  * a bar that repeats the previous one. A changed event (`changed`) is never drawn as a repeat
  * of a different event, so its change marker stays visible.
+ * Uncertain stretches (`flags`) cut segments at their own bounds, so a stretch covering only part of
+ * a bar or an event is drawn at its own beats; segments inside one carry its index in `flag`.
  */
-export function buildLane(a: Arrangement, t: Timing, big: BigBeat, toSec: number, keyOf: (i: number) => string, changed: (i: number) => boolean = () => false): LaneBar[] {
+export function buildLane(a: Arrangement, t: Timing, big: BigBeat, toSec: number, keyOf: (i: number) => string, changed: (i: number) => boolean = () => false, flags?: readonly { fromSec: number; toSec: number }[]): LaneBar[] {
   const from = a.events.length ? Math.min(0, a.events[0].startSec) : 0;
   const bars = barsBetween(t, from, toSec);
   let prevKey: string | null = null;
@@ -66,24 +70,36 @@ export function buildLane(a: Arrangement, t: Timing, big: BigBeat, toSec: number
       const i = findEventIndex(a.events, sec);
       return isActive(a.events[i], sec) && !a.events[i].rest ? i : -1;
     };
+    const flagAt = (sec: number): number => (flags ? flags.findIndex((f) => sec >= f.fromSec && sec < f.toSec) : -1);
     const cuts = [b.startSec];
     for (const e of a.events) {
       for (const x of [e.startSec, e.endSec]) if (x > b.startSec + 0.1 && x < b.endSec - 0.1) cuts.push(x);
     }
+    let flagCut = false;
+    for (const f of flags ?? []) {
+      for (const x of [f.fromSec, f.toSec]) if (x > b.startSec + 0.1 && x < b.endSec - 0.1) {
+        cuts.push(x);
+        flagCut = true;
+      }
+    }
     cuts.sort((x, y) => x - y);
-    const parts: { id: number; st: number }[] = [];
+    const parts: { id: number; flag: number; st: number }[] = [];
     for (const c of cuts) {
       const id = chordAt(c + 0.01);
-      if (!parts.length || parts[parts.length - 1].id !== id) parts.push({ id, st: c });
+      const flag = id < 0 ? -1 : flagAt(c + 0.01);
+      const last = parts[parts.length - 1];
+      if (!last || last.id !== id || last.flag !== flag) parts.push({ id, flag, st: c });
     }
     const segments: LaneSegment[] = parts.map((p, n) => {
       const en = n + 1 < parts.length ? parts[n + 1].st : b.endSec;
       const w = (beatIndexAt(t, en) - beatIndexAt(t, p.st)) / big.beatsPerBig;
-      return { event: p.id, startSec: p.st, endSec: en, weight: Math.max(1, Math.round(w)) };
+      // A bar cut at an uncertain stretch keeps true proportions so the stretch sits at its own beats.
+      const weight = flagCut ? Math.max(1 / 3, Math.round(w * 100) / 100) : Math.max(1, Math.round(w));
+      return { event: p.id, startSec: p.st, endSec: en, weight, flag: p.flag };
     });
     const keys = segments.map((s) => (s.event < 0 ? '-' : keyOf(s.event)));
     const ev = segments[0]?.event ?? -1;
-    const repeat = segments.length === 1 && keys[0] !== '-' && keys[0] === prevKey && (!changed(ev) || ev === prevEvent);
+    const repeat = segments.length === 1 && keys[0] !== '-' && keys[0] === prevKey && (!changed(ev) || ev === prevEvent) && segments[0].flag < 0;
     prevKey = keys[keys.length - 1];
     prevEvent = segments[segments.length - 1]?.event ?? -1;
     return { ...b, segments, repeat };

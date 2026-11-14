@@ -19,7 +19,9 @@ describe('play model on the synthetic demo song', () => {
     // every chord change sits on a bar start
     const starts = new Set(m.bars.map((b) => b.startSec.toFixed(3)));
     for (const e of m.arrangement.events.slice(1)) expect(starts.has(e.startSec.toFixed(3))).toBe(true);
-    expect(m.bars.slice(0, -1).every((b) => b.segments.length === 1)).toBe(true);
+    // one chord per bar (a bar may still be cut at a synthetic uncertain stretch, VGT-19)
+    expect(m.bars.slice(0, -1).every((b) => new Set(b.segments.map((s) => s.event)).size === 1)).toBe(true);
+    expect(m.bars.slice(0, -1).filter((b) => b.segments.length > 1)).toHaveLength(1);
     // the last bar runs past the end of coverage (90.6 s): that tail is drawn empty
     const last = m.bars[m.bars.length - 1];
     expect(last.segments.map((s) => [s.event >= 0, s.endSec])).toEqual([[true, 90.6], [false, last.endSec]]);

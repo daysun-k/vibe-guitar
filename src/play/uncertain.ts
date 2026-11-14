@@ -1,0 +1,97 @@
+/**
+ * Uncertain stretches on the play view (VGT-19): which stored spans show, and the second choice
+ * named the way the screen names chords (capo shape names, the level's simplification). Shared by
+ * every visual variant; the variants only differ in how the side panel draws these marks.
+ */
+import { arrangeEvents, type Arrangement } from '../arrange/arrange';
+import { isNoChord } from '../arrange/chord';
+import type { Level, Profile } from '../arrange/levels';
+import type { Chart, Timing, UncertainSpan } from '../chart/types';
+import { sameChordSymbol, uncertainSpanEvent, type EventRef } from '../editor/correct';
+import { prettyChord, respellChord, shapeName, type KeyEstimate } from '../music/key';
+
+export interface VisibleSpan {
+  /** The span as stored (used to find it again when replacing). */
+  span: UncertainSpan;
+  /** The stored event it applies to, as an EventRef for the replacement write. */
+  ref: EventRef;
+}
+
+/**
+ * Spans that show: the toggle is on, the span lies inside one event, and that event is still an
+ * auto event with the span's chord. Everything else (a manually fixed event, a chart without
+ * spans, the toggle off) shows nothing.
+ */
+export function visibleSpans(chart: Chart, on: boolean): VisibleSpan[] {
+  if (!on || !chart.uncertain?.length) return [];
+  const out: VisibleSpan[] = [];
+  for (const span of chart.uncertain) {
+    const i = uncertainSpanEvent(chart, span);
+    if (i < 0) continue;
+    const e = chart.events[i];
+    out.push({ span, ref: { startSec: e.startSec, chord: e.chord } });
+  }
+  return out;
+}
+
+export interface AltNameOptions {
+  level: Level;
+  capo: number;
+  profile?: Profile;
+  allowRootChange?: boolean;
+}
+
+/**
+ * The second choice named like the shown chords of that screen: spelled for the key, arranged at
+ * the level (입문 drops 7ths) and named as a capo shape. `sounding` is the concert name (shown only
+ * where the screen already shows concert names).
+ */
+export function altNames(alt: string, key: KeyEstimate | null, timing: Timing, span: Pick<UncertainSpan, 'fromSec' | 'toSec'>, o: AltNameOptions): { name: string; sounding: string } {
+  if (isNoChord(alt)) return { name: 'N.C.', sounding: 'N.C.' };
+  const spelled = respellChord(alt, key);
+  const a = arrangeEvents([{ startSec: span.fromSec, endSec: span.toSec, chord: spelled, confidence: 1 }], timing, o).events[0];
+  if (!a || a.rest || !a.shape) return { name: shapeName(spelled, o.capo), sounding: prettyChord(spelled) };
+  const name = o.capo ? a.shape : (a.sounding ?? a.shape);
+  return { name: prettyChord(name), sounding: prettyChord(a.sounding ?? name) };
+}
+
+export interface UncertainMark extends VisibleSpan {
+  fromSec: number;
+  toSec: number;
+  /** Shown name of the second choice ("Am" with a capo shape name). */
+  alt: string;
+  /** Concert name of the second choice (equal to `alt` without a capo). */
+  altSounding: string;
+}
+
+/**
+ * Marks of the play model: visible spans whose stretch is drawn as the span's chord (a short chord
+ * merged into the previous one by the arrangement is not marked) and whose second choice reads
+ * differently from the shown chord after the level's simplification.
+ */
+export function uncertainMarks(chart: Chart, arrangement: Arrangement, key: KeyEstimate | null, timing: Timing, labelAt: (sec: number) => string | null, on: boolean, o: AltNameOptions): UncertainMark[] {
+  const out: UncertainMark[] = [];
+  for (const v of visibleSpans(chart, on)) {
+    const mid = (v.span.fromSec + v.span.toSec) / 2;
+    const ev = arrangement.events.find((e) => mid >= e.startSec && mid < e.endSec);
+    if (!ev || ev.rest || !sameChordSymbol(ev.original, v.span.chord)) continue;
+    const names = altNames(v.span.alt, key, timing, v.span, o);
+    if (names.name === labelAt(mid)) continue;
+    out.push({ ...v, fromSec: v.span.fromSec, toSec: v.span.toSec, alt: names.name, altSounding: names.sounding });
+  }
+  return out;
+}
+
+/** Index of the mark under `t` (inside [fromSec, toSec)), -1 when none. */
+export function markAt(marks: readonly Pick<UncertainMark, 'fromSec' | 'toSec'>[], t: number): number {
+  return marks.findIndex((m) => t >= m.fromSec && t < m.toSec);
+}
+
+// Final sound of how a chord name is read aloud: letters A–G (에이 … 지) end in a vowel, "m" (엠),
+// ♭/♯ (플랫/샵) and 0, 3, 6 (영, 삼, 육) end in a consonant other than ㄹ.
+const EU_RO_LAST = /(?:m|M|♭|♯|b|#|[036])$/;
+
+/** "Am" → "Am으로", "G" → "G로", "C7" → "C7로": the particle a chord name takes before 바꾸기. */
+export function withRo(name: string): string {
+  return `${name}${EU_RO_LAST.test(name) ? '으로' : '로'}`;
+}

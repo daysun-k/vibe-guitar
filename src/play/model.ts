@@ -16,6 +16,7 @@ import type { Lyrics } from '../lyrics/types';
 import { prettyChord, shapeName, type KeyEstimate } from '../music/key';
 import { bigBeatIndexAt, bigBeatInfo, bigBeatsUntil, type BigBeat, type PhaseEstimate } from '../music/meter';
 import { buildLane, buildSections, droppedSeventh, simpleShape, stripItems, type LaneBar, type LaneSection, type StripItem } from './lane';
+import { markAt, uncertainMarks, type UncertainMark } from './uncertain';
 
 export interface PlayOptions {
   level: Level;
@@ -25,6 +26,8 @@ export interface PlayOptions {
   durationSec?: number;
   /** Allow root-changing (relative major/minor) substitutions. Default off. */
   allowRootChange?: boolean;
+  /** 불확실한 곳 표시 (VGT-19): mark uncertain stretches and offer the second choice. Default on. */
+  showUncertain?: boolean;
 }
 
 export interface EventLabel {
@@ -57,6 +60,8 @@ export interface PlayModel {
   bars: LaneBar[];
   sections: LaneSection[];
   durationSec: number;
+  /** Visible uncertain stretches (empty when the switch is off or the chart has none). */
+  uncertain: UncertainMark[];
   lyrics: Lyrics | null;
   lyricOffset: OffsetEstimate | null;
   placed: PlacedLine[];
@@ -118,7 +123,12 @@ export function buildPlayModel(source: Chart, opts: PlayOptions, rawLyrics: Lyri
   for (const r of chart.coverage) coverEnd = Math.max(coverEnd, r.toSec);
   for (const e of arrangement.events) coverEnd = Math.max(coverEnd, e.endSec);
   const durationSec = Math.max(opts.durationSec ?? 0, coverEnd);
-  const bars = buildLane(arrangement, timing, big, Math.min(durationSec, coverEnd + 0.01), (i) => keys[i] || labels[i].name, (i) => !!arrangement.events[i]?.change);
+  const labelAt = (sec: number): string | null => {
+    const i = arrangement.events.findIndex((e) => sec >= e.startSec && sec < e.endSec);
+    return i >= 0 ? labels[i].name : null;
+  };
+  const uncertain = uncertainMarks(source, arrangement, key, timing, labelAt, opts.showUncertain !== false, { level: opts.level, capo, profile: opts.profile, allowRootChange: opts.allowRootChange });
+  const bars = buildLane(arrangement, timing, big, Math.min(durationSec, coverEnd + 0.01), (i) => keys[i] || labels[i].name, (i) => !!arrangement.events[i]?.change, uncertain.length ? uncertain : undefined);
 
   // Lyrics are optional: anything wrong with them degrades to "no lyrics", never to no chords.
   let lyrics: Lyrics | null = null;
@@ -155,6 +165,7 @@ export function buildPlayModel(source: Chart, opts: PlayOptions, rawLyrics: Lyri
     bars,
     sections,
     durationSec,
+    uncertain,
     lyrics,
     lyricOffset,
     placed,
@@ -177,6 +188,8 @@ export interface Frame {
   /** Pinned lyric line (-1 instrumental) and the following line. */
   line: number;
   nextLine: number;
+  /** Index into model.uncertain of the uncertain stretch under the playhead, -1 when none. */
+  uncertain: number;
 }
 
 /**
@@ -237,7 +250,8 @@ export function frameAt(m: PlayModel, t: number): Frame {
   const lines = m.lyrics?.lines ?? [];
   const line = lines.length ? pinnedLineAt(lines, t) : -1;
   const nextLine = lines.length ? nextLineAfter(lines, t, line) : -1;
-  return { event, next, bigLeft, bar, bigInBar, barFraction, section, line, nextLine };
+  const uncertain = event >= 0 ? markAt(m.uncertain, t) : -1;
+  return { event, next, bigLeft, bar, bigInBar, barFraction, section, line, nextLine, uncertain };
 }
 
 /** Every bar occupied by this hard shape, including sustained events and repeat bars. */
