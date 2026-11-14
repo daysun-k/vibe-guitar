@@ -370,20 +370,10 @@ textarea{width:100%;resize:vertical}
 .lane.loop-picking .bar{cursor:crosshair}
 .lane.loop-picking .bar:hover{border-color:var(--ok)}
 
-/* ---------- uncertain stretches (VGT-19; variants via ?uv=A|B|C, temporary) ---------- */
-.sg.unc{position:relative}
-.sg .unc-q,.dias .unc-q{font-style:normal;font-weight:700;font-size:12px;line-height:1;color:var(--unc);align-self:flex-start;margin-left:-2px}
-[data-uv=A] .sg.unc{outline:1.5px dashed var(--unc);outline-offset:-3px;border-radius:8px}
-[data-uv=A] .sg.unc+.sg,[data-uv=A] .sg+.sg.unc{border-left-color:transparent}
-[data-uv=C] .sg.unc::after{content:"";position:absolute;left:6px;right:6px;bottom:2px;height:2px;border-radius:2px;background:var(--unc)}
-[data-uv=B] .row4:has(.has-unc) .bar{height:58px}
-[data-uv=B] .sg.unc{flex-wrap:wrap;align-content:flex-start;row-gap:3px}
-.sg .unc-br{flex-basis:100%;height:0}
-.unc-chip{flex:none;display:inline-flex;align-items:center;gap:2px;height:17px;padding:0 6px;border-radius:99px;
-  border:1px solid var(--unc);background:var(--unc-soft);color:var(--ink);font-size:11px;line-height:1;cursor:pointer;white-space:nowrap}
-.unc-chip .cn{font-size:11px;line-height:1}
-.unc-chip:hover{background:var(--unc);color:var(--surface)}
-.dias .nm .unc-q{font-size:.5em;margin-left:2px;vertical-align:super}
+/* ---------- uncertain stretches (VGT-19) ---------- */
+.sg .unc-q{font-style:normal;font-weight:700;font-size:12px;line-height:1;color:var(--unc);align-self:flex-start;margin-left:-2px}
+.sg.unc{position:relative;outline:1.5px dashed var(--unc);outline-offset:-3px;border-radius:8px}
+.sg.unc+.sg,.sg+.sg.unc{border-left-color:transparent}
 .unc-row{display:flex;align-items:center;gap:8px;min-height:32px;margin:-4px 8px 6px;padding:0 4px 0 10px;border-left:3px solid transparent;font-size:12.5px;color:var(--ink-2)}
 .unc-row:not(:empty){border-left-color:var(--unc);background:var(--unc-soft);border-radius:0 10px 10px 0}
 .unc-row .unc-line{flex:1;min-width:0}

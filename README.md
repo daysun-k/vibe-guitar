@@ -154,9 +154,7 @@ Port of the approved mockup B ("진행표형", diagrams 3x):
   `ChartStore.acceptAlt`, chart `edited`, the same status line and 되돌리기; in demo only the in-memory chart).
   **불확실한 곳 표시** in the settings sheet (on by default) hides every mark. Re-analyses merge stretches like
   chords: the newer chart's stretches, plus the older chart's stretches lying wholly in ranges only it heard.
-  The look is temporary: `sidepanel.html?uv=B` shows a "또는 Am" chip on the lane (its own button; the rest of
-  the bar still only seeks) and only a "?" on the current shape, `uv=C` only a thin amber underline on the
-  lane with the same line and button as A. Two of the three will be removed once one is chosen.
+  While a song has visible stretches, the line under the strip keeps its height so the lane does not jump.
 
 Music fixes applied before drawing (pure functions in `src/music/`, tests in `tests/music.test.ts`):
 
@@ -330,12 +328,13 @@ placeholder lyrics 0.4 s early) that exercises the spelling, phase and offset fi
 cached lyrics only (no request in demo mode). Query parameters: `t=<sec>`, `play`, `rate=0.5|0.75`,
 `loop=<a>-<b>` (mark bars a–b, 1-based, as the loop),
 `theme=light|dark`, `level=beginner|novice|intermediate|advanced`, `capo=auto|0..7`, `snd` (sounding
-names), `uv=A|B|C` (temporary uncertain-mark variants), `unc=0` (불확실한 곳 표시 off), `sheet=1`, `lyrics=0`, `mute` (no count-in click), `phonectl` (휴대폰에서 조작 허용 on), `phone` (휴대폰 악보대 switch on; connects to
+names), `unc=0` (불확실한 곳 표시 off), `sheet=1`, `lyrics=0`, `mute` (no count-in click), `phonectl` (휴대폰에서 조작 허용 on), `phone` (휴대폰 악보대 switch on; connects to
 `127.0.0.1` only).
 
 The synthetic song carries four uncertain stretches (whole verse Fm at 11.6–13.6 s, the second half of verse
 C♯ at 14.6–15.6 s, the low-confidence Fm7 at 19.6–21.6 s, chorus C♯ → A♯m at 27.6–29.6 s). In the panel's
-DevTools console, `await vibeGuitar.seek(12.4)` moves the demo there and resolves once it is drawn.
+DevTools console, `await vibeGuitar.seek(12.4)` moves the demo there and resolves once it is drawn (demo
+only: it does nothing while a real player is followed).
 
 Opened outside the extension (file://) the page runs the synthetic demo with default settings, which is
 how `node scripts/screens.mjs` (after `npm run build`) writes `docs/screens/*.png` at 400 and 600 px, light

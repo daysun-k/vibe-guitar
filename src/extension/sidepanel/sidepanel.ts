@@ -63,7 +63,7 @@ import { controlTabId, keepPlayerAfterDemo } from './player-target';
 import { playToggle, RATE_CANCELS_COUNTIN, type PlayToggleEnv, type TransportResult } from './play-toggle';
 import { ChordFixer } from './fix';
 import { OVERVIEW_EMPTY, renderOverviewHtml } from './overview';
-import { capoReason, unplayableLine, PlayScreen, formatTime, uncertainVariant, type LoopMarks } from './play';
+import { capoReason, unplayableLine, PlayScreen, formatTime, type LoopMarks } from './play';
 import { PhoneLink, phoneStatusText, type PhoneStatus, type PlaybackSample } from './phone-link';
 import { ShownModel, modelSongId, playerTargetKey, songIdOf, songViewReady, type TargetParts, restartTargetSec, barStepTargetSec, runPhoneCommand, panelClock, type CommandContext, type ObservedPlayer, type PanelTransport, type WrapSample } from './phone-control';
 import type { CommandOutcome, PhoneCommand, PhoneEntry } from '../../phone/protocol';
@@ -1874,7 +1874,7 @@ async function main(): Promise<void> {
     setRate: (r) => void setRate(r),
     barClick: (k) => pickLoopBar(k),
     acceptAlt: (i) => void acceptAlt(i),
-  }, uncertainVariant(params.get('uv')));
+  });
   $('loop-btn').onclick = onLoopButton;
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && loopPick) cancelLoopPick();
@@ -1938,8 +1938,9 @@ void main();
     return model;
   },
   isNoChord,
-  /** Seek (demo or player) and resolve after the view has drawn that position (screenshots). */
+  /** Demo only (no effect on a real player): seek the demo clock and resolve once drawn (screenshots). */
   async seek(sec: number) {
+    if (!demo) return;
     await seekTo(sec);
     await new Promise((r) => setTimeout(r, 250));
   },

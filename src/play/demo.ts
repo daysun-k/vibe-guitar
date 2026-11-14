@@ -71,7 +71,7 @@ const barStart = (bar: number) => T0 + (LEAD_BEATS + bar * BPB) * BEAT;
 const r3 = (x: number) => Math.round(x * 1000) / 1000;
 
 /**
- * Synthetic uncertain stretches (VGT-19) so every visual variant has something to show: a whole
+ * Synthetic uncertain stretches (VGT-19) so the play view's marks have something to show: a whole
  * event (verse Fm, second choice the relative major), part of an event as if a change were missed
  * (the second half of verse C♯), a low-confidence 7th that also carries the "Em도 돼요" hint at
  * 중급/상급, and one whose second choice reads differently as a capo shape (chorus C♯ → A♯m, shape

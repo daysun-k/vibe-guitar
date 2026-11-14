@@ -1,7 +1,7 @@
 /**
  * Uncertain stretches on the play view (VGT-19): which stored spans show, and the second choice
- * named the way the screen names chords (capo shape names, the level's simplification). Shared by
- * every visual variant; the variants only differ in how the side panel draws these marks.
+ * named the way the screen names chords (capo shape names, the level's simplification). The side
+ * panel only draws these marks.
  */
 import { arrangeEvents, type Arrangement } from '../arrange/arrange';
 import { isNoChord } from '../arrange/chord';
