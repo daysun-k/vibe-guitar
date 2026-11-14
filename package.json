@@ -27,6 +27,8 @@
     "paired-eval": "node scripts/paired-eval.mjs",
     "sequence-eval": "node scripts/sequence-eval.mjs",
     "baseline-analysis": "node scripts/baseline-analysis.mjs",
+    "uncertainty-analysis": "node scripts/uncertainty-analysis.mjs",
+    "uncertainty-sequence": "node scripts/uncertainty-sequence.mjs",
     "candidate-step": "node scripts/candidate-step.mjs"
   },
   "devDependencies": {

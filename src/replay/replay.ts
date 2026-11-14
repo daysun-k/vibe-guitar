@@ -7,13 +7,14 @@
  */
 import type { Chart } from '../chart/types';
 import type { KeyEstimate } from '../music/key';
-import { buildAutoChart } from '../recognize/autochart';
+import { buildAutoChart, type AutoChartInput } from '../recognize/autochart';
 import { hasCandidateOptions, plainRecognizerOptions, type CandidateDecodeOptions, type CandidateRecognizerOptions } from '../recognize/candidate-decode';
 import { CandidateRecognizer, type MajminModel } from '../recognize/candidate-recognizer';
 import type { BtcModelMeta, Vocabulary } from '../recognize/chords';
 import { Recognizer, type SegmentAnalysis } from '../recognize/recognizer';
 import type { ModelRunner } from '../recognize/runner';
 import { analyzeClosedSegments, ListeningSession, type Segment } from '../recognize/session';
+import type { UncertaintyOptions } from '../recognize/uncertainty';
 import { CAPTURE_SAMPLE_RATE, type CaptureMeta, type CaptureSegment } from './capture';
 
 /** One 4096-frame capture-worklet block at 48 kHz after resampling to 22.05 kHz (capture-worklet.ts). */
@@ -170,6 +171,35 @@ export async function feedSession(session: ListeningSession, segments: CaptureSe
   return fed;
 }
 
+/** The live path's analyses: Recognizer (with its uncertainty stats) over the session's closed segments. */
+async function shippedAnalyses(session: ListeningSession, models: ReplayModels, options: CandidateRecognizerOptions): Promise<SegmentAnalysis[]> {
+  const recognizer = new Recognizer(models.beat, models.chords, models.chordMeta, plainRecognizerOptions(options));
+  const analyses: SegmentAnalysis[] = await analyzeClosedSegments(session, new WeakMap<Segment, SegmentAnalysis>(), (seg) => recognizer.analyzeSessionSegment(seg));
+  if (!analyses.length) throw new Error('replay: no segment of at least 1 s');
+  return analyses;
+}
+
+/**
+ * Replays one capture on the live path (Recognizer, no candidate options) and keeps its analyses:
+ * `build` is buildAutoChart over them with the capture's recording and duration (VGT-19 flags).
+ */
+export async function replayShipped(
+  meta: Pick<CaptureMeta, 'recordingKey' | 'recording' | 'durationSec'>,
+  segments: CaptureSegment[],
+  models: ReplayModels,
+  options: CandidateRecognizerOptions,
+  tool: string,
+): Promise<{ analyses: SegmentAnalysis[]; input: (uncertainty?: UncertaintyOptions | null) => AutoChartInput; ms: { feed: number; analyze: number } }> {
+  if (hasCandidateOptions(options)) throw new Error('replayShipped: candidate options are not the live path');
+  const session = new ListeningSession(meta.recordingKey, meta.durationSec);
+  const t0 = now();
+  await feedSession(session, segments, models.beat);
+  const t1 = now();
+  const analyses = await shippedAnalyses(session, models, options);
+  const input = (uncertainty?: UncertaintyOptions | null): AutoChartInput => ({ recording: { ...meta.recording }, segments: analyses, tool, durationSec: session.durationSec, ...(uncertainty ? { uncertainty } : {}) });
+  return { analyses, input, ms: { feed: Math.round(t1 - t0), analyze: Math.round(now() - t1) } };
+}
+
 /**
  * Replays one capture: the chart the extension would build from the same audio with `options`.
  * Without candidate options this is the live path (Recognizer); with them, CandidateRecognizer
@@ -191,9 +221,7 @@ export async function replayCapture(
   const build = (analyses: SegmentAnalysis[]) => buildAutoChart({ recording: { ...meta.recording }, segments: analyses, tool, durationSec: session.durationSec });
   const ms = () => ({ feed: Math.round(t1 - t0), analyze: Math.round(now() - t1) });
   if (!keep && !hasCandidateOptions(options)) {
-    const recognizer = new Recognizer(models.beat, models.chords, models.chordMeta, plainRecognizerOptions(options));
-    const analyses: SegmentAnalysis[] = await analyzeClosedSegments(session, new WeakMap<Segment, SegmentAnalysis>(), (seg) => recognizer.analyzeSessionSegment(seg));
-    if (!analyses.length) throw new Error('replay: no segment of at least 1 s');
+    const analyses = await shippedAnalyses(session, models, options);
     return { chart: build(analyses), analysedSegments: analyses.length, ms: ms() };
   }
   const recognizer = new CandidateRecognizer(models.beat, models.chords, models.chordMeta, options, models.majmin);

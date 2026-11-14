@@ -168,6 +168,40 @@ reference extent (both unless `--whole-chart` is given), and with
 `--gap <A> <B>` reports the song-mean majmin F gap between two result files (independent bootstrap, seeds
 7007/7008).
 
+## Uncertain-section measurement (VGT-19)
+
+`docs/uncertainty-protocol.md` owns every rule; these commands only compute it.
+
+```bash
+# DEV sweep: θ_f for S1-S5 and f in {5,10,15,20,25,30,40}%, every measured quantity, criterion steps 1-4
+npm run uncertainty-analysis -- --audio ~/vgt19-audio --maps docs/recognition-dev-maps.json --annotations <dir> --out <dev.json> [--ids songId,…]
+# Fixed setting (TEST): the frozen signal and θ (full precision), T1-T4 and the similar/different reading
+npm run uncertainty-analysis -- --audio ~/vgt19-audio --maps <test-maps.json> --annotations <dir> --songs docs/annotation-eval-songs-heldout-v2.json \
+  --out <test.json> --signal <S1..S5> --threshold <θ> --dev-result <dev.json> [--charts-out <dir>]
+# K-pop chord order: charts WITH `uncertain` (from --charts-out) against the VGT-21 references, whole chart
+npm run uncertainty-sequence -- --maps docs/kpop-eval-maps.json --annotations <root> --charts <dir> --out <kpop.json>
+```
+
+`uncertainty-analysis` (`src/replay/uncertainty-analysis*.ts`) replays each capture with the shipped
+recognizer only (`{"recognizer":{"emission":"meanLog","pitchShift":[-1,1]}}`; any other `--config` is
+refused) and first checks R1 for every song: the replayed chart equals the live chart in the capture's
+`meta.json` (`compareParity`) **and** every event confidence is exactly equal. Any failure stops the run
+(exit 3) with the failing songs; nothing is measured. A sweep also stops when a map song has no capture;
+a fixed run reports it as incomplete. Per-unit statistics come from the shipped `Recognizer` (`stats` on
+each decoded unit); flags come from `buildAutoChart`'s `uncertainty` option, so the measured spans are the
+ones the extension would store. The evaluated region is checked against `scoreSong` for every song. The
+result JSON (non-finite numbers written as null) records the git commit and dirty flag, the maps sha256,
+the config, the capture ids and builds, the R1 result and the model hashes; stdout prints one line per
+setting, the existing rule (S1 < 0.5), the oracle diagnostic and the criterion or TEST reading. A5
+(resource limits) is not computed here.
+
+`uncertainty-sequence` (`src/eval/uncertainty-sequence.ts`) reads references and charts exactly as
+`sequence-eval --whole-chart` (the only mode), and charts must carry `uncertain`. A chart token is flagged
+when at least half of its duration (its chord intervals; N and coverage gaps excluded) lies in spans.
+It reports the substitution + insertion share of flagged vs unflagged chart tokens (wildcard-absorbed
+tokens left out) and the net change of song-mean recall, precision and F and of deletion and insertion
+counts when every span takes its second choice. A map song without a chart marks the check incomplete.
+
 ## Cleanup
 
 After the campaign: delete the capture folder (`rm -rf ~/vg-captures/<campaign>`) and the replay charts,

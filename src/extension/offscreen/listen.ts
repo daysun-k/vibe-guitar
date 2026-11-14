@@ -10,7 +10,7 @@ import { CQT_FRAME_SEC } from '../../audio/features';
 import type { Recording } from '../../chart/types';
 import { buildAutoChart } from '../../recognize/autochart';
 import type { BtcMeta } from '../../recognize/chords';
-import { EXTENSION_RECOGNIZER_OPTIONS } from '../../recognize/extension-options';
+import { EXTENSION_RECOGNIZER_OPTIONS, EXTENSION_UNCERTAINTY } from '../../recognize/extension-options';
 import { Recognizer, type SegmentAnalysis } from '../../recognize/recognizer';
 import { ModelWorkerClient } from '../../recognize/model-worker-client';
 import { MODEL_FILES, type ModelRunner } from '../../recognize/runner';
@@ -235,7 +235,7 @@ export class ListeningController {
       // segments closed at this point; audio arriving during the awaits is left for later.
       const analyses = await analyzeClosedSegments(session, this.analysisCache, (seg) => models.recognizer.analyzeSessionSegment(seg));
       if (!analyses.length) throw new Error('들은 구간이 없습니다');
-      const chart = buildAutoChart({ recording: { ...recording }, segments: analyses, tool: TOOL, durationSec: session.durationSec });
+      const chart = buildAutoChart({ recording: { ...recording }, segments: analyses, tool: TOOL, durationSec: session.durationSec, uncertainty: EXTENSION_UNCERTAINTY });
       this.send({ type: 'auto-chart', chart });
       if (auto) this.autoDone.add(session.key);
       this.lastAnalysis = { at: new Date().toISOString(), events: chart.events.length, ms: Math.round(performance.now() - t0), recordingKey: session.key };

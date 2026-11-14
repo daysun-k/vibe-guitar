@@ -21,6 +21,7 @@ import {
 } from './chords';
 import type { ModelRunner } from './runner';
 import { segmentBeatLogits, type Segment } from './session';
+import { withUnitStats } from './uncertainty';
 
 export interface SegmentFeatures {
   mel: Float32Array;
@@ -153,7 +154,15 @@ export class Recognizer {
     const t3 = now();
     const bpb = estimateBeatsPerBar(beats, downbeats);
     const units = beats.length >= 4 ? unitsFromBeats(startSec, endSec, beats, downbeats, bpb) : fixedUnits(startSec, endSec);
-    const decoded = decodeUnits(probs, f.cqtFrames, this.symbols.length, CQT_FRAME_SEC, startSec, units, this.symbols, this.decodeOptions());
+    const decoded = withUnitStats(
+      decodeUnits(probs, f.cqtFrames, this.symbols.length, CQT_FRAME_SEC, startSec, units, this.symbols, this.decodeOptions()),
+      probs,
+      f.cqtFrames,
+      this.symbols.length,
+      CQT_FRAME_SEC,
+      startSec,
+      this.symbols,
+    );
     const t4 = now();
     return { startSec, endSec, beats, downbeats, units: decoded, probs: keepProbs ? probs : undefined, timingsMs: { features: t1 - t0, beats: t2 - t1, chords: t3 - t2, decode: t4 - t3 } };
   }

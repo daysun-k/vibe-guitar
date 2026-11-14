@@ -6,6 +6,7 @@ import { normalizeCoverage } from '../chart/coverage';
 import type { Chart, ChordEvent, CoverageRange, Recording, Timing } from '../chart/types';
 import { estimateBeatsPerBar, estimateBpm } from './beats';
 import type { SegmentAnalysis } from './recognizer';
+import { uncertainSpans, type PlacedUnit, type UncertaintyOptions } from './uncertainty';
 
 const r3 = (x: number): number => Math.round(x * 1000) / 1000;
 
@@ -48,9 +49,16 @@ export interface AutoChartInput {
   tool: string;
   durationSec?: number;
   createdAt?: string;
+  /** Uncertain-section flags (docs/uncertainty-protocol.md); absent = no `uncertain` key (unchanged chart). */
+  uncertainty?: UncertaintyOptions | null;
 }
 
 export function buildAutoChart(input: AutoChartInput): Chart {
+  return assembleAutoChart(input).chart;
+}
+
+/** buildAutoChart plus every clipped unit with the final event showing it (offline analysis). */
+export function assembleAutoChart(input: AutoChartInput): { chart: Chart; placed: PlacedUnit[] } {
   const owned = ownership(input.segments.filter((s) => s.endSec - s.startSec > 0.5));
   const inRange = (t: number, r: CoverageRange) => t >= r.fromSec && t < r.toSec;
 
@@ -71,18 +79,24 @@ export function buildAutoChart(input: AutoChartInput): Chart {
   const bpm = estimateBpm(beats) ?? 120;
   const beatsPerBar = estimateBeatsPerBar(beats, downbeats);
 
-  // Chord events: units of the owning segment, merged when the symbol repeats.
+  // Chord events: units of the owning segment, merged when the symbol repeats. Each clipped unit
+  // records the final event its run became (uncertain spans must agree with the final events).
   const events: ChordEvent[] = [];
+  const placed: PlacedUnit[] = [];
   for (const o of owned) {
-    let current: { symbol: string; start: number; confSum: number; durSum: number } | null = null;
+    let current: { symbol: string; start: number; confSum: number; durSum: number; units: PlacedUnit[] } | null = null;
     const flush = () => {
       if (!current) return;
       const startSec = r3(current.start);
       const conf = current.durSum > 0 ? current.confSum / current.durSum : 0;
       const prev = events[events.length - 1];
-      if (prev && prev.chord === current.symbol && Math.abs(prev.startSec - startSec) < 1e-9) return;
-      if (prev && startSec <= prev.startSec) return;
-      events.push({ startSec, chord: current.symbol, confidence: Math.round(Math.min(1, Math.max(0, conf)) * 1000) / 1000, source: 'auto' });
+      let event = -1;
+      if (prev && prev.chord === current.symbol && Math.abs(prev.startSec - startSec) < 1e-9) event = events.length - 1;
+      else if (!(prev && startSec <= prev.startSec)) {
+        events.push({ startSec, chord: current.symbol, confidence: Math.round(Math.min(1, Math.max(0, conf)) * 1000) / 1000, source: 'auto' });
+        event = events.length - 1;
+      }
+      for (const p of current.units) p.event = event;
     };
     for (const u of o.seg.units) {
       const s = Math.max(u.startSec, o.range.fromSec);
@@ -90,10 +104,13 @@ export function buildAutoChart(input: AutoChartInput): Chart {
       if (e - s <= 0) continue;
       if (!current || current.symbol !== u.symbol) {
         flush();
-        current = { symbol: u.symbol, start: s, confSum: 0, durSum: 0 };
+        current = { symbol: u.symbol, start: s, confSum: 0, durSum: 0, units: [] };
       }
       current.confSum += u.confidence * (e - s);
       current.durSum += e - s;
+      const p: PlacedUnit = { unit: u, startSec: s, endSec: e, event: -1 };
+      current.units.push(p);
+      placed.push(p);
     }
     flush();
   }
@@ -108,7 +125,7 @@ export function buildAutoChart(input: AutoChartInput): Chart {
   }
   const heard = coverage.reduce((s, r) => s + r.toSec - r.fromSec, 0);
   const pct = input.durationSec ? ` (${Math.round((heard / input.durationSec) * 100)}% of ${Math.round(input.durationSec)} s)` : '';
-  return {
+  const chart: Chart = {
     schemaVersion: 1,
     recording: { ...input.recording },
     timing,
@@ -121,6 +138,8 @@ export function buildAutoChart(input: AutoChartInput): Chart {
       note: `Automatic chart from listening mode: heard ${Math.round(heard)} s${pct}. Not verified by a person.`,
     },
   };
+  if (input.uncertainty) chart.uncertain = uncertainSpans(placed, events, input.uncertainty);
+  return { chart, placed };
 }
 
 /** Inserts evenly spaced beats into gaps longer than 1.5 beat periods (coverage holes, missed beats). */
