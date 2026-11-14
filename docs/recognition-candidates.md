@@ -249,3 +249,43 @@ promotion 2 c6-shift-1; code at da21561). DEV song means (23 songs, frozen maps,
 
 Finalist vs original baseline: +2.41 pp mean majmin. These are provisional DEV choices; the one-shot
 TEST confirmation of the protocol decides whether the result holds.
+
+## Final confirmation (TEST, one shot, 2026-11-14)
+Procedure exactly as in the protocol's "Final confirmation on TEST". Finalist frozen before TEST was touched:
+commit 6638ae0, config `{"emission":"meanLog","pitchShift":[-1,1]}`, packaged model hashes unchanged.
+- DEV browser check first: the finalist dump build in Aside produced live charts identical to the offline
+  finalist charts on 3 DEV songs (chords, start times and beats after 1 ms rounding; confidence diff 0).
+- TEST capture: the 18 scored songs of the official v2 result, official uploads, 18/18 captured with one
+  capture each and coverage of at least 90% of the upload length; no retries were needed.
+- R1 on TEST: finalist replay equals the live charts of the same captures for 18/18 songs, so the charts
+  measured below are exactly what the extension showed in the browser.
+- Arms on the same TEST PCM with the official v2 maps: baseline = original recognizer (replay `{}` on main
+  527aa1b), finalist = 6638ae0 with the finalist config.
+
+| TEST, 18 songs (song means) | Original recognizer | Finalist | Rule |
+| --- | --- | --- | --- |
+| majmin (primary) | 82.3 | 83.3 | mean delta +1.01 pp, 95% paired percentile bootstrap [+0.37, +1.80] -> PASS |
+| root | 82.2 | 83.2 | not lower -> holds |
+| sevenths | 72.9 | 73.2 | not lower -> holds |
+| boundary precision (+-250 ms) | 93.4 | 93.5 | not lower by more than 2.0 -> holds |
+
+- Coverage and evaluated seconds were identical in both arms. Sensitivity: Student t half-width 0.80 pp;
+  13 songs up, 2 down, 3 unchanged; leave-one-out mean delta at least +0.73 pp; worst song -0.66 pp.
+- Unchanged-aligner diagnostic on the TEST baseline replay: 18/18 songs scored; median distance from the
+  official map 44 ms, one song above 0.1 s. Maps stayed frozen.
+- The original recognizer scores 82.3 on this recording vs 83.1 in the official v2 result made from an
+  earlier capture: the same capture-to-capture variability seen on DEV (R2).
+- Decision: ship the finalist as the extension default (protocol "Shipping").
+
+## Limits that remain
+- The measured gain is about +1 pp on held-out songs (+2.4 pp on the DEV songs it was chosen on); with 18 TEST
+  songs only gains of roughly this size can be confirmed.
+- All numbers cover songs whose upload aligns with the annotation; songs that fail alignment (for example
+  rap-heavy or tempo-drifting uploads) are not measured.
+- The same recognizer changes its answer on ambiguous passages between two captures of one song (up to about
+  6 pp per song on DEV).
+- Remaining error types on DEV after the finalist are dominated by fifth-related roots and other confusions;
+  bass-based root correction and repetition smoothing made them worse, lower change penalties traded
+  accuracy for false chord changes, and fine-tuning was deferred by the user (reserved ranks 93+ untouched).
+- Follow-ups from the PR #36 review: candidate-step should treat a missing required resource measurement as
+  not verified (F1), and report the median analyze time as a diagnostic only (F2).
