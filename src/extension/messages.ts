@@ -1,5 +1,5 @@
 /** Messages exchanged between content scripts, service worker, offscreen document and side panel. */
-import type { Chart, CoverageRange, Recording, RecordingSource } from '../chart/types';
+import type { Chart, CoverageRange, Recording, RecordingSource, UncertainSpan } from '../chart/types';
 import type { RecordingIdSource } from './content/recording-id';
 import type { EventRef } from '../editor/correct';
 
@@ -137,6 +137,8 @@ export type ChartWriteMessage =
   | { type: 'chart-write'; op: 'adopt-auto'; source: RecordingSource; id: string }
   /** Play view: fix one event's chord (identified by its start and current chord). */
   | { type: 'chart-write'; op: 'correct-event'; source: RecordingSource; id: string; event: EventRef; chord: string; at: string }
+  /** Play view (VGT-19): play an uncertain stretch of an auto event as its second choice. */
+  | { type: 'chart-write'; op: 'accept-alt'; source: RecordingSource; id: string; event: EventRef; span: UncertainSpan; at: string }
   | { type: 'chart-write'; op: 'undo-correct'; source: RecordingSource; id: string; before: Chart; after: Chart };
 
 /** Service worker → side panel: reply to a ChartWriteMessage (`before`: the chart a correction replaced). */
