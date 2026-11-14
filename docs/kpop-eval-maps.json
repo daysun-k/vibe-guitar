@@ -1,0 +1,170 @@
+{
+  "schema": "vibe-guitar-paired-maps/1",
+  "purpose": "VGT-21 K-pop evaluation set: frozen time maps for the 12 eval songs (media = offsetSec + rate x annotation time; the references are timed on the capture itself, so offsetSec 0 and rate 1). Fixed before any score; see docs/kpop-eval-protocol.md.",
+  "source": {
+    "songList": "docs/kpop-eval-songs.json",
+    "uploads": "~/vgt-kpop-eval/capture/uploads.json (YouTube Music art tracks)",
+    "mediaDurationSec": "~/vgt-kpop-eval/capture/driver-results.json durationSec (measured on the capture run, 2026-11-14)",
+    "groups": "artist:<slug>; Busker Busker is grouped with Jang Beom June (protocol: 4 artists, 3 songs each)",
+    "note": "Reserves iu-autumn and akmu-nakka are not listed; per the protocol they replace an eval song of the same artist only before any score."
+  },
+  "count": 12,
+  "songs": [
+    {
+      "id": "jbj-cherry",
+      "dataset": "vgt21-kpop-v1",
+      "youtubeId": "KvthiAoGTfo",
+      "offsetSec": 0,
+      "rate": 1,
+      "mediaDurationSec": 260.641,
+      "btcTraining": "not-known",
+      "groups": [
+        "artist:jang-beom-june"
+      ],
+      "songList": "docs/kpop-eval-songs.json"
+    },
+    {
+      "id": "jbj-shampoo",
+      "dataset": "vgt21-kpop-v1",
+      "youtubeId": "_pcl_JPqMfw",
+      "offsetSec": 0,
+      "rate": 1,
+      "mediaDurationSec": 168.581,
+      "btcTraining": "not-known",
+      "groups": [
+        "artist:jang-beom-june"
+      ],
+      "songList": "docs/kpop-eval-songs.json"
+    },
+    {
+      "id": "jbj-karaoke",
+      "dataset": "vgt21-kpop-v1",
+      "youtubeId": "zeIOhIpQ-oI",
+      "offsetSec": 0,
+      "rate": 1,
+      "mediaDurationSec": 239.861,
+      "btcTraining": "not-known",
+      "groups": [
+        "artist:jang-beom-june"
+      ],
+      "songList": "docs/kpop-eval-songs.json"
+    },
+    {
+      "id": "ssk-moment",
+      "dataset": "vgt21-kpop-v1",
+      "youtubeId": "OdFVPP_Rcos",
+      "offsetSec": 0,
+      "rate": 1,
+      "mediaDurationSec": 243.341,
+      "btcTraining": "not-known",
+      "groups": [
+        "artist:sung-si-kyung"
+      ],
+      "songList": "docs/kpop-eval-songs.json"
+    },
+    {
+      "id": "ssk-street",
+      "dataset": "vgt21-kpop-v1",
+      "youtubeId": "mLwfuskNDOo",
+      "offsetSec": 0,
+      "rate": 1,
+      "mediaDurationSec": 279.281,
+      "btcTraining": "not-known",
+      "groups": [
+        "artist:sung-si-kyung"
+      ],
+      "songList": "docs/kpop-eval-songs.json"
+    },
+    {
+      "id": "ssk-heejae",
+      "dataset": "vgt21-kpop-v1",
+      "youtubeId": "nD1p_H3qo_A",
+      "offsetSec": 0,
+      "rate": 1,
+      "mediaDurationSec": 281.341,
+      "btcTraining": "not-known",
+      "groups": [
+        "artist:sung-si-kyung"
+      ],
+      "songList": "docs/kpop-eval-songs.json"
+    },
+    {
+      "id": "iu-night",
+      "dataset": "vgt21-kpop-v1",
+      "youtubeId": "NnRjwEhFU70",
+      "offsetSec": 0,
+      "rate": 1,
+      "mediaDurationSec": 253.301,
+      "btcTraining": "not-known",
+      "groups": [
+        "artist:iu"
+      ],
+      "songList": "docs/kpop-eval-songs.json"
+    },
+    {
+      "id": "iu-goodday",
+      "dataset": "vgt21-kpop-v1",
+      "youtubeId": "OIHlzvEKncQ",
+      "offsetSec": 0,
+      "rate": 1,
+      "mediaDurationSec": 235.541,
+      "btcTraining": "not-known",
+      "groups": [
+        "artist:iu"
+      ],
+      "songList": "docs/kpop-eval-songs.json"
+    },
+    {
+      "id": "iu-lovepoem",
+      "dataset": "vgt21-kpop-v1",
+      "youtubeId": "kcx0a2OAhN0",
+      "offsetSec": 0,
+      "rate": 1,
+      "mediaDurationSec": 258.241,
+      "btcTraining": "not-known",
+      "groups": [
+        "artist:iu"
+      ],
+      "songList": "docs/kpop-eval-songs.json"
+    },
+    {
+      "id": "akmu-lastgoodbye",
+      "dataset": "vgt21-kpop-v1",
+      "youtubeId": "G7TqsFwWTM0",
+      "offsetSec": 0,
+      "rate": 1,
+      "mediaDurationSec": 283.821,
+      "btcTraining": "not-known",
+      "groups": [
+        "artist:akmu"
+      ],
+      "songList": "docs/kpop-eval-songs.json"
+    },
+    {
+      "id": "akmu-heartbreak",
+      "dataset": "vgt21-kpop-v1",
+      "youtubeId": "KczYjTVrK_o",
+      "offsetSec": 0,
+      "rate": 1,
+      "mediaDurationSec": 290.181,
+      "btcTraining": "not-known",
+      "groups": [
+        "artist:akmu"
+      ],
+      "songList": "docs/kpop-eval-songs.json"
+    },
+    {
+      "id": "akmu-200",
+      "dataset": "vgt21-kpop-v1",
+      "youtubeId": "5UrL0CM2uQA",
+      "offsetSec": 0,
+      "rate": 1,
+      "mediaDurationSec": 193.401,
+      "btcTraining": "not-known",
+      "groups": [
+        "artist:akmu"
+      ],
+      "songList": "docs/kpop-eval-songs.json"
+    }
+  ]
+}
