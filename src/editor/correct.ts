@@ -4,7 +4,8 @@
  */
 import { formatChord, isNoChord, parseChord, qualitySuffix, sameChord, transposeChord } from '../arrange/chord';
 import { spellPitchClass } from '../arrange/notes';
-import { NO_CHORD, type Chart } from '../chart/types';
+import { coverageRangeAt, normalizeCoverage } from '../chart/coverage';
+import { NO_CHORD, type Chart, type ChordEvent, type UncertainSpan } from '../chart/types';
 import { validateChart } from '../chart/validate';
 import { respellChord, type KeyEstimate } from '../music/key';
 
@@ -57,6 +58,78 @@ export function correctChordEvent(chart: Chart, ref: EventRef, chord: string, no
   };
   const v = validateChart(out);
   if (!v.ok) throw new Error(`corrected chart is invalid: ${v.errors.join('; ')}`);
+  return out;
+}
+
+const EDGE_SEC = 1e-3;
+
+/**
+ * End of event i as the play view sees it: the next event's start, cut at the end of the heard
+ * range the event starts in. Infinity for the last event of a chart without coverage; -Infinity
+ * when the event starts outside every heard range (it is never drawn).
+ */
+export function eventEndSec(chart: Chart, i: number): number {
+  const next = chart.events[i + 1]?.startSec ?? Infinity;
+  if (!chart.coverage.length) return next;
+  const range = coverageRangeAt(normalizeCoverage(chart.coverage), chart.events[i].startSec);
+  return range ? Math.min(next, range.toSec) : -Infinity;
+}
+
+/**
+ * Index of the event an uncertain span applies to, or -1: the span lies inside that one event,
+ * the event is still an auto event and still has the span's chord (any spelling). A manual fix
+ * of the event, or a chord change, therefore hides the span.
+ */
+export function uncertainSpanEvent(chart: Chart, span: UncertainSpan): number {
+  let i = -1;
+  for (let k = 0; k < chart.events.length; k++) {
+    if (chart.events[k].startSec <= span.fromSec + 1e-6) i = k;
+    else break;
+  }
+  if (i < 0) return -1;
+  const e = chart.events[i];
+  if (e.source !== 'auto' || isNoChord(e.chord) || !sameChordSymbol(e.chord, span.chord)) return -1;
+  return span.toSec <= eventEndSec(chart, i) + 1e-6 ? i : -1;
+}
+
+const sameSpan = (a: UncertainSpan, b: UncertainSpan): boolean =>
+  a.fromSec === b.fromSec && a.toSec === b.toSec && sameChordSymbol(a.chord, b.chord) && sameChordSymbol(a.alt, b.alt) && a.replace === b.replace;
+
+/**
+ * "2순위로 바꾸기": a copy of the chart where the span's stretch of the event plays the span's
+ * second choice. The event is split at the span bounds: the head before the span and the tail
+ * after it keep the auto chord with its confidence; the span part becomes a manual event
+ * (confidence 1) with `span.alt`. Empty heads/tails are not created. The span is removed from
+ * `uncertain`; the chart becomes 'edited' (a hand-made chart stays 'manual') like
+ * correctChordEvent. A CorrectionConflict when the event or the span changed meanwhile.
+ */
+export function acceptUncertainAlt(chart: Chart, ref: EventRef, span: UncertainSpan, now: Date = new Date()): Chart {
+  const conflict = () => new CorrectionConflict('코드표가 그 사이에 바뀌었어요. 다시 골라 주세요.');
+  const i = findEvent(chart, ref);
+  if (i < 0) throw conflict();
+  const si = (chart.uncertain ?? []).findIndex((s) => sameSpan(s, span));
+  if (si < 0) throw conflict();
+  const stored = chart.uncertain![si];
+  // Only the replace tier offers the replacement (Amendment 1); a later analysis may have moved the
+  // stretch out of it while the panel still showed the button (review vgt19-flags-ui-r4 F4).
+  if (stored.replace !== true) throw conflict();
+  if (uncertainSpanEvent(chart, stored) !== i) throw conflict();
+  const e = chart.events[i];
+  const end = eventEndSec(chart, i);
+  const parts: ChordEvent[] = [];
+  if (stored.fromSec - e.startSec > EDGE_SEC) parts.push(e);
+  parts.push({ startSec: parts.length ? stored.fromSec : e.startSec, chord: storedChord(stored.alt), confidence: 1, source: 'manual' });
+  if (end - stored.toSec > EDGE_SEC) parts.push({ ...e, startSec: stored.toSec });
+  const events = [...chart.events.slice(0, i), ...parts, ...chart.events.slice(i + 1)];
+  const uncertain = chart.uncertain!.filter((_, k) => k !== si);
+  const out: Chart = {
+    ...chart,
+    events,
+    uncertain,
+    provenance: { ...chart.provenance, createdBy: chart.provenance.createdBy === 'manual' ? 'manual' : 'edited', updatedAt: now.toISOString() },
+  };
+  const v = validateChart(out);
+  if (!v.ok) throw new Error(`chart with the second choice is invalid: ${v.errors.join('; ')}`);
   return out;
 }
 

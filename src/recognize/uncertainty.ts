@@ -12,10 +12,15 @@ export type UncertaintySignal = 'S1' | 'S2' | 'S3' | 'S4' | 'S5';
 /** Simplicity order of the protocol's candidate signals. */
 export const UNCERTAINTY_SIGNALS: readonly UncertaintySignal[] = ['S1', 'S2', 'S3', 'S4', 'S5'];
 
-/** A unit is flagged when its signal is below `threshold` (full precision). */
+/**
+ * A unit is flagged when its signal is below `threshold` (full precision). With `replaceBelow`
+ * (Amendment 1), a flagged unit whose signal is also below it is in the replace tier: its spans carry
+ * `replace: true` (the panel offers the one-tap replacement there only).
+ */
 export interface UncertaintyOptions {
   signal: UncertaintySignal;
   threshold: number;
+  replaceBelow?: number;
 }
 
 const LOG_EPS = 1e-9;
@@ -147,15 +152,22 @@ export function isFlagged(p: PlacedUnit, events: ChordEvent[], opts: Uncertainty
   return unitSignal(opts.signal, st, e.confidence ?? 0) < opts.threshold;
 }
 
+/** Whether a flagged unit is in the replace tier (signal below `replaceBelow`; false without it). */
+export function inReplaceTier(p: PlacedUnit, events: ChordEvent[], opts: UncertaintyOptions): boolean {
+  if (opts.replaceBelow === undefined) return false;
+  return unitSignal(opts.signal, p.unit.stats!, events[p.event].confidence ?? 0) < opts.replaceBelow;
+}
+
 /**
  * Spans: maximal runs of consecutive (touching) flagged units inside one final event with one alt
- * family; times rounded to 1 ms like event times; zero-length spans dropped. The second choice is the
+ * family and one tier (replace-tier spans carry `replace: true`); times rounded to 1 ms like event
+ * times; zero-length spans dropped. The second choice is the
  * alt-family member with the highest duration-weighted mean probability over the span (clipped
  * durations; ties: vocabulary order).
  */
 export function uncertainSpans(placed: PlacedUnit[], events: ChordEvent[], opts: UncertaintyOptions): UncertainSpan[] {
   const spans: UncertainSpan[] = [];
-  let cur: { event: number; alt: string; from: number; to: number; units: PlacedUnit[] } | null = null;
+  let cur: { event: number; alt: string; replace: boolean; from: number; to: number; units: PlacedUnit[] } | null = null;
   const close = () => {
     if (!cur) return;
     const fromSec = r3(cur.from);
@@ -169,7 +181,9 @@ export function uncertainSpans(placed: PlacedUnit[], events: ChordEvent[], opts:
       }
       let best = 0;
       for (let k = 1; k < sums.length; k++) if (sums[k] > sums[best]) best = k;
-      spans.push({ fromSec, toSec, chord: events[cur.event].chord, alt: st0.altSymbols[best] });
+      const span: UncertainSpan = { fromSec, toSec, chord: events[cur.event].chord, alt: st0.altSymbols[best] };
+      if (cur.replace) span.replace = true;
+      spans.push(span);
     }
     cur = null;
   };
@@ -179,12 +193,13 @@ export function uncertainSpans(placed: PlacedUnit[], events: ChordEvent[], opts:
       continue;
     }
     const alt = p.unit.stats!.altFamily!;
-    if (cur && cur.event === p.event && cur.alt === alt && Math.abs(p.startSec - cur.to) < 1e-9) {
+    const replace = inReplaceTier(p, events, opts);
+    if (cur && cur.event === p.event && cur.alt === alt && cur.replace === replace && Math.abs(p.startSec - cur.to) < 1e-9) {
       cur.to = p.endSec;
       cur.units.push(p);
     } else {
       close();
-      cur = { event: p.event, alt, from: p.startSec, to: p.endSec, units: [p] };
+      cur = { event: p.event, alt, replace, from: p.startSec, to: p.endSec, units: [p] };
     }
   }
   close();

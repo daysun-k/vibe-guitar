@@ -23,7 +23,7 @@ import {
   undoStamp,
   type StampState,
 } from '../../editor/core';
-import { correctChordEvent, type EventRef } from '../../editor/correct';
+import { acceptUncertainAlt, correctChordEvent, type EventRef } from '../../editor/correct';
 import { DraftBook, chartWriteTarget, checkSaveTarget, isDraftEmpty, reattachDraft, recordingKeyOf, type EditorDraft } from '../../editor/drafts';
 import type { Lyrics } from '../../lyrics/types';
 import { keyLabel, prettyChord, respellChartForKey, shapeName } from '../../music/key';
@@ -56,7 +56,7 @@ import type {
   PlayerStateMessage,
 } from '../messages';
 import { estimatePosition, type PlayerSnapshot } from '../playview';
-import { adoptAutoChart, chartSongKey, correctChartEvent, listCharts, loadAccuracyPairs, loadAutoChart, loadChart, loadSettings, normalizeSettings, saveChart, saveSettings, undoChartCorrection, type Settings } from '../storage';
+import { acceptChartAlt, adoptAutoChart, chartSongKey, correctChartEvent, listCharts, loadAccuracyPairs, loadAutoChart, loadChart, loadSettings, normalizeSettings, saveChart, saveSettings, undoChartCorrection, type Settings } from '../storage';
 import { escapeHtml, renderShapeDiagram } from './diagram';
 import { LyricsAsker, lyricsOutcome, lyricsLookupReady } from './lyrics-asker';
 import { controlTabId, keepPlayerAfterDemo } from './player-target';
@@ -372,6 +372,7 @@ function recompute(): void {
     capo: currentCapo(),
     profile: settings.profile,
     allowRootChange: settings.allowRootChange,
+    showUncertain: settings.showUncertain,
     durationSec: demo ? demo.clock.durationSec : player?.duration,
   };
   let next: PlayModel | null;
@@ -1002,7 +1003,42 @@ function renderFixNote(): void {
 }
 
 /** Stores one fixed chord: through the service worker's serialized writes, or in memory during demo. */
-async function saveFix(event: EventRef, concert: string, names: { from: string; to: string }): Promise<void> {
+function saveFix(event: EventRef, concert: string, names: { from: string; to: string }): Promise<void> {
+  return storeChartChange(
+    (c) => correctChordEvent(c, event, concert),
+    (r) => correctChartEvent(r.source, r.id, event, concert),
+    `고쳤어요: ${names.from} → ${names.to}`,
+  );
+}
+
+let altBusy = false;
+
+/** 불확실한 곳 (VGT-19): plays model.uncertain[i] as its second choice, stored and undone like a fix. */
+async function acceptAlt(i: number): Promise<void> {
+  const u = model?.uncertain[i];
+  if (!model || !u || !u.replace || altBusy) return; // only replace-tier stretches offer the replacement
+  const mid = (u.fromSec + u.toSec) / 2;
+  const shown = model.labels[model.arrangement.events.findIndex((e) => mid >= e.startSec && mid < e.endSec)]?.name ?? u.ref.chord;
+  altBusy = true;
+  try {
+    await storeChartChange(
+      (c) => acceptUncertainAlt(c, u.ref, u.span),
+      (r) => acceptChartAlt(r.source, r.id, u.ref, u.span),
+      `바꿨어요: ${shown} → ${u.alt}`,
+      '바꾸지 못했어요.',
+    );
+  } catch {
+    // the status line already says why
+  } finally {
+    altBusy = false;
+  }
+}
+
+/**
+ * One undoable chart change from the play view (코드 고치기, 2순위로 바꾸기): in memory during demo,
+ * else through the service worker's serialized writes; `done` is the status line on success.
+ */
+async function storeChartChange(local: (c: Chart) => Chart, remote: (r: Pick<Recording, 'source' | 'id'>) => Promise<{ before: Chart; after: Chart }>, done: string, failed = '고치지 못했어요.'): Promise<void> {
   const key = shownKey();
   try {
     let before: Chart;
@@ -1010,22 +1046,22 @@ async function saveFix(event: EventRef, concert: string, names: { from: string; 
     let recording: Pick<Recording, 'source' | 'id'> | null = null;
     if (demo) {
       before = demo.chart;
-      after = correctChordEvent(before, event, concert);
+      after = local(before);
       demo.chart = after;
     } else {
       const target = chartWriteTarget(currentRecording(), false);
       if (!target.ok) throw new Error('재생 중인 곡이 없어요.');
       recording = { source: target.recording.source, id: target.recording.id };
-      ({ before, after } = await correctChartEvent(recording.source, recording.id, event, concert));
+      ({ before, after } = await remote(recording));
       if (key !== shownKey()) return; // the song changed while saving
       chart = after;
     }
     lastFix = { key, recording, before, after };
-    fixNote = { key, text: `고쳤어요: ${names.from} → ${names.to}${demo ? ' (데모라서 저장하지는 않아요)' : ''}`, undo: true, error: false };
+    fixNote = { key, text: `${done}${demo ? ' (데모라서 저장하지는 않아요)' : ''}`, undo: true, error: false };
     recompute();
     if (!demo) await refreshPendingAuto();
   } catch (e) {
-    fixNote = { key, text: `고치지 못했어요. ${e instanceof Error ? e.message : String(e)}`, undo: false, error: true };
+    fixNote = { key, text: `${failed} ${e instanceof Error ? e.message : String(e)}`, undo: false, error: true };
     renderFixNote();
     throw e;
   }
@@ -1537,6 +1573,7 @@ function syncSheet(): void {
   }
   $('snd-sw').setAttribute('aria-checked', String(settings.showSounding));
   $('root-sw').setAttribute('aria-checked', String(settings.allowRootChange));
+  $('unc-sw').setAttribute('aria-checked', String(settings.showUncertain));
   $('lyrics-sw').setAttribute('aria-checked', String(settings.fetchLyrics));
   syncPhone();
   document.documentElement.classList.toggle('show-snd', settings.showSounding);
@@ -1576,6 +1613,11 @@ function bindSheet(): void {
     settings.showSounding = !settings.showSounding;
     syncSheet();
     persist(false);
+  };
+  $('unc-sw').onclick = () => {
+    settings.showUncertain = !settings.showUncertain;
+    syncSheet();
+    persist(true);
   };
   $('root-sw').onclick = () => {
     settings.allowRootChange = !settings.allowRootChange;
@@ -1822,6 +1864,7 @@ async function main(): Promise<void> {
   if (params.has('root')) settings.allowRootChange = true;
   if (params.has('phone')) settings.phoneStand = true; // screenshots: the switch on (connects to 127.0.0.1 only)
   if (params.has('phonectl')) settings.phoneControl = true; // screenshots: 휴대폰에서 조작 허용 on
+  if (params.get('unc') === '0') settings.showUncertain = false; // screenshots: 불확실한 곳 표시 off
   applyTheme();
   phone = new PhoneLink({ onStatus: renderPhoneStatus, sample: phoneSample, onPhones: renderPhones, onCommand: onPhoneCommand });
   addEventListener('focus', () => phone.retryNow());
@@ -1830,6 +1873,7 @@ async function main(): Promise<void> {
     togglePlay: () => void togglePlay(),
     setRate: (r) => void setRate(r),
     barClick: (k) => pickLoopBar(k),
+    acceptAlt: (i) => void acceptAlt(i),
   });
   $('loop-btn').onclick = onLoopButton;
   document.addEventListener('keydown', (e) => {
@@ -1894,4 +1938,10 @@ void main();
     return model;
   },
   isNoChord,
+  /** Demo only (no effect on a real player): seek the demo clock and resolve once drawn (screenshots). */
+  async seek(sec: number) {
+    if (!demo) return;
+    await seekTo(sec);
+    await new Promise((r) => setTimeout(r, 250));
+  },
 };

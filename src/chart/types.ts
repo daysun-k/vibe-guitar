@@ -66,6 +66,11 @@ export interface UncertainSpan {
   chord: string;
   /** The recognizer's second choice there, from another chord family than `chord`. */
   alt: string;
+  /**
+   * Replace tier (Amendment 1): the second choice is offered as a one-tap replacement. Absent = the
+   * span only informs (its second choice is shown; the chord can still be fixed by hand).
+   */
+  replace?: true;
 }
 
 export interface Chart {

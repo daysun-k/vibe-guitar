@@ -121,7 +121,8 @@ export function validateChart(input: unknown): ValidationResult {
           errors.push(`${p} must be an object`);
           return;
         }
-        checkKeys(s, p, ['fromSec', 'toSec', 'chord', 'alt'], ['fromSec', 'toSec', 'chord', 'alt'], errors);
+        checkKeys(s, p, ['fromSec', 'toSec', 'chord', 'alt', 'replace'], ['fromSec', 'toSec', 'chord', 'alt'], errors);
+        if ('replace' in s && s.replace !== true) errors.push(`${p}.replace must be true when present`);
         if (!isNum(s.fromSec) || !isNum(s.toSec) || s.fromSec < 0 || s.toSec <= s.fromSec) errors.push(`${p} must satisfy 0 <= fromSec < toSec`);
         else {
           if (s.fromSec < prevTo) errors.push(`${p} must start at or after the previous span's end`);

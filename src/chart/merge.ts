@@ -3,7 +3,7 @@
  * short re-analysis never silently shrinks what was already heard.
  */
 import { coverageRangeAt, normalizeCoverage } from './coverage';
-import type { Chart, ChordEvent, CoverageRange } from './types';
+import type { Chart, ChordEvent, CoverageRange, UncertainSpan } from './types';
 
 const r3 = (x: number): number => Math.round(x * 1000) / 1000;
 /** Leftover slivers shorter than this are dropped. */
@@ -35,7 +35,8 @@ export function subtractCoverage(ranges: readonly CoverageRange[], taken: readon
  * The newer chart wins wherever it has coverage; the previous chart keeps the ranges only
  * it heard. The chord sounding at the start of a kept range is restarted there. Coverage
  * of the result is the union of both. Timing: the newer bpm/meter, beat times from both
- * (bar numbering can shift by a few beats across a seam between the two charts).
+ * (bar numbering can shift by a few beats across a seam between the two charts). Uncertain
+ * spans: the newer chart's, plus the previous chart's spans lying wholly in the kept ranges.
  */
 export function mergeAutoCharts(prev: Chart, next: Chart): Chart {
   const nextCov = normalizeCoverage(next.coverage);
@@ -81,5 +82,23 @@ export function mergeAutoCharts(prev: Chart, next: Chart): Chart {
 
   const heard = coverage.reduce((s, r) => s + r.toSec - r.fromSec, 0);
   const note = `${next.provenance.note ?? 'Automatic chart.'} Merged with the earlier auto chart from ${prev.provenance.createdAt}; heard ${Math.round(heard)} s in total.`;
-  return { ...next, timing, events, coverage, provenance: { ...next.provenance, note } };
+  const out: Chart = { ...next, timing, events, coverage, provenance: { ...next.provenance, note } };
+  const uncertain = mergeUncertain(prev.uncertain, next.uncertain, kept);
+  if (uncertain) out.uncertain = uncertain;
+  else delete out.uncertain;
+  return out;
+}
+
+/**
+ * Spans of the merged chart: every span of the newer chart, and the previous chart's spans that
+ * lie inside one kept range (a span reaching into the newer coverage was heard again there).
+ * Sorted, and a span overlapping an earlier one is dropped. Undefined when neither chart has spans.
+ */
+export function mergeUncertain(prev: readonly UncertainSpan[] | undefined, next: readonly UncertainSpan[] | undefined, kept: readonly CoverageRange[]): UncertainSpan[] | undefined {
+  if (!prev && !next) return undefined;
+  const old = (prev ?? []).filter((s) => kept.some((k) => s.fromSec >= k.fromSec - 1e-9 && s.toSec <= k.toSec + 1e-9));
+  const all = [...(next ?? []), ...old].sort((a, b) => a.fromSec - b.fromSec || a.toSec - b.toSec);
+  const out: UncertainSpan[] = [];
+  for (const s of all) if (!out.length || s.fromSec >= out[out.length - 1].toSec) out.push({ ...s });
+  return out;
 }

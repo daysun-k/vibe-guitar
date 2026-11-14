@@ -4,7 +4,7 @@
  * A-flat spelled with sharps the way the recognizer names roots, a beat grid whose first
  * beat is not a downbeat, and placeholder lyrics ("라", "라라") sung 0.4 s early.
  */
-import type { Chart, ChordEvent } from '../chart/types';
+import type { Chart, ChordEvent, UncertainSpan } from '../chart/types';
 import type { Lyrics, LyricLine } from '../lyrics/types';
 
 export class DemoClock {
@@ -68,6 +68,29 @@ const FORM: { name: string; lyric: boolean; chords: [string, number][] }[] = [
 
 const totalBars = FORM.reduce((a, s) => a + s.chords.reduce((b, [, n]) => b + n, 0), 0);
 const barStart = (bar: number) => T0 + (LEAD_BEATS + bar * BPB) * BEAT;
+const r3 = (x: number) => Math.round(x * 1000) / 1000;
+
+/**
+ * Synthetic uncertain stretches (VGT-19) so the play view's marks have something to show: a whole
+ * event (verse Fm, second choice the relative major; the only replace-tier stretch, with the button), part of an event as if a change were missed
+ * (the second half of verse C♯), a low-confidence 7th that also carries the "Em도 돼요" hint at
+ * 중급/상급, and one whose second choice reads differently as a capo shape (chorus C♯ → A♯m, shape
+ * Am with capo 1, concert B♭m).
+ */
+export const DEMO_UNCERTAIN_BARS: { bar: number; fromBeat: number; toBeat: number; chord: string; alt: string; replace?: true }[] = [
+  { bar: 5, fromBeat: 0, toBeat: BPB, chord: 'Fm', alt: 'G#', replace: true },
+  { bar: 6, fromBeat: 3, toBeat: BPB, chord: 'C#', alt: 'D#' },
+  { bar: 9, fromBeat: 0, toBeat: BPB, chord: 'Fm7', alt: 'G#' },
+  { bar: 13, fromBeat: 0, toBeat: BPB, chord: 'C#', alt: 'A#m' },
+];
+
+function demoUncertain(): UncertainSpan[] {
+  return DEMO_UNCERTAIN_BARS.map((u) => {
+    const s: UncertainSpan = { fromSec: r3(barStart(u.bar) + u.fromBeat * BEAT), toSec: r3(barStart(u.bar) + u.toBeat * BEAT), chord: u.chord, alt: u.alt };
+    if (u.replace) s.replace = true;
+    return s;
+  });
+}
 
 export function demoChart(): Chart {
   const beatTimes: number[] = [];
@@ -92,6 +115,7 @@ export function demoChart(): Chart {
     events,
     coverage: [{ fromSec: 0, toSec: end }],
     provenance: { createdBy: 'recognizer', createdAt: '2026-11-10T00:00:00.000Z', tool: 'synthetic demo', note: 'Synthetic demo data (not a real song).' },
+    uncertain: demoUncertain(),
   };
 }
 

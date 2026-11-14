@@ -6,11 +6,16 @@
  */
 import type { RecognizerOptions } from './recognizer';
 import type { UncertaintyOptions } from './uncertainty';
+import { UNCERTAINTY_CRITERION } from './uncertainty-criterion';
 
 export const EXTENSION_RECOGNIZER_OPTIONS: Readonly<RecognizerOptions> = Object.freeze({ emission: 'meanLog', pitchShift: [-1, 1] });
 
 /**
- * Uncertain-section flags of the extension's charts (VGT-19, docs/uncertainty-protocol.md): the frozen
- * signal and threshold once the DEV criterion is fixed; null = no flags (charts unchanged).
+ * Uncertain-section flags of the extension's charts (VGT-19, docs/uncertainty-protocol.md "Amendment 1"):
+ * the frozen DEV criterion, flag tier below `threshold`, replace tier below `replaceBelow`.
  */
-export const EXTENSION_UNCERTAINTY: Readonly<UncertaintyOptions> | null = null;
+export const EXTENSION_UNCERTAINTY: Readonly<UncertaintyOptions> | null = Object.freeze({
+  signal: UNCERTAINTY_CRITERION.signal,
+  threshold: UNCERTAINTY_CRITERION.threshold,
+  replaceBelow: UNCERTAINTY_CRITERION.replaceBelow,
+});

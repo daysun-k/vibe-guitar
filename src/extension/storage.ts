@@ -1,9 +1,9 @@
 /** chrome.storage.local wrappers: charts keyed by recording id, and settings. */
 import { DEFAULT_PROFILE, type Level, type Profile } from '../arrange/levels';
-import { chartStorageKey, type Chart, type RecordingSource } from '../chart/types';
+import { chartStorageKey, type Chart, type RecordingSource, type UncertainSpan } from '../chart/types';
 import { mergeAutoCharts } from '../chart/merge';
 import { validateChart } from '../chart/validate';
-import { CorrectionConflict, correctChordEvent, type EventRef } from '../editor/correct';
+import { CorrectionConflict, acceptUncertainAlt, correctChordEvent, type EventRef } from '../editor/correct';
 import type { AccuracyPair } from '../eval/overview';
 import type { ChartWriteMessage, ChartWriteResult } from './messages';
 
@@ -30,6 +30,8 @@ export interface Settings {
   phoneStand: boolean;
   /** 휴대폰에서 조작 허용 (VGT-16): the approved phone may play/pause and restart. Off by default. */
   phoneControl: boolean;
+  /** 불확실한 곳 표시 (VGT-19): mark uncertain stretches with their second choice. On by default. */
+  showUncertain: boolean;
   profile: Profile;
 }
 
@@ -46,6 +48,7 @@ export const DEFAULT_SETTINGS: Settings = {
   allowRootChange: false,
   phoneStand: false,
   phoneControl: false,
+  showUncertain: true,
   profile: DEFAULT_PROFILE,
 };
 
@@ -61,7 +64,7 @@ export function normalizeSettings(raw: unknown): Settings {
   const s = (raw && typeof raw === 'object' ? raw : {}) as Partial<Settings>;
   const countInBars = s.countInBars === 0 || s.countInBars === 1 || s.countInBars === 2 ? s.countInBars : s.countIn === false ? 0 : 1;
   const { countIn: _legacy, ...rest } = s;
-  return { ...DEFAULT_SETTINGS, ...rest, countInBars, allowRootChange: s.allowRootChange === true, phoneStand: s.phoneStand === true, phoneControl: s.phoneControl === true, profile: { ...DEFAULT_PROFILE, ...(s.profile ?? {}) } };
+  return { ...DEFAULT_SETTINGS, ...rest, countInBars, allowRootChange: s.allowRootChange === true, phoneStand: s.phoneStand === true, phoneControl: s.phoneControl === true, showUncertain: s.showUncertain !== false, profile: { ...DEFAULT_PROFILE, ...(s.profile ?? {}) } };
 }
 
 export async function saveSettings(s: Settings): Promise<void> {
@@ -257,7 +260,21 @@ export class ChartStore {
   }
 
   /**
-   * Undoes correctEvent for the requested recording while its stored chart is still exactly
+   * Plays one uncertain stretch as its second choice (VGT-19), with the same write turn, storage
+   * key and undo as correctEvent.
+   */
+  acceptAlt(source: RecordingSource, id: string, event: EventRef, span: UncertainSpan, at: Date): Promise<{ before: Chart; after: Chart }> {
+    return this.exclusive(async () => {
+      const before = await this.load(source, id);
+      if (!before) throw new CorrectionConflict('저장된 코드표가 없어요.');
+      const after = checked(acceptUncertainAlt({ ...before, recording: { ...before.recording, source, id } }, event, span, at));
+      await this.area.set({ [chartStorageKey(source, id)]: after });
+      return { before, after };
+    });
+  }
+
+  /**
+   * Undoes correctEvent (or acceptAlt) for the requested recording while its stored chart is still exactly
    * the corrected one (any other write since, e.g. an import with new timing, blocks undo).
    * An auto chart in use is restored as the recording's latest stored auto chart (later
    * analyses were merged into it).
@@ -316,7 +333,14 @@ export async function correctChartEvent(source: RecordingSource, id: string, eve
   return { before: r.before, after: r.chart };
 }
 
-/** Side panel: undoes correctChartEvent through the serialized ChartStore. */
+/** Side panel: plays an uncertain stretch as its second choice through the serialized ChartStore. */
+export async function acceptChartAlt(source: RecordingSource, id: string, event: EventRef, span: UncertainSpan): Promise<{ before: Chart; after: Chart }> {
+  const r = await requestWrite({ type: 'chart-write', op: 'accept-alt', source, id, event, span, at: new Date().toISOString() });
+  if (!r.chart || !r.before) throw new Error('서비스 워커가 바꾼 코드표를 돌려주지 않았어요');
+  return { before: r.before, after: r.chart };
+}
+
+/** Side panel: undoes correctChartEvent or acceptChartAlt through the serialized ChartStore. */
 export async function undoChartCorrection(source: RecordingSource, id: string, before: Chart, after: Chart): Promise<Chart> {
   const r = await requestWrite({ type: 'chart-write', op: 'undo-correct', source, id, before, after });
   if (!r.chart) throw new Error('서비스 워커가 되돌린 코드표를 돌려주지 않았어요');
@@ -332,6 +356,10 @@ export async function handleChartWrite(store: ChartStore, msg: ChartWriteMessage
     }
     if (msg.op === 'correct-event') {
       const { before, after } = await store.correctEvent(msg.source, msg.id, msg.event, msg.chord, new Date(msg.at));
+      return { ok: true, chart: after, before };
+    }
+    if (msg.op === 'accept-alt') {
+      const { before, after } = await store.acceptAlt(msg.source, msg.id, msg.event, msg.span, new Date(msg.at));
       return { ok: true, chart: after, before };
     }
     if (msg.op === 'undo-correct') return { ok: true, chart: await store.undoCorrection(msg.source, msg.id, msg.before, msg.after) };
