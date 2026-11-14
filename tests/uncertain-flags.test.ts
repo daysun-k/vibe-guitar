@@ -13,6 +13,7 @@ import { demoChart } from '../src/play/demo';
 import { flagsInBar } from '../src/play/lane';
 import { buildPlayModel, frameAt } from '../src/play/model';
 import { altNames, markAt, visibleSpans, withRo } from '../src/play/uncertain';
+import { uncertainRowHTML } from '../src/extension/sidepanel/play';
 
 const rec: Recording = { source: 'youtube', id: 'uncflag0001', title: 'T', artist: 'A' };
 const MAIN = chartStorageKey('youtube', rec.id);
@@ -387,5 +388,43 @@ describe('lane: unanalysed time competes as "no chord" (review vgt19-flags-ui-r3
     // G heard 1.5–8 s with a stretch 1.5–1.9 s: 0–1.5 s is unheard, the stretch keeps its own segment.
     const c = chart([[1.5, 'G']], [[1.5, 8]], [span(1.5, 1.9, 'G', 'Em')]);
     expect(firstBar(c).segs).toEqual([[0, 1.5, 'empty', -1], [1.5, 1.9, 'G', 0], [1.9, 2, 'G', -1]]);
+  });
+});
+
+describe('two tiers on the panel (Amendment 1)', () => {
+  it('replace is optional and only true is valid; merging keeps it', () => {
+    expect(validateChart(base([{ ...span(4, 8, 'G', 'Em'), replace: true }])).ok).toBe(true);
+    expect(validateChart(base([{ ...span(4, 8, 'G', 'Em'), replace: false } as unknown as UncertainSpan])).errors).toContain('uncertain[0].replace must be true when present');
+    expect(validateChart(base([{ ...span(4, 8, 'G', 'Em'), replace: 'yes' } as unknown as UncertainSpan])).ok).toBe(false);
+    const prev = base([{ ...span(21, 23, 'F', 'Dm'), replace: true }]);
+    const next = chart([[4, 'G'], [8, 'Em']], [[4, 12]], [{ ...span(8.5, 9.5, 'Em', 'G'), replace: true }, span(10, 11, 'Em', 'C')], '2026-11-12T00:00:00.000Z');
+    expect(mergeAutoCharts(prev, next).uncertain).toEqual([{ ...span(8.5, 9.5, 'Em', 'G'), replace: true }, span(10, 11, 'Em', 'C'), { ...span(21, 23, 'F', 'Dm'), replace: true }]);
+  });
+
+  it('every visible stretch is marked; the tier only decides the button', () => {
+    const c = base([{ ...span(4, 6, 'G', 'Em'), replace: true }, span(20, 22, 'F', 'Dm')]);
+    const m = buildPlayModel(c, { level: 'novice', capo: 0 }, null);
+    expect(m.uncertain.map((u) => [u.alt, u.replace])).toEqual([['Em', true], ['Dm', false]]);
+    expect(m.bars.flatMap((b) => b.segments).filter((s) => s.flag >= 0).map((s) => s.flag)).toEqual([0, 1]);
+    // the replacement of a replace-tier stretch is stored like before
+    const after = acceptUncertainAlt(c, m.uncertain[0].ref, m.uncertain[0].span, NOW);
+    expect(after.events[1]).toEqual({ startSec: 4, chord: 'Em', confidence: 1, source: 'manual' });
+    expect(after.uncertain).toEqual([span(20, 22, 'F', 'Dm')]);
+  });
+
+  it('row text: "G일 가능성이 더 커요" with the button on the replace tier, "다른 후보 G" without it otherwise', () => {
+    expect(uncertainRowHTML({ alt: 'G', altSounding: 'A♭', replace: true }, 0, false)).toBe('<span class="unc-line">확실하지 않아요 · <b>G</b>일 가능성이 더 커요</span><button class="unc-btn" data-u="0">G로 바꾸기</button>');
+    expect(uncertainRowHTML({ alt: 'D', altSounding: 'E♭', replace: false }, 1, false)).toBe('<span class="unc-line">확실하지 않아요 · 다른 후보 <b>D</b></span>');
+    expect(uncertainRowHTML({ alt: 'Am', altSounding: 'B♭m', replace: false }, 3, true)).toBe('<span class="unc-line">확실하지 않아요 · 다른 후보 <b>Am</b> <small class="snd">실제 B♭m</small></span>');
+  });
+
+  it('demo: only the verse Fm stretch (11.6–13.6 s) is in the replace tier', () => {
+    const m = buildPlayModel(demoChart(), { level: 'beginner', capo: 'auto' }, null);
+    expect(m.uncertain.map((u) => [u.fromSec, u.toSec, u.replace])).toEqual([
+      [11.6, 13.6, true],
+      [14.6, 15.6, false],
+      [19.6, 21.6, false],
+      [27.6, 29.6, false],
+    ]);
   });
 });

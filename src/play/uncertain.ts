@@ -62,6 +62,8 @@ export interface UncertainMark extends VisibleSpan {
   alt: string;
   /** Concert name of the second choice (equal to `alt` without a capo). */
   altSounding: string;
+  /** Replace tier: the panel offers the one-tap replacement (else the second choice is only shown). */
+  replace: boolean;
 }
 
 /**
@@ -77,7 +79,7 @@ export function uncertainMarks(chart: Chart, arrangement: Arrangement, key: KeyE
     if (!ev || ev.rest || !sameChordSymbol(ev.original, v.span.chord)) continue;
     const names = altNames(v.span.alt, key, timing, v.span, o);
     if (names.name === labelAt(mid)) continue;
-    out.push({ ...v, fromSec: v.span.fromSec, toSec: v.span.toSec, alt: names.name, altSounding: names.sounding });
+    out.push({ ...v, fromSec: v.span.fromSec, toSec: v.span.toSec, alt: names.name, altSounding: names.sounding, replace: v.span.replace === true });
   }
   return out;
 }

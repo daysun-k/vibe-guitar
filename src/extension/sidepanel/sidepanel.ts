@@ -1016,7 +1016,7 @@ let altBusy = false;
 /** 불확실한 곳 (VGT-19): plays model.uncertain[i] as its second choice, stored and undone like a fix. */
 async function acceptAlt(i: number): Promise<void> {
   const u = model?.uncertain[i];
-  if (!model || !u || altBusy) return;
+  if (!model || !u || !u.replace || altBusy) return; // only replace-tier stretches offer the replacement
   const mid = (u.fromSec + u.toSec) / 2;
   const shown = model.labels[model.arrangement.events.findIndex((e) => mid >= e.startSec && mid < e.endSec)]?.name ?? u.ref.chord;
   altBusy = true;

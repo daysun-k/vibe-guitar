@@ -70,7 +70,8 @@
           "fromSec": { "type": "number", "minimum": 0 },
           "toSec": { "type": "number", "minimum": 0 },
           "chord": { "type": "string", "minLength": 1 },
-          "alt": { "type": "string", "minLength": 1 }
+          "alt": { "type": "string", "minLength": 1 },
+          "replace": { "const": true, "description": "Replace tier: the second choice is offered as a one-tap replacement (absent = information only)." }
         }
       }
     },

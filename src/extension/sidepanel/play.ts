@@ -7,7 +7,7 @@ import type { Arrangement } from '../../arrange/arrange';
 import { prettyChord, shapeName } from '../../music/key';
 import { bigBeatSeconds } from '../../music/meter';
 import { barsForHardChord, changeConcertLabel, frameAt, upcomingShapes, type PlayModel } from '../../play/model';
-import { withRo } from '../../play/uncertain';
+import { withRo, type UncertainMark } from '../../play/uncertain';
 import { bassHTML, slashChordHTML, splitSlashBass } from './chord-name';
 import { escapeHtml, renderShapeDiagram, shapeDiagramHeight } from './diagram';
 import { ScrubState } from './scrub';
@@ -33,6 +33,18 @@ export interface PlayHost {
   barClick?(index: number): boolean;
   /** 불확실한 곳 (VGT-19): play model.uncertain[index] as its second choice. */
   acceptAlt?(index: number): void;
+}
+
+/**
+ * The line under the shape strip for the stretch under the playhead (index `i` of model.uncertain).
+ * Two tiers (Amendment 1): every stretch names its second choice; only replace-tier stretches, where
+ * the second choice is right more often, say so and offer the one-tap replacement button.
+ */
+export function uncertainRowHTML(u: Pick<UncertainMark, 'alt' | 'altSounding' | 'replace'>, i: number, showSounding: boolean): string {
+  const snd = showSounding && u.altSounding !== u.alt ? ` <small class="snd">실제 ${escapeHtml(u.altSounding)}</small>` : '';
+  return u.replace
+    ? `<span class="unc-line">확실하지 않아요 · <b>${slashChordHTML(u.alt)}</b>일 가능성이 더 커요${snd}</span><button class="unc-btn" data-u="${i}">${escapeHtml(withRo(u.alt))} 바꾸기</button>`
+    : `<span class="unc-line">확실하지 않아요 · 다른 후보 <b>${slashChordHTML(u.alt)}</b>${snd}</span>`;
 }
 
 /** Screen-reader / status wording of a mark: "확실하지 않아요, 다른 후보 Am". */
@@ -325,8 +337,7 @@ export class PlayScreen {
       this.uncRow.innerHTML = '';
       return;
     }
-    const snd = this.showSounding && u.altSounding !== u.alt ? ` <small class="snd">실제 ${escapeHtml(u.altSounding)}</small>` : '';
-    this.uncRow.innerHTML = `<span class="unc-line">확실하지 않아요 · 다른 후보 <b>${slashChordHTML(u.alt)}</b>${snd}</span><button class="unc-btn" data-u="${i}">${escapeHtml(withRo(u.alt))} 바꾸기</button>`;
+    this.uncRow.innerHTML = uncertainRowHTML(u, i, this.showSounding);
   }
 
   private buildLane(m: PlayModel): void {

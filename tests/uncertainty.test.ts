@@ -11,7 +11,9 @@ import { unitFrames } from '../src/recognize/candidate-decode';
 import { decodeUnits, DEFAULT_DECODE, type DecodedUnit, type DecodeUnit, type UnitStats } from '../src/recognize/chords';
 import { familyOf } from '../src/recognize/family';
 import type { SegmentAnalysis } from '../src/recognize/recognizer';
-import { unitFrameRange, unitStats, vocabularyFamilies } from '../src/recognize/uncertainty';
+import { EXTENSION_UNCERTAINTY } from '../src/recognize/extension-options';
+import { unitFrameRange, unitStats, vocabularyFamilies, type UncertaintyOptions } from '../src/recognize/uncertainty';
+import { UNCERTAINTY_CRITERION } from '../src/recognize/uncertainty-criterion';
 
 const SYMBOLS = ['C', 'Cm', 'C7', 'Cmaj7', 'Cm7', 'G', 'Gm', 'N'];
 const FS = 0.1;
@@ -207,5 +209,73 @@ describe('buildAutoChart uncertain spans', () => {
     ]);
     expect(chordChanges(chart)).toBe(1);
     expect(chordChanges(r)).toBe(3);
+  });
+});
+
+// ---------------------------------------------------------------- Two tiers (Amendment 1)
+
+describe('replace tier (Amendment 1)', () => {
+  const G = ['G', 'G7'];
+  const AM = ['Am', 'Am7'];
+  // One C event 0–3 s with S2 0.1 / 0.3 / 0.1, then F 3–4 s (confident).
+  const tiered = () => [seg(0, 4, [unit(0, 1, 'C', 0.1, stats(0.1, G, [0.3, 0.1])), unit(1, 2, 'C', 0.3, stats(0.3, G, [0.3, 0.1])), unit(2, 3, 'C', 0.1, stats(0.1, G, [0.3, 0.1])), unit(3, 4, 'F', 0.9)])];
+
+  it('without replaceBelow the chart is byte-identical to before (no replace key)', () => {
+    const plain = buildAutoChart(input(tiered(), { uncertainty: { signal: 'S2', threshold: 0.5 } }));
+    expect(JSON.stringify(plain)).not.toContain('replace');
+    expect(JSON.stringify(buildAutoChart(input(tiered(), { uncertainty: { signal: 'S2', threshold: 0.5, replaceBelow: undefined } })))).toBe(JSON.stringify(plain));
+    expect(plain.uncertain).toEqual([{ fromSec: 0, toSec: 3, chord: 'C', alt: 'G' }]);
+  });
+
+  it('runs split at the tier boundary; replace-tier spans carry replace: true', () => {
+    const chart = buildAutoChart(input(tiered(), { uncertainty: { signal: 'S2', threshold: 0.5, replaceBelow: 0.2 } }));
+    expect(chart.uncertain).toEqual([
+      { fromSec: 0, toSec: 1, chord: 'C', alt: 'G', replace: true },
+      { fromSec: 1, toSec: 2, chord: 'C', alt: 'G' },
+      { fromSec: 2, toSec: 3, chord: 'C', alt: 'G', replace: true },
+    ]);
+    spansAgree(chart);
+  });
+
+  it('replace-tier spans equal the spans of θ = replaceBelow; all spans cover the time of θ = threshold (seeded synthetic units)', () => {
+    let a = 0x19a1;
+    const rnd = () => ((a = (Math.imul(a, 1103515245) + 12345) >>> 0) / 4294967296);
+    let replaceSpans = 0;
+    let infoSpans = 0;
+    for (let trial = 0; trial < 40; trial++) {
+      const units: DecodedUnit[] = [];
+      let sym = 'C';
+      for (let k = 0; k < 30; k++) {
+        if (rnd() < 0.2) sym = sym === 'C' ? 'F' : 'C';
+        const p = Math.round(rnd() * 1000) / 1000;
+        const fam = rnd() < 0.7 ? G : AM;
+        units.push(unit(k, k + 1, sym, p, stats(p, fam, [0.3, 0.2])));
+      }
+      const make = (u: UncertaintyOptions) => buildAutoChart(input([seg(0, 30, units)], { durationSec: 40, uncertainty: u })).uncertain ?? [];
+      const two = make({ signal: 'S2', threshold: 0.6, replaceBelow: 0.25 });
+      const low = make({ signal: 'S2', threshold: 0.25 });
+      const high = make({ signal: 'S2', threshold: 0.6 });
+      expect(two.filter((s) => s.replace).map(({ replace: _r, ...s }) => s)).toEqual(low);
+      expect(two.filter((s) => !s.replace).every((s) => !('replace' in s))).toBe(true);
+      const union = (ss: { fromSec: number; toSec: number }[]) => {
+        const out: [number, number][] = [];
+        for (const s of [...ss].sort((x, y) => x.fromSec - y.fromSec)) {
+          const last = out[out.length - 1];
+          if (last && s.fromSec <= last[1] + 1e-9) last[1] = Math.max(last[1], s.toSec);
+          else out.push([s.fromSec, s.toSec]);
+        }
+        return out;
+      };
+      expect(union(two)).toEqual(union(high));
+      replaceSpans += two.filter((s) => s.replace).length;
+      infoSpans += two.filter((s) => !s.replace).length;
+    }
+    expect(replaceSpans).toBeGreaterThan(40); // not vacuous: both tiers occur often
+    expect(infoSpans).toBeGreaterThan(40);
+  });
+
+  it('the extension uses the frozen criterion with both thresholds', () => {
+    expect(EXTENSION_UNCERTAINTY).toEqual({ signal: 'S4', threshold: UNCERTAINTY_CRITERION.threshold, replaceBelow: UNCERTAINTY_CRITERION.replaceBelow });
+    expect(UNCERTAINTY_CRITERION.replaceBelow).toBeLessThan(UNCERTAINTY_CRITERION.threshold);
   });
 });

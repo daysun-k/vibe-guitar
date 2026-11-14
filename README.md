@@ -144,7 +144,10 @@ Port of the approved mockup B ("진행표형", diagrams 3x):
   with a dashed amber outline and a small "?" after the chord name, at its own beats (a stretch covering only
   part of a bar or a chord is drawn as its own segment). While the playhead is inside it, one line under the
   shape strip says "확실하지 않아요 · 다른 후보 Am" with a "Am으로 바꾸기" button; the strip still shows at most
-  three shapes. The second choice is named like the chords on that screen (capo shape names, the level's
+  three shapes. Two tiers (docs/uncertainty-protocol.md "Amendment 1", numbers in docs/uncertainty-results.md):
+  every marked stretch names its second choice, but the button (and the wording "G일 가능성이 더 커요") appears
+  only on the most uncertain tier (`replace: true`), where the second choice is right more often; elsewhere use
+  코드 고치기. The second choice is named like the chords on that screen (capo shape names, the level's
   simplification; the concert name only as a small extra when 실제 음 이름 보기 is on). A stretch shows only
   while the chord under it is still the auto chord it was computed for, so a fixed chord drops its mark; a
   second choice that would read the same as the shown chord (e.g. G for Gmaj7 at 입문) is not offered.
