@@ -229,6 +229,29 @@ export interface DecodedUnit extends DecodeUnit {
   symbol: string;
   /** Mean probability of the chosen symbol over the unit. */
   confidence: number;
+  /** Uncertainty statistics (docs/uncertainty-protocol.md), set by the shipped Recognizer (unitStats). */
+  stats?: UnitStats;
+}
+
+/**
+ * Per-unit uncertainty statistics from the reduced probabilities and the frames decodeUnits assigns
+ * to the unit (docs/uncertainty-protocol.md "Per-beat quantities"). Families are the C1 families of
+ * familyOf (src/recognize/family.ts).
+ */
+export interface UnitStats {
+  /** p_sym: linear mean probability of the decoded symbol (equals the unit's confidence). */
+  pSym: number;
+  /** p_fam: summed linear mean probability of the decoded symbol's family. */
+  pFam: number;
+  /** Alt family a(u): the other family with the highest summed mean (ties: vocabulary order); null if none. */
+  altFamily: string | null;
+  /** p_alt: summed linear mean probability of the alt family (0 without one). */
+  pAlt: number;
+  /** Members of the alt family in vocabulary order and their linear mean probabilities. */
+  altSymbols: string[];
+  altProbs: number[];
+  /** S5: mean frame log(p_shown + 1e-9) minus the largest such mean outside the shown family. */
+  s5: number;
 }
 
 export interface DecodeOptions {

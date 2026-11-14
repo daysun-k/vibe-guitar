@@ -28,13 +28,14 @@ import {
 } from '../src/recognize/candidate-decode';
 import { CandidateRecognizer } from '../src/recognize/candidate-recognizer';
 import { EXTENSION_RECOGNIZER_OPTIONS } from '../src/recognize/extension-options';
-import { buildVocabulary, decodeUnits, DEFAULT_DECODE, type BtcModelMeta, type DecodeUnit } from '../src/recognize/chords';
+import { buildVocabulary, decodeUnits, DEFAULT_DECODE, type BtcModelMeta, type DecodedUnit, type DecodeUnit } from '../src/recognize/chords';
 import { Recognizer } from '../src/recognize/recognizer';
 import type { ModelRunner } from '../src/recognize/runner';
 import { parseReplayConfig } from '../src/replay/replay';
 import { testAudio } from './replay-helpers';
 
 const FS = 0.1; // frame seconds in the synthetic matrices
+const withoutStats = (units: DecodedUnit[]): DecodedUnit[] => units.map(({ stats: _stats, ...u }) => u);
 
 function rng(seed: number): () => number {
   let s = seed >>> 0;
@@ -411,7 +412,9 @@ describe('CandidateRecognizer end to end (fake models)', () => {
       const audio = testAudio(9, 7);
       const plain = await new Recognizer(beatRunner(withBeats), chordRunner, meta).analyzeSegment(audio, 3.25, undefined, true);
       const cand = await new CandidateRecognizer(beatRunner(withBeats), chordRunner, meta, {}).analyzeSegment(audio, 3.25, undefined, true);
-      expect(cand.units).toEqual(plain.units);
+      // The shipped Recognizer adds uncertainty stats (VGT-19); symbol, confidence and timing stay equal.
+      expect(plain.units.every((u) => u.stats !== undefined)).toBe(true);
+      expect(cand.units).toEqual(withoutStats(plain.units));
       expect(cand.beats).toEqual(plain.beats);
       expect(cand.probs).toEqual(plain.probs);
       expect(new Set(cand.units.map((u) => u.symbol)).size).toBeGreaterThan(1);
@@ -659,7 +662,8 @@ describe('finalist in the extension recognizer (meanLog + pitchShift)', () => {
     const audio = testAudio(9, 5);
     const plain = await new Recognizer(beats, runner, meta, EXTENSION_RECOGNIZER_OPTIONS).analyzeSegment(audio, 1.5, undefined, true);
     const cand = await new CandidateRecognizer(beats, runner, meta, { emission: 'meanLog', pitchShift: [-1, 1] }).analyzeSegment(audio, 1.5, undefined, true);
-    expect(plain.units).toEqual(cand.units);
+    expect(plain.units.every((u) => u.stats !== undefined)).toBe(true);
+    expect(withoutStats(plain.units)).toEqual(cand.units);
     expect(plain.probs).toEqual(cand.probs);
     const original = await new Recognizer(beats, runner, meta).analyzeSegment(audio, 1.5, undefined, true);
     expect(plain.probs).not.toEqual(original.probs);
