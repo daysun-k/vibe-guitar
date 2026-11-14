@@ -354,10 +354,38 @@ describe('lane: segment content by overlap (review vgt19-flags-ui-r2)', () => {
     expect(flagsInBar([{ fromSec: 0, toSec: 0.04 }, { fromSec: 0.04, toSec: 1 }], 0, 2)).toEqual([{ index: 1, fromSec: 0, toSec: 1 }]);
   });
 
-  it('an event start dropped by the 0.1 s rule still gives the bar the event that fills it', () => {
-    // C 0–0.05 s, then G: the bar is drawn as G (it was drawn as C before).
+  it('a bar without a stretch keeps the drawing from before VGT-19 (C 0–0.05 s, then G → C)', () => {
     const c = chart([[0, 'C'], [0.05, 'G']], [[0, 8]]);
     const m = buildPlayModel(c, { level: 'novice', capo: 0 }, null);
-    expect(m.bars[0].segments.map((x) => m.labels[x.event].name)).toEqual(['G']);
+    expect(m.bars[0].segments.map((x) => m.labels[x.event].name)).toEqual(['C']);
+  });
+});
+
+describe('lane: unanalysed time competes as "no chord" (review vgt19-flags-ui-r3 F3)', () => {
+  const firstBar = (c: Chart, showUncertain = true) => {
+    const m = buildPlayModel(c, { level: 'novice', capo: 0, showUncertain }, null);
+    return { m, segs: m.bars[0].segments.map((x) => [x.startSec, x.endSec, x.event < 0 ? 'empty' : m.labels[x.event].name, x.flag]) };
+  };
+
+  it('G and coverage 1.95–8 s, no stretches: the first bar stays empty, like frameAt', () => {
+    const c = chart([[1.95, 'G']], [[1.95, 8]]);
+    expect(validateChart(c).ok).toBe(true);
+    const { m, segs } = firstBar(c);
+    expect(segs).toEqual([[0, 2, 'empty', -1]]);
+    expect(frameAt(m, 0.5).event).toBe(-1);
+    expect(firstBar(c, false).segs).toEqual([[0, 2, 'empty', -1]]);
+  });
+
+  it('G and coverage 1.95–1.99 s: the first bar stays empty', () => {
+    const c = chart([[1.95, 'G']], [[1.95, 1.99]]);
+    expect(validateChart(c).ok).toBe(true);
+    expect(firstBar(c).segs).toEqual([[0, 2, 'empty', -1]]);
+    expect(firstBar(c, false).segs).toEqual([[0, 2, 'empty', -1]]);
+  });
+
+  it('in a bar with a stretch, mostly unheard time still draws as empty', () => {
+    // G heard 1.5–8 s with a stretch 1.5–1.9 s: 0–1.5 s is unheard, the stretch keeps its own segment.
+    const c = chart([[1.5, 'G']], [[1.5, 8]], [span(1.5, 1.9, 'G', 'Em')]);
+    expect(firstBar(c).segs).toEqual([[0, 1.5, 'empty', -1], [1.5, 1.9, 'G', 0], [1.9, 2, 'G', -1]]);
   });
 });

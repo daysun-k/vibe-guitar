@@ -57,10 +57,12 @@ export function barsBetween(t: Timing, fromSec: number, toSec: number): { bar: n
  * Unlike event cuts, a stretch is never lost: inside each bar its bounds within 0.1 s of the bar's
  * start or end map to that edge, and a cut anywhere else is kept however short the stretch is. Only a
  * sliver under 0.1 s of a stretch that has at least 0.1 s in another bar is left out of this bar.
- * Each segment's content is decided by overlap, not by a lookup at one instant (bounds dropped or
- * moved by the 0.1 s rules would otherwise point just past the event or the stretch): its chord is
- * the event overlapping it most (no chord when that is a rest or nothing overlaps), its flag the
- * stretch overlapping it most (ties: the earlier stretch).
+ * A bar without a stretch is drawn exactly as before VGT-19 (the chord at each cut, looked up just
+ * after it). In a bar with a stretch each segment's content is decided by overlap instead, since
+ * bounds dropped or moved by the 0.1 s rules would otherwise point just past the event or the
+ * stretch: its chord is the candidate covering most of it, where "no chord" (time with no event, a
+ * rest or outside the heard ranges) competes like an event; its flag is the stretch overlapping it
+ * most. Ties go to the candidate that starts earlier in the segment.
  */
 export function buildLane(a: Arrangement, t: Timing, big: BigBeat, toSec: number, keyOf: (i: number) => string, changed: (i: number) => boolean = () => false, flags?: readonly { fromSec: number; toSec: number }[]): LaneBar[] {
   const from = a.events.length ? Math.min(0, a.events[0].startSec) : 0;
@@ -71,17 +73,31 @@ export function buildLane(a: Arrangement, t: Timing, big: BigBeat, toSec: number
     // Split at every event start and end inside the bar (ends mark coverage gaps), so time
     // without analysis is drawn empty. Rests and gaps are both "no chord" (-1); equal
     // neighbours merge.
+    const chordAt = (sec: number): number => {
+      const i = findEventIndex(a.events, sec);
+      const e = a.events[i];
+      return e && sec >= e.startSec && sec < e.endSec && !e.rest ? i : -1;
+    };
     const chordOver = (st: number, en: number): number => {
-      let best = -1;
-      let bestLen = 0;
+      const cands: { id: number; len: number; first: number }[] = [];
+      let covered = 0;
+      let cursor = st;
+      let noneFirst = Infinity;
       for (let k = Math.max(0, findEventIndex(a.events, st)); k < a.events.length && a.events[k].startSec < en; k++) {
-        const len = Math.min(en, a.events[k].endSec) - Math.max(st, a.events[k].startSec);
-        if (len > bestLen + 1e-9) {
-          best = k;
-          bestLen = len;
-        }
+        const e = a.events[k];
+        const from = Math.max(st, e.startSec);
+        const to = Math.min(en, e.endSec);
+        if (to - from <= 1e-9 || e.rest) continue;
+        if (from > cursor + 1e-9) noneFirst = Math.min(noneFirst, cursor);
+        cursor = Math.max(cursor, to);
+        covered += to - from;
+        cands.push({ id: k, len: to - from, first: from });
       }
-      return best >= 0 && !a.events[best].rest ? best : -1;
+      if (cursor < en - 1e-9) noneFirst = Math.min(noneFirst, cursor);
+      if (en - st - covered > 1e-9) cands.push({ id: -1, len: en - st - covered, first: noneFirst });
+      let best = cands[0];
+      for (const c of cands) if (c.len > best.len + 1e-9 || (Math.abs(c.len - best.len) <= 1e-9 && c.first < best.first)) best = c;
+      return best ? best.id : -1;
     };
     const barFlags = flagsInBar(flags ?? [], b.startSec, b.endSec);
     const flagOver = (st: number, en: number): number => {
@@ -112,9 +128,14 @@ export function buildLane(a: Arrangement, t: Timing, big: BigBeat, toSec: number
     for (let n = 0; n < cuts.length; n++) {
       const c = cuts[n];
       const en = n + 1 < cuts.length ? cuts[n + 1] : b.endSec;
-      if (en - c < 1e-9) continue; // a duplicate cut
-      const id = chordOver(c, en);
-      const flag = id < 0 ? -1 : flagOver(c, en);
+      let id: number;
+      let flag = -1;
+      if (!barFlags.length) id = chordAt(c + 0.01);
+      else {
+        if (en - c < 1e-9) continue; // a duplicate cut
+        id = chordOver(c, en);
+        flag = id < 0 ? -1 : flagOver(c, en);
+      }
       const last = parts[parts.length - 1];
       if (!last || last.id !== id || last.flag !== flag) parts.push({ id, flag, st: c });
     }
