@@ -172,4 +172,32 @@ delta for every song. In the browser, the final dump build's live chart equals m
 capture and its live flags equal the offline flags of that capture.
 
 ## Recorded during implementation
-(empty)
+Readings fixed while the tooling was built (2026-11-14), before any result; no rule above changed.
+- **θ_f among equal shares:** several thresholds can give the same largest share at or below f (units
+  without evaluated time do not move it). θ_f is the largest of them: the smallest value, among units with
+  evaluated time, that stays unflagged (∞ if all could be flagged). Reason: one deterministic value.
+- **Units that cannot be flagged:** a unit whose run `buildAutoChart` skipped (its rounded start is not
+  after the previous event, so another chord is shown there), or with no other family in the vocabulary,
+  is never flagged; its evaluated time stays in the share's denominator. Reason: a span must name the
+  chord the final event shows, and needs a second choice.
+- **Span adjacency:** consecutive flagged units join only when they touch (no coverage gap between them).
+- **Reference segments and neighbours:** only touching reference intervals merge, and the segment
+  "immediately before or after R" must touch R; a reference coverage gap acts like a barrier.
+- **Chart runs:** a chord outside majmin (e.g. sus4) keys its run by its own symbol, so different such
+  chords are different runs; a stretch with no chart event (none in recognizer charts) is a different chord.
+- **Omitted reference segments:** R counts when it has evaluated time and no correct chart time inside;
+  "contains flagged time" means flagged evaluated time inside R.
+- **Spread:** spans per minute and chord changes per minute use the charts' coverage minutes (pooled).
+  "Second-choice changes per minute" is reported as chord changes per minute of the chart with every span
+  replaced, next to the shown chart's rate and their difference. Span durations are pooled over all spans
+  (median and 10th percentile, linear interpolation as `quantile`).
+- **Oracle diagnostic:** uses each flaggable unit's best alt-family member (single unit, no span weighting);
+  error time over units that cannot be flagged counts as not fixed.
+- **Not assessable in alarms:** A2/T2 as stated; A3/T3 and A4/T4 are also raised when their share has no
+  support (never a pass). The TEST reading is "not assessable" when the TEST capture or share is.
+- **R1 and model hashes:** R1 is the chart check (parity plus exact confidences); model files that differ
+  from the capture's build are recorded and warned about, as `replay-audio` does, without failing R1.
+- **Bootstrap:** every share's interval uses its own mulberry32 stream seeded 7007; the blind replacement is
+  the song mean of per-song majmin deltas, bootstrapped as (delta, 1) pairs.
+- **K-pop tokens:** only the whole-chart mode exists; chart tokens absorbed by a wildcard are left out of
+  both the flagged and unflagged counts.
