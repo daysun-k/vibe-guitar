@@ -21,7 +21,31 @@ vs frame). Those analyses are recorded below under "Baseline analyses"; they nev
 and only apply the gates written in the candidate entries.
 
 ## Baseline analyses
-(to be filled before the first candidate is scored)
+Replay reproduction on the new DEV recording (2026-11-14; 23/23 songs captured with the dump build at
+9cd43e1, one capture each, no failures):
+- R1 identity (main 1513b58 replay vs the live chart of the same capture): 23/23 identical (max
+  confidence difference 0.000).
+- R2 drift (replayed baseline vs `officialChartScore`, frozen maps): song-mean majmin 81.01 vs 81.28
+  (-0.27, limit 1.0: met); one song above the 5-point per-song limit, `billboard-0879-run-d-m-c-walk-this-way`
+  +6.29. Investigated: not alignment (the unchanged aligner picks an offset within 60 ms of the frozen map),
+  not replay (R1 identical); the chart content differs between the official and the new capture (60 vs 53
+  events, 87.6% time agreement, flips on ambiguous passages), i.e. capture-to-capture variability. The
+  user chose to proceed with the new recording: "새 녹음으로 진행 (Recommended)". Maps stay frozen.
+
+Baseline analysis (`npm run baseline-analysis`, main defaults, commit 68cdf50, 23 DEV songs, song means;
+`baseline-analysis.json` in the briefing folder):
+- Error anatomy (share of evaluated majmin time): exact 81.0%, fifth-related root 6.9%, other 4.4%,
+  parallel 2.9%, relative 2.6%, semitone root 0.7%, auto chord where the reference is N 0.96%, false N
+  (auto N where the reference has a chord) 0.51%.
+- BTC top-k family oracle per beat unit (C1 family classes): reference family top-1 81.4%, within top-2
+  91.5%, within top-3 94.7%.
+- Unit-grid oracle ceilings (majority reference label per unit): beat units 97.90, half-beat units 98.12
+  (+0.22 pp), frame units 99.06.
+- btc_majmin vs the large model (per beat unit, 25 majmin families): the family argmax differs in 9.2%
+  of units (8.8% of evaluated time); per-unit argmax majmin WCSR large 81.43, majmin model 80.91, oracle
+  picking whichever matches 84.56 (+3.13 pp over the large model).
+- Gates: U skipped (half-beat ceiling +0.22 pp < 1 pp); C7 skipped (false N 0.51% < 1%); C5 gate passed
+  (oracle +3.13 pp >= 1 pp).
 
 ## Candidates
 
@@ -102,3 +126,24 @@ and only apply the gates written in the candidate entries.
 
 ## Results log
 (one entry per scored setting: date, commit, setting, DEV deltas, eligibility, decision)
+
+Pass 1, incumbent = main defaults (`{"recognizer":{}}`), charts replayed on the new DEV recording;
+`npm run candidate-step` (deltas in pp: mean majmin delta [2.5th pct of the paired bootstrap],
+Billboard-subset delta, smallest leave-one-out delta, boundary precision delta):
+- 2026-11-14, da21561, c2-1.5-3-4.5: +1.02 [+0.04], Billboard +1.16, min LOO +0.50, precision -2.21; not eligible (P5 flicker); rejected.
+- 2026-11-14, da21561, c2-1-2-3: +1.49 [+0.01], Billboard +1.71, min LOO +0.71, precision -4.23; not eligible (P5 flicker); rejected.
+- 2026-11-14, da21561, c2-0.5-1-1.5: +1.48 [-0.39], Billboard +1.71, min LOO +0.62, precision -8.94; not eligible (P2, P5; group alarm complexity:moderate); rejected.
+- 2026-11-14, da21561, c2-0-0-0: +0.25 [-1.91], Billboard +0.32, min LOO -0.57, precision -19.46; not eligible (P1, P2, P4, P5; group alarm complexity:moderate); rejected.
+- 2026-11-14, da21561, c1-scale1: +0.41 [-0.04], Billboard +0.42, min LOO +0.25, precision -0.33; not eligible (P1, P2); rejected.
+- 2026-11-14, da21561, c1-scale1.25: -0.37 [-1.01], Billboard -0.49, min LOO -0.51, precision +0.81; not eligible (P1-P5; group alarms billboard, simple, moderate); rejected.
+- 2026-11-14, U: skipped by its gate (half-beat ceiling 98.12 vs beat 97.90, +0.22 pp < 1 pp); not scored.
+- 2026-11-14, da21561, e-durationWeighted: -0.02 [-0.17], Billboard -0.04, min LOO -0.04, precision +0.03; not eligible (P1-P5; group alarm complexity:simple); rejected.
+- 2026-11-14, da21561, e-meanLog: +0.91 [+0.25], Billboard +0.95, min LOO +0.65, precision -0.28; eligible, no alarm; promoted.
+- 2026-11-14, C7: skipped by its gate (false N 0.51% < 1%); not scored.
+- Pass 1 stopped after E (eligible setting); C5, C6, C4 not run in pass 1. Scored settings: 8 of 50.
+
+**Promotion 1: e-meanLog** (`{"recognizer":{"emission":"meanLog"}}`, commit da21561). DEV song means
+before -> after: majmin 81.0 -> 81.9, root 83.1 -> 83.9, sevenths 69.1 -> 70.1, boundary F 74.1 -> 76.0
+(precision 86.9 -> 86.6, recall 66.9 -> 69.5). Mean majmin delta +0.91 pp, 95% paired bootstrap
+[+0.25, +1.71]; Billboard-subset delta +0.95; smallest leave-one-out delta +0.65 (without
+pilot-talking-heads-and-she-was). All five groups not lower; no song loss >= 5 pp; resources within limits.
