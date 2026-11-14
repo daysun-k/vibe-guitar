@@ -11,7 +11,10 @@
  *   mediaDurationSec) overlaps the chart's coverage are kept, so a partly captured song is compared
  *   on the captured part. Consecutive equal tokens are collapsed (consecutive wildcards too).
  * - Chart: the chart's events inside its coverage (chartIntervals, as WCSR reads them), N dropped,
- *   same view token, consecutive equal tokens collapsed.
+ *   same view token, consecutive equal tokens collapsed. With a time window, only chart intervals that
+ *   overlap the mapped reference extent (referenceExtent: first to last non-N segment, as the WCSR
+ *   reference coverage) are kept, so chart chords outside the annotated part are neither matches nor
+ *   insertions. Without a window (--whole-chart) the whole chart is used.
  * - View tokens: majmin = majminLabel of the boundary metric ("<pc>:maj" / "<pc>:min"; a chord
  *   outside majmin keeps its own symbol as "other:<symbol>"); root = the root pitch class
  *   (a symbol without a parseable root is dropped like N); sevenths = the evaluator's sevenths
@@ -35,7 +38,7 @@ import { parseChord } from '../arrange/chord';
 import { normalizeCoverage } from '../chart/coverage';
 import type { Chart, CoverageRange } from '../chart/types';
 import { chartIntervals, reduceSymbol } from './metrics';
-import { chartFromExport, EvalInputError, harteToSymbol, parseLab, type AnnotationSegment, type EvalIo, type SongEntry, type SongList } from './annotations';
+import { chartFromExport, chordSpan, EvalInputError, harteToSymbol, parseLab, type AnnotationSegment, type EvalIo, type SongEntry, type SongList } from './annotations';
 import { lookupSongs, majminLabel, type MapEntry, type NamedSongList, type PairedMaps } from './paired';
 import { bootstrapMeanCi, BOOTSTRAP_RESAMPLES, BOOTSTRAP_SEED, CI_LEVEL, mulberry32, quantile } from './song-mean';
 
@@ -102,10 +105,26 @@ export function referenceTokens(segs: AnnotationSegment[], view: View, window: R
   return collapse(out);
 }
 
-/** Chart tokens: events inside the chart's coverage, N dropped, consecutive equal tokens collapsed. */
-export function chartTokens(chart: Chart, view: View): string[] {
+/**
+ * Media-time extent of a reference under a map: first to last non-N segment, mapped and cut to
+ * [0, mediaDurationSec] (the coverage annotationChart gives the WCSR reference).
+ */
+export function referenceExtent(segs: AnnotationSegment[], window: Omit<ReferenceWindow, 'coverage'>): CoverageRange[] {
+  const span = chordSpan(segs);
+  if (!span) return [];
+  const from = Math.max(0, window.offsetSec + window.rate * span.fromSec);
+  const to = Math.min(window.mediaDurationSec ?? Infinity, window.offsetSec + window.rate * span.toSec);
+  return to > from ? [{ fromSec: from, toSec: to }] : [];
+}
+
+/**
+ * Chart tokens: events inside the chart's coverage, N dropped, consecutive equal tokens collapsed.
+ * With an extent, only chart intervals overlapping it (positive overlap) are kept.
+ */
+export function chartTokens(chart: Chart, view: View, extent: CoverageRange[] | null = null): string[] {
   return collapse(
     chartIntervals(chart.events, chart.coverage)
+      .filter((i) => !extent || extent.some((r) => Math.min(i.endSec, r.toSec) > Math.max(i.startSec, r.fromSec)))
       .map((i) => viewToken(i.symbol, view))
       .filter((t): t is string => t !== null),
   );
@@ -323,8 +342,9 @@ export function scoreSequenceSong(m: MapEntry, entry: { song: SongEntry; list: S
   let anat: Anatomy | null = null;
   let wildcardShare = NaN;
   for (const v of VIEWS) {
-    const ref = referenceTokens(v === 'sevenths' ? segs7 : segs, v, window);
-    const est = chartTokens(chart, v);
+    const vsegs = v === 'sevenths' ? segs7 : segs;
+    const ref = referenceTokens(vsegs, v, window);
+    const est = chartTokens(chart, v, window ? referenceExtent(vsegs, window) : null);
     const { score, ops } = scoreTokens(ref, est);
     views[v] = score;
     if (v === 'majmin') {

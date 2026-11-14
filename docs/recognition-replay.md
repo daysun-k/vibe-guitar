@@ -163,7 +163,8 @@ and the summary says so.
 `npm run sequence-eval` (`src/eval/sequence.ts`, VGT-21 amendment 1 in `docs/kpop-eval-protocol.md`) scores one
 chart set by chord order instead of timing (majmin, root and sevenths token sequences aligned by global edit
 distance, `X` as an uncounted wildcard, song means with a 95% percentile bootstrap, seed 7007), cuts the
-reference to the chart's coverage through the same frozen maps unless `--whole-chart` is given, and with
+reference to the chart's coverage through the same frozen maps and counts chart chords only inside the mapped
+reference extent (both unless `--whole-chart` is given), and with
 `--gap <A> <B>` reports the song-mean majmin F gap between two result files (independent bootstrap, seeds
 7007/7008).
 

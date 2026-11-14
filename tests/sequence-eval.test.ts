@@ -6,7 +6,7 @@ import type { Chart } from '../src/chart/types';
 import { parseLab, parseSongList, SONG_LIST_SCHEMA, type SongList } from '../src/eval/annotations';
 import { PAIRED_MAPS_SCHEMA, parseGroups, parseMaps, songListsToLoad, type PairedMaps } from '../src/eval/paired';
 import * as seq from '../src/eval/sequence';
-import { alignSequences, anatomy, chartTokens, classifySubstitution, referenceTokens, scoreTokens, sequenceEvaluate, sequenceGap, viewToken, WILDCARD, type SequenceIo } from '../src/eval/sequence';
+import { alignSequences, anatomy, chartTokens, classifySubstitution, referenceExtent, referenceTokens, scoreTokens, sequenceEvaluate, sequenceGap, viewToken, WILDCARD, type SequenceIo } from '../src/eval/sequence';
 import { bootstrapMeanCi } from '../src/eval/song-mean';
 // @ts-expect-error plain .mjs without types
 import { parseArgs, run } from '../scripts/sequence-eval.mjs';
@@ -109,6 +109,18 @@ describe('sequence alignment and counts', () => {
     expect(w.score).toMatchObject({ editDistance: 1, absorbed: 0, chartCounted: 3, matches: 2 });
   });
 
+  it('with a map, chart tokens are counted only inside the mapped reference extent', () => {
+    const segs = parseLab('0 3 N\n3 10 C:maj\n10 20 G:maj\n20 25 N\n');
+    // media = 5 + t: chords span 8-25 (N excluded), cut at media 40.
+    const extent = referenceExtent(segs, { offsetSec: 5, rate: 1, mediaDurationSec: 40 });
+    expect(extent).toEqual([{ fromSec: 8, toSec: 25 }]);
+    expect(referenceExtent(segs, { offsetSec: 5, rate: 1, mediaDurationSec: 20 })).toEqual([{ fromSec: 8, toSec: 20 }]);
+    // F 0-6 and Dm 25-30 lie outside; C 6-12 overlaps the extent start; Am 24-25 overlaps its end.
+    const c = chart([[0, 'F'], [6, 'C'], [12, 'G'], [24, 'Am'], [25, 'Dm'], [30, 'N']], [[0, 40]]);
+    expect(chartTokens(c, 'majmin', extent)).toEqual(['0:maj', '7:maj', '9:min']);
+    expect(chartTokens(c, 'majmin')).toEqual(['5:maj', '0:maj', '7:maj', '9:min', '2:min']);
+  });
+
   it('the map window cuts the reference to the chart coverage', () => {
     const segs = parseLab('0 10 C:maj\n10 20 G:maj\n20 30 A:min\n30 40 F:maj\n');
     // media = 5 + t: C 5-15, G 15-25, Am 25-35, F 35-45; chart covers 17-30.
@@ -206,6 +218,16 @@ describe('sequenceEvaluate', () => {
     expect(whole.referenceWindow).toBe('none');
     expect(whole.inputs.wholeChart).toBe(true);
     expect(whole.songs[3].views.majmin).toMatchObject({ refTokens: 4, matches: 3, deletions: 1 });
+  });
+
+  it('chart chords outside the annotated part are neither matches nor insertions unless --whole-chart', () => {
+    // a's chart runs on past the reference (chords 0-4 s): Dm (4-5 s) and E (5 s on) are outside it.
+    const longer: SequenceIo = { ...io(), readChart: (y) => (y === ids.a ? seqChart(['C', 'G', 'Am', 'F', 'Dm', 'E']) : songCharts[y]) };
+    const cut = sequenceEvaluate(maps(), named(), longer, { now });
+    expect(cut.songs[0].views.majmin).toMatchObject({ chartTokens: 4, insertions: 0, precision: 1, f: 1 });
+    const whole = sequenceEvaluate(maps(), named(), longer, { now, wholeChart: true });
+    expect(whole.songs[0].views.majmin).toMatchObject({ chartTokens: 6, insertions: 2, recall: 1 });
+    expect(whole.songs[0].views.majmin.precision).toBeCloseTo(4 / 6, 12);
   });
 
   it('song means, seeded bootstrap, groups and leave-one-group-out', () => {
