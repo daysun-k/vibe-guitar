@@ -138,9 +138,25 @@ Port of the approved mockup B ("진행표형", diagrams 3x):
   so it applies to the stored chart even if an auto chart arrived meanwhile. "되돌리기" in the status line
   undoes the last fix while the stored chart is still the fixed one. Clicking a bar still only seeks. In demo
   playback the fix changes only the in-memory demo chart.
-- **Uncertainty** is shown only by the badge, plus at 중급/상급 an actionable hint such as "Em도 돼요" on
-  low-confidence 7th chords. 입문 reduces 7/maj7 to triads; the change mark (●) and its tooltip say so (no
-  superscript 7 next to the name).
+- **Uncertainty**: at 중급/상급 an actionable hint such as "Em도 돼요" on low-confidence 7th chords. 입문
+  reduces 7/maj7 to triads; the change mark (●) and its tooltip say so (no superscript 7 next to the name).
+- **불확실한 곳 (VGT-19)**: where an auto chart has an uncertain stretch (`chart.uncertain`) the lane marks it
+  with a dashed amber outline and a small "?" after the chord name, at its own beats (a stretch covering only
+  part of a bar or a chord is drawn as its own segment). While the playhead is inside it, one line under the
+  shape strip says "확실하지 않아요 · 다른 후보 Am" with a "Am으로 바꾸기" button; the strip still shows at most
+  three shapes. The second choice is named like the chords on that screen (capo shape names, the level's
+  simplification; the concert name only as a small extra when 실제 음 이름 보기 is on). A stretch shows only
+  while the chord under it is still the auto chord it was computed for, so a fixed chord drops its mark; a
+  second choice that would read the same as the shown chord (e.g. G for Gmaj7 at 입문) is not offered.
+  The button replaces just that stretch: the chord is split at the stretch bounds, the stretch becomes a
+  manual event with the second choice (confidence 1), the parts before and after keep the auto chord and
+  confidence, and the stretch leaves `uncertain`. It is stored like 코드 고치기 (serialized
+  `ChartStore.acceptAlt`, chart `edited`, the same status line and 되돌리기; in demo only the in-memory chart).
+  **불확실한 곳 표시** in the settings sheet (on by default) hides every mark. Re-analyses merge stretches like
+  chords: the newer chart's stretches, plus the older chart's stretches lying wholly in ranges only it heard.
+  The look is temporary: `sidepanel.html?uv=B` shows a "또는 Am" chip on the lane (its own button; the rest of
+  the bar still only seeks) and only a "?" on the current shape, `uv=C` only a thin amber underline on the
+  lane with the same line and button as A. Two of the three will be removed once one is chosen.
 
 Music fixes applied before drawing (pure functions in `src/music/`, tests in `tests/music.test.ts`):
 
@@ -314,8 +330,12 @@ placeholder lyrics 0.4 s early) that exercises the spelling, phase and offset fi
 cached lyrics only (no request in demo mode). Query parameters: `t=<sec>`, `play`, `rate=0.5|0.75`,
 `loop=<a>-<b>` (mark bars a–b, 1-based, as the loop),
 `theme=light|dark`, `level=beginner|novice|intermediate|advanced`, `capo=auto|0..7`, `snd` (sounding
-names), `sheet=1`, `lyrics=0`, `mute` (no count-in click), `phonectl` (휴대폰에서 조작 허용 on), `phone` (휴대폰 악보대 switch on; connects to
+names), `uv=A|B|C` (temporary uncertain-mark variants), `unc=0` (불확실한 곳 표시 off), `sheet=1`, `lyrics=0`, `mute` (no count-in click), `phonectl` (휴대폰에서 조작 허용 on), `phone` (휴대폰 악보대 switch on; connects to
 `127.0.0.1` only).
+
+The synthetic song carries four uncertain stretches (whole verse Fm at 11.6–13.6 s, the second half of verse
+C♯ at 14.6–15.6 s, the low-confidence Fm7 at 19.6–21.6 s, chorus C♯ → A♯m at 27.6–29.6 s). In the panel's
+DevTools console, `await vibeGuitar.seek(12.4)` moves the demo there and resolves once it is drawn.
 
 Opened outside the extension (file://) the page runs the synthetic demo with default settings, which is
 how `node scripts/screens.mjs` (after `npm run build`) writes `docs/screens/*.png` at 400 and 600 px, light
