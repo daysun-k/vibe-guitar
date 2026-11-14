@@ -201,3 +201,35 @@ Readings fixed while the tooling was built (2026-11-14), before any result; no r
   the song mean of per-song majmin deltas, bootstrapped as (delta, 1) pairs.
 - **K-pop tokens:** only the whole-chart mode exists; chart tokens absorbed by a wildcard are left out of
   both the flagged and unflagged counts.
+
+## Amendment 1 (2026-11-14, after the DEV result, user decision; before any TEST or K-pop replay)
+**Why.** The DEV sweep (`docs/uncertainty-results.md`) chose S4 at f = 20% (θ = 0.394164403405739: flagged
+share 20.0%, all-error capture 51.5%, missed-change capture 73.3%; A1-A3 not raised) and raised **A4**: on the
+flagged time the second choice is right 27.9% of the time and the shown chord 56.9%, so a one-tap
+replacement offered on every flagged stretch would more often make the chart worse (replacing every flagged
+stretch lowers the DEV song-mean majmin by 5.7 pp). On the most uncertain 5% (S4 θ_5 = -0.3143507889471948) the
+second choice is right 53.5% and the shown chord 35.6%. Asked with these numbers and three alternatives, the
+user chose, on 2026-11-14: "두 단계 (Recommended)" - mark 20% and show the second choice there, offer the
+one-tap replacement only where the second choice is right more often, check both thresholds once on TEST.
+
+**Rule (replaces the single threshold; everything else above stays in force).**
+- **Flag tier:** a unit is flagged when S4 < θ_flag = 0.394164403405739 (the criterion's operating point,
+  unchanged).
+- **Replace tier:** a flagged unit is in the replace tier when S4 < θ_replace = -0.3143507889471948 (DEV θ_5 of
+  S4, at full precision).
+- **Spans:** formed as in "Flagged spans and the second choice", and a span never mixes tiers (runs are split
+  at the tier boundary). A replace-tier span carries `replace: true`. Replace-tier time is therefore exactly the
+  flagged time of the fixed setting (S4, θ_replace), and all flagged time is that of (S4, θ_flag).
+- **Panel:** every visible span is marked and shows its second choice; the one-tap replacement is offered only
+  on replace-tier spans; any other chord can still be changed with the existing chord fix.
+
+**TEST reading (replaces "TEST alarms" in "TEST check").** Two fixed runs of `uncertainty-analysis` on TEST:
+(S4, θ_flag) and (S4, θ_replace). "Similar" and T1-T3 are read on the flag run exactly as written. **T4 is read
+on the replace run:** raised when, on replace-tier time, the second choice is right no more often than the
+shown chord, or when that is not assessable. T4 on the flag run is reported for information. Neither threshold
+is changed on TEST results.
+
+**K-pop (reference).** Flags at θ_flag. Net sequence recovery is reported twice: every flagged span taking its
+second choice (as written) and only replace-tier spans taking it.
+
+**Frozen values in code:** `src/recognize/uncertainty-criterion.ts`.
