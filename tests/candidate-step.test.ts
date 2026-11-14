@@ -57,6 +57,7 @@ describe('candidate step rules', () => {
     const r = resourceChecks(baselineRes, { packagedBytes: 1101, total4minMs: 5522 + 2761, medianAnalyzeMs: 812 + 1001, peakRssBytes: 1200 });
     expect([r.packagedBytes.ok, r.analysisTime4minMs.ok, r.medianAnalyzeMs.ok, r.peakRssBytes.ok]).toEqual([false, true, false, true]);
     expect(r.medianAnalyzeMs.limit).toBe(1812);
+    expect(r.medianAnalyzeMs.diagnostic).toBe(true);
   });
 
   it('is eligible only when P1..P6 all hold, and reports without deciding', () => {
@@ -86,6 +87,18 @@ describe('candidate step rules', () => {
     const badRes = resourceChecks(baselineRes, { packagedBytes: 2000, total4minMs: 1, medianAnalyzeMs: 1, peakRssBytes: 1 });
     const r6 = evaluateStep({ vsIncumbent: paired(good), vsBaseline: paired(good), benchIncumbent: bench(0.97, 0.95, 0.9), benchCandidate: bench(0.97, 0.95, 0.9), resources: badRes });
     expect([r6.P.P6, r6.eligible, r6.alarms.resources]).toEqual([false, false, ['packagedBytes']]);
+    // PR #36 review F2: the median analyze time is a diagnostic and never gates P6 or raises an alarm.
+    const slowMedian = resourceChecks(baselineRes, { packagedBytes: 1000, total4minMs: 5600, medianAnalyzeMs: 99999, peakRssBytes: 1100 });
+    const rMed = evaluateStep({ vsIncumbent: paired(good), vsBaseline: paired(good), benchIncumbent: bench(0.97, 0.95, 0.9), benchCandidate: bench(0.97, 0.95, 0.9), resources: slowMedian });
+    expect([slowMedian.medianAnalyzeMs.ok, rMed.P.P6, rMed.eligible, rMed.alarms.resources, rMed.anyAlarm]).toEqual([false, true, true, [], false]);
+    // PR #36 review F1: a missing required measurement is "not verified": P6 fails and an alarm is raised.
+    for (const gap of [{ total4minMs: null }, { peakRssBytes: null }, { peakRssBytes: undefined }, { packagedBytes: Number.NaN }]) {
+      const res = resourceChecks(baselineRes, { packagedBytes: 1000, total4minMs: 5600, medianAnalyzeMs: 800, peakRssBytes: 1100, ...gap });
+      const rGap = evaluateStep({ vsIncumbent: paired(good), vsBaseline: paired(good), benchIncumbent: bench(0.97, 0.95, 0.9), benchCandidate: bench(0.97, 0.95, 0.9), resources: res });
+      expect([rGap.P.P6, rGap.eligible, rGap.anyAlarm, rGap.alarms.resources, rGap.alarms.resourcesNotVerified.length]).toEqual([false, false, true, [], 1]);
+    }
+    const noMedian = resourceChecks(baselineRes, { packagedBytes: 1000, total4minMs: 5600, medianAnalyzeMs: null, peakRssBytes: 1100 });
+    expect(evaluateStep({ vsIncumbent: paired(good), vsBaseline: paired(good), benchIncumbent: bench(0.97, 0.95, 0.9), benchCandidate: bench(0.97, 0.95, 0.9), resources: noMedian }).P.P6).toBe(true);
   });
 
   it('raises group alarms on rounded group means and song-loss alarms vs incumbent or baseline', () => {
