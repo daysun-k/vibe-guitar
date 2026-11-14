@@ -107,6 +107,17 @@ export function parseReplayConfig(v: unknown): ReplayConfig {
       if (!isObj(x)) throw new Error('config: recognizer.keyPrior must be an object { "bonus": number, "margin": number }');
       onlyFields(x, 'recognizer.keyPrior', ['bonus', 'margin']);
       out.keyPrior = { bonus: num(x.bonus, 'recognizer.keyPrior.bonus'), margin: num(x.margin, 'recognizer.keyPrior.margin', (n) => n >= 0 && n <= 1, 'a number in [0, 1]') };
+    } else if (k === 'bassRoot') {
+      if (!isObj(x)) throw new Error('config: recognizer.bassRoot must be an object { "margin": number }');
+      onlyFields(x, 'recognizer.bassRoot', ['margin']);
+      out.bassRoot = { margin: num(x.margin, 'recognizer.bassRoot.margin', (n) => n >= 0 && n <= 1, 'a number in [0, 1]') };
+    } else if (k === 'repetition') {
+      if (!isObj(x)) throw new Error('config: recognizer.repetition must be an object { "k": integer, "weight": number }');
+      onlyFields(x, 'recognizer.repetition', ['k', 'weight']);
+      out.repetition = {
+        k: num(x.k, 'recognizer.repetition.k', (n) => Number.isInteger(n) && n >= 1 && n <= 16, 'an integer in [1, 16]'),
+        weight: num(x.weight, 'recognizer.repetition.weight', (n) => n > 0 && n <= 1, 'a number in (0, 1]'),
+      };
     } else throw new Error(`config: unknown field recognizer.${k}`);
   }
   return { ...(typeof v.label === 'string' ? { label: v.label } : {}), recognizer: out };

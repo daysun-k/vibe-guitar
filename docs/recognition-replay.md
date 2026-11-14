@@ -86,7 +86,8 @@ bytes differ, or that the capture does not name, is printed as a `WARNING` and l
 `emission: "durationWeighted" | "meanLog"` (E), `majmin: "familyDecide" | "average"` (C5; loads
 `btc_majmin.onnx`, whose sha256 goes to the manifest's `candidateModels`), `nLogPrior` (C7),
 `pitchShift: [semitones…]` (C6) and `keyPrior: { bonus, margin }` (C4: a second decode pass with the
-key that `estimateKey` gives for the pass-1 chart; the manifest records it per song). Options combine;
+key that `estimateKey` gives for the pass-1 chart; the manifest records it per song), `bassRoot: { margin }`
+(C10) and `repetition: { k, weight }` (C8). Options combine;
 unknown fields are errors. A new candidate option is added to `CandidateRecognizerOptions` in
 `src/recognize/candidate-decode.ts` and to `parseReplayConfig` in `src/replay/replay.ts`.
 `npm run bench -- --config <json>` runs the synthetic benchmark with the same options.

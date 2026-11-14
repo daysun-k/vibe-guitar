@@ -124,6 +124,35 @@ Baseline analysis (`npm run baseline-analysis`, main defaults, commit 68cdf50, 2
 - A tuning-mismatch candidate only if the baseline analyses show detuning errors (earlier diagnostics
   found none).
 
+### Appended after the main list converged (pass 3, 2026-11-14; settings fixed before scoring)
+Scored in pass 4 against incumbent inc2 (`{"emission":"meanLog","pitchShift":[-1,1]}`), C10 then C8;
+both compose with the incumbent options and are off unless set.
+
+#### C10 Bass-aware root correction
+- Evidence: fifth-related root errors are 6.9% of evaluated majmin time on DEV, the largest error
+  type (baseline analysis).
+- Method (`recognizer.bassRoot`): per decode unit, bass chroma from the two lowest CQT octaves, bins
+  0-47 = C1 (32.7 Hz) to a quarter tone above B2 (about 127 Hz): linear magnitude (exp of the log-CQT,
+  unshifted) summed by pitch class over the unit's frames, quarter-tone bins split between their two
+  semitones. Only in units where the top-2 decode classes by mean probability (after the incumbent's
+  processing: pitch-shift averaging, and C8 smoothing when set) are fifth-related (roots 7 semitones
+  apart, both in the major family maj/7/maj7 or both minor min/m7), their probabilities are within the
+  margin, and the decoder chose one of them: output the one whose root is the strongest bass pitch
+  class; keep the decoder's choice when the bass matches neither. Applied after the Viterbi, per unit.
+- Expected: 0 to +1.5 pp (bass is not always the root: inversions, pedal points). Cost: negligible.
+- Settings: margin 0.15; margin 0.30.
+
+#### C8 Repetition smoothing
+- Evidence: the top-2 family oracle is 91.5 vs top-1 81.4 on DEV (many near-misses).
+- Method (`recognizer.repetition`): beat-synchronous decode-class probability vectors (the unit means
+  the Viterbi uses; with the incumbent's meanLog emission, the per-unit geometric-mean probabilities).
+  For each beat, its k most similar other beats of the same segment by cosine similarity of beat chroma
+  (all 144 CQT bins folded to 12 pitch classes, linear magnitude; audio chroma rather than the
+  probability vectors, so model errors do not choose the neighbours), excluding beats within +-4 of
+  itself; new vector = (1 - w) * own + w * mean(neighbours); then decode as usual.
+- Expected: 0 to +1.5 pp. Cost: O(beats^2) similarity per segment, negligible.
+- Settings: k 2, w 0.3; k 4, w 0.5.
+
 ## Results log
 (one entry per scored setting: date, commit, setting, DEV deltas, eligibility, decision)
 

@@ -42,6 +42,24 @@ export interface KeyPriorOptions {
   margin: number;
 }
 
+/**
+ * C10: in units whose top-2 classes are fifth-related (roots 7 semitones apart, same major/minor
+ * family) and within `margin` in mean probability, take the one whose root is the strongest bass
+ * pitch class (the decoder's choice stays when the bass matches neither).
+ */
+export interface BassRootOptions {
+  margin: number;
+}
+
+/**
+ * C8: each unit's class vector becomes (1 − weight)·own + weight·mean of its `k` most similar units by
+ * beat-chroma cosine similarity, excluding units within ±4 of itself (same segment).
+ */
+export interface RepetitionOptions {
+  k: number;
+  weight: number;
+}
+
 /** RecognizerOptions plus the candidate options (replay config `recognizer`, bench --config). */
 export interface CandidateRecognizerOptions extends Omit<RecognizerOptions, 'decode'> {
   decode?: CandidateDecodeOptions;
@@ -53,6 +71,10 @@ export interface CandidateRecognizerOptions extends Omit<RecognizerOptions, 'dec
   /** C6: semitone shifts averaged with the unshifted run (equal weights). */
   pitchShift?: number[];
   keyPrior?: KeyPriorOptions;
+  /** C10: bass-aware root choice between fifth-related top-2 classes. */
+  bassRoot?: BassRootOptions;
+  /** C8: repetition smoothing of beat vectors over similar beats. */
+  repetition?: RepetitionOptions;
 }
 
 /** True when an option outside the plain Recognizer (vocabulary, decode.changePenalty, noBeats) is set. */
@@ -64,7 +86,9 @@ export function hasCandidateOptions(o: CandidateRecognizerOptions): boolean {
     o.majmin !== undefined ||
     o.nLogPrior !== undefined ||
     o.pitchShift !== undefined ||
-    o.keyPrior !== undefined
+    o.keyPrior !== undefined ||
+    o.bassRoot !== undefined ||
+    o.repetition !== undefined
   );
 }
 
@@ -210,6 +234,112 @@ export function rootRotation(labels: string[], delta: number): Int32Array {
   });
 }
 
+// ---------------------------------------------------------------- C10 / C8 chroma
+
+/**
+ * CQT bins of the bass chroma: the two lowest octaves, bins 0-47 = C1 (32.7 Hz) up to a quarter tone
+ * above B2 (≈ 127 Hz), where bass fundamentals lie.
+ */
+export const BASS_BINS: [number, number] = [0, 48];
+/** All bins, for the beat chroma of C8. */
+export const ALL_BINS: [number, number] = [0, CQT.nBins];
+
+/**
+ * 12-bin chroma of frames [f0, f1) over CQT bins [b0, b1): linear magnitude exp(log-CQT) − eps summed by
+ * pitch class (bin 0 = C1; even bins are semitones, odd bins are quarter tones split half/half between
+ * their two neighbouring semitones).
+ */
+export function chroma(cqt: Float32Array, f0: number, f1: number, [b0, b1]: [number, number], nBins = CQT.nBins): Float64Array {
+  const out = new Float64Array(12);
+  for (let f = f0; f < f1; f++) {
+    for (let k = b0; k < b1; k++) {
+      const m = Math.max(0, Math.exp(cqt[f * nBins + k]) - CQT.logEps);
+      const s = k / 2;
+      if (k % 2 === 0) out[s % 12] += m;
+      else {
+        out[Math.floor(s) % 12] += m / 2;
+        out[Math.ceil(s) % 12] += m / 2;
+      }
+    }
+  }
+  return out;
+}
+
+const argmax12 = (c: Float64Array): number => {
+  let b = 0;
+  for (let i = 1; i < 12; i++) if (c[i] > c[b]) b = i;
+  return c[b] > 0 ? b : -1;
+};
+
+/**
+ * C8 neighbours: for each unit, the indices of its k most similar units by cosine similarity of their
+ * chroma (ties: lower index), excluding units within ±4 of itself. Fewer when fewer qualify.
+ */
+export function repetitionNeighbours(chromas: Float64Array[], k: number, exclude = 4): number[][] {
+  const norm = chromas.map((c) => Math.sqrt(c.reduce((a, x) => a + x * x, 0)));
+  return chromas.map((c, u) => {
+    const sims: { j: number; s: number }[] = [];
+    for (let j = 0; j < chromas.length; j++) {
+      if (Math.abs(j - u) <= exclude) continue;
+      let dot = 0;
+      for (let i = 0; i < 12; i++) dot += c[i] * chromas[j][i];
+      sims.push({ j, s: norm[u] > 0 && norm[j] > 0 ? dot / (norm[u] * norm[j]) : 0 });
+    }
+    sims.sort((a, b) => b.s - a.s || a.j - b.j);
+    return sims.slice(0, k).map((x) => x.j);
+  });
+}
+
+/** (1 − w)·own + w·mean(neighbours) per unit; units without neighbours stay. */
+export function smoothVectors(v: Float32Array | Float64Array, U: number, K: number, nb: number[][], w: number): Float64Array {
+  const out = Float64Array.from(v);
+  for (let u = 0; u < U; u++) {
+    if (!nb[u].length) continue;
+    for (let j = 0; j < K; j++) {
+      let m = 0;
+      for (const n of nb[u]) m += v[n * K + j];
+      out[u * K + j] = (1 - w) * v[u * K + j] + (w * m) / nb[u].length;
+    }
+  }
+  return out;
+}
+
+/** Root pitch class and major/minor family of a class name ("G7" → 7, maj), null otherwise. */
+function rootFamily(name: string): { root: number; fam: 'maj' | 'min' } | null {
+  const f = familyOf(name);
+  const m = /^(\d+):(maj|min)$/.exec(f);
+  return m ? { root: Number(m[1]), fam: m[2] as 'maj' | 'min' } : null;
+}
+
+/**
+ * C10 for one unit: the class to output, or −1 to keep the decoder's choice. Applies only when the
+ * decoded class is one of the unit's top-2 classes, the two are fifth-related in the same family, their
+ * mean probabilities are within margin, and the strongest bass pitch class is one of their roots.
+ */
+export function bassRootChoice(names: string[], avg: ArrayLike<number>, u: number, decoded: number, bass: Float64Array, margin: number): number {
+  const K = names.length;
+  let t1 = -1;
+  let t2 = -1;
+  for (let j = 0; j < K; j++) {
+    const p = avg[u * K + j];
+    if (t1 < 0 || p > avg[u * K + t1]) {
+      t2 = t1;
+      t1 = j;
+    } else if (t2 < 0 || p > avg[u * K + t2]) t2 = j;
+  }
+  if (t2 < 0 || (decoded !== t1 && decoded !== t2)) return -1;
+  if (avg[u * K + t1] - avg[u * K + t2] > margin) return -1;
+  const a = rootFamily(names[t1]);
+  const b = rootFamily(names[t2]);
+  if (!a || !b || a.fam !== b.fam) return -1;
+  const d = (((a.root - b.root) % 12) + 12) % 12;
+  if (d !== 5 && d !== 7) return -1;
+  const pc = argmax12(bass);
+  if (pc === a.root) return t1;
+  if (pc === b.root) return t2;
+  return -1;
+}
+
 // ---------------------------------------------------------------- Decoding
 
 /** Everything decodeCandidate needs for one segment (kept for the key-prior second pass and analyses). */
@@ -224,6 +354,8 @@ export interface CandidateDecodeInput {
   probs: Float32Array;
   /** btc_majmin frame probabilities in MAJMIN_FAMILIES order [frames × 25] (when the majmin model ran). */
   majminProbs?: Float32Array;
+  /** Log-CQT frames [frames × CQT.nBins] (unshifted), for C10 bass chroma and C8 beat chroma. */
+  cqt?: Float32Array;
 }
 
 export interface CandidateUnit extends DecodeUnit {
@@ -342,7 +474,7 @@ const median = (xs: number[]): number => {
 };
 
 /** Per-unit log emissions [U × K] with the emission mode, the N prior and the key prior applied. */
-export function emissions(space: ClassSpace, input: CandidateDecodeInput, units: CandidateUnit[], avg: Float32Array, opts: CandidateRecognizerOptions, key: KeyEstimate | null): Float64Array {
+export function emissions(space: ClassSpace, input: CandidateDecodeInput, units: CandidateUnit[], avg: Float32Array | Float64Array, opts: CandidateRecognizerOptions, key: KeyEstimate | null, neighbours: number[][] | null = null): Float64Array {
   const K = space.names.length;
   const U = units.length;
   const e = new Float64Array(U * K);
@@ -351,6 +483,11 @@ export function emissions(space: ClassSpace, input: CandidateDecodeInput, units:
       const [f0, f1] = unitFrames(units[u], input.frames, input.frameSec, input.frameStartSec);
       for (let f = f0; f < f1; f++) for (let j = 0; j < K; j++) e[u * K + j] += Math.log(space.probs[f * K + j] + 1e-9);
       for (let j = 0; j < K; j++) e[u * K + j] /= f1 - f0;
+    }
+    if (neighbours && opts.repetition) {
+      // C8 with meanLog: smooth the per-unit geometric-mean probabilities, then back to logs.
+      const g = smoothVectors(e.map(Math.exp), U, K, neighbours, opts.repetition.weight);
+      for (let i = 0; i < U * K; i++) e[i] = Math.log(g[i]);
     }
   } else {
     for (let i = 0; i < U * K; i++) e[i] = Math.log(avg[i] + 1e-9);
@@ -425,12 +562,39 @@ export function decodeCandidate(input: CandidateDecodeInput, opts: CandidateReco
   if (!U) return [];
   const space = classSpace(input, opts);
   const K = space.names.length;
-  const avg = unitMeans(space.probs, input.frames, K, input.frameSec, input.frameStartSec, units);
-  const e = emissions(space, input, units, avg, opts, key);
+  let avg: Float32Array | Float64Array = unitMeans(space.probs, input.frames, K, input.frameSec, input.frameStartSec, units);
+  const unitChroma = (bins: [number, number]) => {
+    if (!input.cqt) throw new Error('candidate decode: bassRoot / repetition need the log-CQT frames');
+    return units.map((u) => chroma(input.cqt!, ...unitFrames(u, input.frames, input.frameSec, input.frameStartSec), bins));
+  };
+  let neighbours: number[][] | null = null;
+  if (opts.repetition) {
+    neighbours = repetitionNeighbours(unitChroma(ALL_BINS), opts.repetition.k);
+    avg = smoothVectors(avg, U, K, neighbours, opts.repetition.weight);
+  }
+  const e = emissions(space, input, units, avg, opts, key, neighbours);
   const scale = space.kind === 'symbols' ? 1 : (opts.decode?.familyFirst?.penaltyScale ?? 1);
   const pen = unitPenalties(units, opts.decode?.changePenalty ?? DEFAULT_DECODE.changePenalty, opts.units, scale);
   const path = viterbi(e, U, K, pen);
-  if (space.kind === 'symbols') return units.map((u, i) => ({ startSec: u.startSec, endSec: u.endSec, strength: u.strength, symbol: input.symbols[path[i]], confidence: avg[i * K + path[i]] }));
+  const out = space.kind === 'symbols' ? units.map((u, i) => ({ startSec: u.startSec, endSec: u.endSec, strength: u.strength, symbol: input.symbols[path[i]], confidence: avg[i * K + path[i]] })) : familyOutput(input, space, units, path);
+  if (opts.bassRoot) {
+    const bass = unitChroma(BASS_BINS);
+    const S = input.symbols.length;
+    const symAvg = unitMeans(input.probs, input.frames, S, input.frameSec, input.frameStartSec, units);
+    for (let u = 0; u < U; u++) {
+      const c = bassRootChoice(space.names, avg, u, path[u], bass[u], opts.bassRoot.margin);
+      if (c < 0 || c === path[u]) continue;
+      let pick = space.members[c][0];
+      for (const j of space.members[c]) if (symAvg[u * S + j] > symAvg[u * S + pick]) pick = j;
+      out[u] = { ...out[u], symbol: input.symbols[pick], confidence: symAvg[u * S + pick] };
+    }
+  }
+  return out;
+}
+
+/** Family classes (C1, C5): per maximal run of one class, the member with the highest mean probability over the run's frames. */
+function familyOutput(input: CandidateDecodeInput, space: ClassSpace, units: CandidateUnit[], path: Int32Array): DecodedUnit[] {
+  const U = units.length;
 
   const S = input.symbols.length;
   const symAvg = unitMeans(input.probs, input.frames, S, input.frameSec, input.frameStartSec, units);

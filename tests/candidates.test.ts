@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { CQT } from '../src/audio/features';
 import { estimateKey } from '../src/music/key';
 import {
+  ALL_BINS,
+  BASS_BINS,
+  bassRootChoice,
   candidateUnits,
+  chroma,
+  repetitionNeighbours,
+  smoothVectors,
   classSpace,
   decodeCandidate,
   emissions,
@@ -496,4 +502,112 @@ describe('replay config: candidate options', () => {
 
 describe('DEFAULT_DECODE', () => {
   it('is still [2, 4, 6]', () => expect(DEFAULT_DECODE.changePenalty).toEqual([2, 4, 6]));
+});
+
+describe('C10 bass-aware root correction', () => {
+  const B = CQT.nBins;
+  /** Log-CQT frames with energy (log 0 = magnitude 1) only in the given bins, silence elsewhere. */
+  const cqtWith = (frames: number, bins: (f: number) => number[]) => {
+    const c = new Float32Array(frames * B).fill(-20);
+    for (let f = 0; f < frames; f++) for (const k of bins(f)) c[f * B + k] = 0;
+    return c;
+  };
+
+  it('builds bass chroma from bins 0-47 (C1 up), quarter-tone bins split between neighbours', () => {
+    expect(BASS_BINS).toEqual([0, 48]);
+    const c = cqtWith(2, () => [14, 15, 60]); // G1, G1 + quarter tone, a bin above the bass range
+    const ch = chroma(c, 0, 2, BASS_BINS);
+    expect(ch[7]).toBeCloseTo(2 * 1.5, 4);
+    expect(ch[8]).toBeCloseTo(2 * 0.5, 4);
+    expect(ch.reduce((a, b) => a + b, 0)).toBeCloseTo(4, 4); // bin 60 is outside the bass bins
+    expect(chroma(c, 0, 2, ALL_BINS)[6]).toBeCloseTo(2, 4); // bin 60 = semitone 30 = F#
+  });
+
+  it('chooses between fifth-related top-2 classes of one family by the bass root, only within the margin', () => {
+    const names = ['C', 'G', 'Am', 'Gm', 'N'];
+    const bass = (pc: number) => Float64Array.from({ length: 12 }, (_, i) => (i === pc ? 1 : 0.1));
+    const avg = [0.45, 0.4, 0.1, 0.03, 0.02];
+    expect(bassRootChoice(names, avg, 0, 0, bass(7), 0.15)).toBe(1); // bass G → G
+    expect(bassRootChoice(names, avg, 0, 1, bass(0), 0.15)).toBe(0); // bass C → C
+    expect(bassRootChoice(names, avg, 0, 0, bass(4), 0.15)).toBe(-1); // bass matches neither: keep
+    expect(bassRootChoice(names, avg, 0, 0, bass(7), 0.03)).toBe(-1); // outside the margin
+    expect(bassRootChoice(names, avg, 0, 2, bass(7), 0.15)).toBe(-1); // decoded class not in the top 2
+    expect(bassRootChoice(names, [0.45, 0.02, 0.4, 0.1, 0.03], 0, 0, bass(9), 0.15)).toBe(-1); // C vs Am: not a fifth
+    expect(bassRootChoice(names, [0.45, 0.02, 0.1, 0.4, 0.03], 0, 0, bass(7), 0.15)).toBe(-1); // C vs Gm: different family
+    expect(bassRootChoice(['F', 'C7', 'N'], [0.4, 0.45, 0.15], 0, 1, bass(5), 0.15)).toBe(0); // F vs C7 (fifth, both major family)
+  });
+
+  it('corrects the decoded unit in the decode path and needs the log-CQT', () => {
+    const symbols = ['C', 'G', 'N'];
+    const rows = Array.from({ length: 8 }, () => ({ C: 0.48, G: 0.42 }));
+    const cqt = cqtWith(8, () => [14]); // bass G1
+    const x = { ...input(symbols, matrix(symbols, rows), beatUnits(4, 2)), cqt };
+    expect(decodeCandidate(x, {}).map((u) => u.symbol)).toEqual(['C', 'C', 'C', 'C']);
+    expect(decodeCandidate(x, { bassRoot: { margin: 0.15 } }).map((u) => u.symbol)).toEqual(['G', 'G', 'G', 'G']);
+    expect(decodeCandidate(x, { bassRoot: { margin: 0.05 } }).map((u) => u.symbol)).toEqual(['C', 'C', 'C', 'C']);
+    expect(decodeCandidate(x, { bassRoot: { margin: 0.15 }, emission: 'meanLog', pitchShift: [-1, 1] }).map((u) => u.symbol)).toEqual(['G', 'G', 'G', 'G']);
+    expect(() => decodeCandidate(input(symbols, matrix(symbols, rows), beatUnits(4, 2)), { bassRoot: { margin: 0.15 } })).toThrow(/need the log-CQT/);
+  });
+});
+
+describe('C8 repetition smoothing', () => {
+  const B = CQT.nBins;
+  /** 12 units of 2 frames; unit u sounds pitch class pcs[u] in every octave. */
+  const chromaCqt = (pcs: number[]) => {
+    const c = new Float32Array(pcs.length * 2 * B).fill(-20);
+    pcs.forEach((pc, u) => {
+      for (let f = 2 * u; f < 2 * u + 2; f++) for (let k = 2 * pc; k < B; k += 24) c[f * B + k] = 0;
+    });
+    return c;
+  };
+
+  it('finds the k most similar units by chroma cosine, never within ±4', () => {
+    const pcs = Array.from({ length: 12 }, (_, u) => u);
+    pcs[9] = 2; // unit 9 repeats unit 2
+    const cqt = chromaCqt(pcs);
+    const ch = pcs.map((_, u) => chroma(cqt, 2 * u, 2 * u + 2, ALL_BINS));
+    const nb = repetitionNeighbours(ch, 2);
+    expect(nb[2][0]).toBe(9);
+    expect(nb[9][0]).toBe(2);
+    for (let u = 0; u < 12; u++) for (const j of nb[u]) expect(Math.abs(j - u)).toBeGreaterThan(4);
+    expect(repetitionNeighbours([new Float64Array(12), new Float64Array(12)], 2)).toEqual([[], []]);
+  });
+
+  it('mixes (1 − w)·own + w·mean(neighbours)', () => {
+    const v = Float32Array.from([1, 0, 0, 1, 0.5, 0.5]);
+    expect([...smoothVectors(v, 3, 2, [[1, 2], [], [0]], 0.5)]).toEqual([0.625, 0.375, 0, 1, 0.75, 0.25]);
+  });
+
+  it('pulls an ambiguous unit toward its repetition, with log-mean and meanLog emissions', () => {
+    const symbols = ['C', 'G', 'N'];
+    const pcs = Array.from({ length: 12 }, (_, u) => u);
+    pcs[9] = 2;
+    const rows = Array.from({ length: 12 }, (_, u) => (u === 2 ? { C: 0.42, G: 0.5 } : u === 9 ? { C: 0.9, G: 0.05 } : u % 2 ? { C: 0.6, G: 0.3 } : { C: 0.3, G: 0.6 })).flatMap((r) => [r, r]);
+    const units = beatUnits(12, 2).map((u) => ({ ...u, strength: 2 as const }));
+    const x = { ...input(symbols, matrix(symbols, rows), units), cqt: chromaCqt(pcs) };
+    const flat = { decode: { changePenalty: [0, 0, 0] as [number, number, number] } };
+    expect(decodeCandidate(x, flat)[2].symbol).toBe('G');
+    expect(decodeCandidate(x, { ...flat, repetition: { k: 1, weight: 0.5 } })[2].symbol).toBe('C');
+    expect(decodeCandidate(x, { ...flat, emission: 'meanLog' })[2].symbol).toBe('G');
+    expect(decodeCandidate(x, { ...flat, emission: 'meanLog', repetition: { k: 1, weight: 0.5 } })[2].symbol).toBe('C');
+    // Unit 9 (clear C) stays C.
+    expect(decodeCandidate(x, { ...flat, repetition: { k: 1, weight: 0.5 } })[9].symbol).toBe('C');
+  });
+
+  it('config: accepts the C10 and C8 settings and rejects malformed ones', () => {
+    for (const r of [{ bassRoot: { margin: 0.15 } }, { bassRoot: { margin: 0.3 } }, { repetition: { k: 2, weight: 0.3 } }, { repetition: { k: 4, weight: 0.5 } }])
+      expect(parseReplayConfig({ recognizer: r }).recognizer).toEqual(r);
+    expect(hasCandidateOptions({ bassRoot: { margin: 0.15 } })).toBe(true);
+    expect(hasCandidateOptions({ repetition: { k: 2, weight: 0.3 } })).toBe(true);
+    const bad: [unknown, RegExp][] = [
+      [{ bassRoot: { margin: 2 } }, /bassRoot.margin must be a number in \[0, 1\]/],
+      [{ bassRoot: { margin: 0.1, bins: 48 } }, /unknown field recognizer.bassRoot.bins/],
+      [{ repetition: { k: 0, weight: 0.3 } }, /repetition.k must be an integer/],
+      [{ repetition: { k: 2.5, weight: 0.3 } }, /repetition.k must be an integer/],
+      [{ repetition: { k: 2, weight: 0 } }, /repetition.weight must be a number in \(0, 1\]/],
+      [{ repetition: { k: 2 } }, /repetition.weight/],
+      [{ repetition: { k: 2, weight: 0.3, exclude: 4 } }, /unknown field recognizer.repetition.exclude/],
+    ];
+    for (const [r, re] of bad) expect(() => parseReplayConfig({ recognizer: r })).toThrow(re);
+  });
 });

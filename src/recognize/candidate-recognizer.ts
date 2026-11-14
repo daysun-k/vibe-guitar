@@ -105,7 +105,7 @@ export class CandidateRecognizer {
     const t3 = now();
     const bpb = estimateBeatsPerBar(beats, downbeats);
     const units = beats.length >= 4 ? unitsFromBeats(startSec, endSec, beats, downbeats, bpb) : fixedUnits(startSec, endSec);
-    const input: CandidateDecodeInput = { frames: f.cqtFrames, frameSec: CQT_FRAME_SEC, frameStartSec: startSec, units, symbols: this.symbols, probs, majminProbs };
+    const input: CandidateDecodeInput = { frames: f.cqtFrames, frameSec: CQT_FRAME_SEC, frameStartSec: startSec, units, symbols: this.symbols, probs, majminProbs, cqt: f.cqt };
     const decoded = decodeCandidate(input, this.opts, null);
     const t4 = now();
     const analysis: SegmentAnalysis = { startSec, endSec, beats, downbeats, units: decoded, probs: keepProbs ? probs : undefined, timingsMs: { features: t1 - t0, beats: t2 - t1, chords: t3 - t2, decode: t4 - t3 } };
