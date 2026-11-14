@@ -184,7 +184,7 @@ export interface BoundaryMean {
 }
 
 /** Majmin-reduced label; a chord outside the reduction keeps its own symbol, so changes into and out of it count. */
-const majminLabel = (symbol: string): string => reduceSymbol(symbol, 'majmin') ?? `other:${symbol}`;
+export const majminLabel = (symbol: string): string => reduceSymbol(symbol, 'majmin') ?? `other:${symbol}`;
 
 /** Greedy in time order; for points on a line with a symmetric window this is a maximum one-to-one matching. */
 export function matchChanges(ref: number[], est: number[], windowSec = BOUNDARY_WINDOW_SEC): number {
