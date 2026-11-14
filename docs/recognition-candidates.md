@@ -270,7 +270,7 @@ commit 6638ae0, config `{"emission":"meanLog","pitchShift":[-1,1]}`, packaged mo
 | boundary precision (+-250 ms) | 93.4 | 93.5 | not lower by more than 2.0 -> holds |
 
 - Coverage and evaluated seconds were identical in both arms. Sensitivity: Student t half-width 0.80 pp;
-  13 songs up, 2 down, 3 unchanged; leave-one-out mean delta at least +0.73 pp; worst song -0.66 pp.
+  by exact sign 14 songs up, 2 down and 2 with no change (13 up, 2 down, 3 unchanged when deltas are rounded to 0.01 pp); leave-one-out mean delta at least +0.73 pp; worst song -0.66 pp.
 - Unchanged-aligner diagnostic on the TEST baseline replay: 18/18 songs scored; median distance from the
   official map 44 ms, one song above 0.1 s. Maps stayed frozen.
 - The original recognizer scores 82.3 on this recording vs 83.1 in the official v2 result made from an
