@@ -171,3 +171,20 @@ root 83.9 -> 85.5, sevenths 70.1 -> 71.3, boundary F 76.0 -> 76.7 (precision 86.
 +1.54; smallest leave-one-out delta +1.28 (without billboard-0891-the-who-happy-jack). No group lower
 against the incumbent or the original baseline; worst song -4.56 pp (iron butterfly); resources within
 limits. Cumulative against the original baseline (main defaults): +2.41 pp mean majmin (81.0 -> 83.4).
+
+Pass 3, incumbent = inc2-meanLog-shift1 (`{"recognizer":{"emission":"meanLog","pitchShift":[-1,1]}}`), charts of
+pass-2 c6-shift-1; alarms against the incumbent and the original baseline:
+- 2026-11-14, da21561, c2-1.5-3-4.5: +0.37 [-0.47], Billboard +0.28, min LOO +0.03, precision -1.96; not eligible (P1, P2); group alarm moderate; 1 song loses 5-10 pp; rejected.
+- 2026-11-14, da21561, c2-1-2-3: +0.71 [-0.45], Billboard +0.60, min LOO +0.20, precision -4.55; not eligible (P2, P5); group alarm moderate; 1 song loses 5-10 pp; rejected.
+- 2026-11-14, da21561, c2-0.5-1-1.5: +0.43 [-1.06], Billboard +0.19, min LOO -0.13, precision -8.13; not eligible (P1, P2, P4, P5); group alarm moderate; 2 songs lose 5-10 pp; rejected.
+- 2026-11-14, da21561, c2-0-0-0: -1.00 [-2.70], Billboard -1.21, min LOO -1.56, precision -18.54; not eligible (P1, P2, P3, P4, P5); group alarm billboard, complex, isophonics-btc-overlap, moderate; 5 songs lose 5-10 pp; rejected.
+- 2026-11-14, da21561, c1-scale1: -0.15 [-0.56], Billboard -0.22, min LOO -0.31, precision -0.08; not eligible (P1, P2, P3, P4, P5); group alarm billboard, moderate, simple; rejected.
+- 2026-11-14, da21561, c1-scale1.25: -1.00 [-2.20], Billboard -1.21, min LOO -1.15, precision +0.95; not eligible (P1, P2, P3, P4, P5); group alarm billboard, complex, isophonics-btc-overlap, moderate, simple; song loss >= 10 pp pilot-talking-heads-and-she-was; rejected.
+- 2026-11-14, U: skipped by its gate (same record as pass 1); not scored.
+- 2026-11-14, da21561, c5-familyDecide: -0.52 [-2.15], Billboard -1.05, min LOO -0.92, precision +0.31; not eligible (P1, P2, P3, P4, P5, P6); group alarm billboard, complex, moderate; song loss >= 10 pp billboard-0879-run-d-m-c-walk-this-way; 2 songs lose 5-10 pp; resources packagedBytes, medianAnalyzeMs; rejected.
+- 2026-11-14, da21561, c5-average: -0.21 [-1.22], Billboard -0.50, min LOO -0.56, precision +0.43; not eligible (P1, P2, P3, P4, P5, P6); group alarm billboard, complex, moderate; 2 songs lose 5-10 pp; resources packagedBytes, medianAnalyzeMs; rejected.
+- 2026-11-14, C7: skipped by its gate (same record as pass 1); not scored.
+- 2026-11-14, da21561, c4-bonus0.5: +0.04 [-0.25], Billboard +0.03, min LOO -0.07, precision +0.25; not eligible (P1, P2, P4, P5); group alarm complex, moderate; rejected.
+- 2026-11-14, da21561, c4-bonus1.0: +0.07 [-0.24], Billboard +0.03, min LOO -0.07, precision +0.42; not eligible (P1, P2, P4, P5); group alarm complex, moderate; rejected.
+- Main list converged after pass 3 (no promotion); incumbent inc2 (`{"emission":"meanLog","pitchShift":[-1,1]}`,
+  DEV majmin 83.41). Scored settings: 28 of 50.
