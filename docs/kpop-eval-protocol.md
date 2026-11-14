@@ -181,5 +181,75 @@ trial compares baseline and candidate on a new capture with the same references)
 - A change to any of these after the first score is not allowed; a change before scoring is recorded below with its
   reason, and the manifest is regenerated.
 
+## Amendment 1 (2026-11-14, before any score): chord-order comparison
+Fixed before any recognizer output of these songs was opened or scored. It replaces the sections it names; everything
+else above stays in force.
+
+**Why.** All 14 captures passed R1 (replay identical to the live chart, 14/14, no model-hash warning). The timing gate
+failed for all 12 eval songs (it passed only the reserve iu-autumn): within-one-bar shares 0.00-0.77, and for 3 songs the
+displaced-line control was not beaten. Diagnosis: input defects in 3 songs (iu-lovepoem's base sheet stores the song
+twice; jbj-cherry's key: the sheets' written keys and capos say A, the chroma fit said E; iu-night's beat tracker ran at
+double tempo), and in the others the chord rows' first chords seem to start 1-3 bars before the sung lines, so the
+gate's premise (a row's first chord starts with its lyric line) does not hold for these sheets. A prototype that
+anchored rows to the lyric times and validated on held-out blocks of 4 lines with a 1-line buffer also failed (only
+iu-autumn reached 0.8). Web chord sheets could not be timed reliably here, and the user cannot judge chords by ear, so
+listening confirmation is not available. The user chose, on 2026-11-14, "코드 순서 비교로 진행 (Recommended)": compare the
+order of chords instead of their timing, recompute Billboard the same way, leave tied sheet disagreements uncounted,
+mark timing-dependent metrics as reference only, and fix the rules in this document before any score.
+
+**Primary metric (replaces "Scoring" and "Decision rule" above).** `npm run sequence-eval` (`src/eval/sequence.ts`):
+reference and chart are each reduced to a sequence of chord tokens (the majmin reduction of the boundary metric; N
+dropped; consecutive equal tokens collapsed; a reference X is a wildcard that matches anything and is never counted),
+aligned by global edit distance (substitution, insertion and deletion cost 1). Per song: matches, recall (matches /
+reference tokens), precision (matches / chart tokens) and F, in three views: majmin, root, sevenths (sevenths-level
+labels; unresolved sevenths are wildcards). Error anatomy over the alignment: fifth-related root, parallel, relative,
+semitone root, other substitutions, deletions and insertions. Song means, per-artist means, song-mean 95% percentile
+bootstrap (10 000 resamples, seed 7007), leave-one-artist-out.
+
+**References (replaces steps 4-6 of "Reference construction").** The sheet consensus sequence itself, no timing:
+majority questions take the majority candidate; tie questions become wildcards; a sheet that holds the song twice
+(two halves agreeing >= 0.98) keeps the half paired with the synced lyrics. Key: only lineages that state a key or capo
+vote (converted to sounding pitch; a sheet without either does not vote); a strict stated majority that equals the
+chroma best shift is used; otherwise the consensus is aligned (frozen unanchored timing tool, default parameters) under
+each candidate shift and the shift with the higher synced-lyric agreement share wins, the chroma shift when the shares
+differ by less than 0.10. This uses no recognizer output. No user confirmation page. LAB files with dummy one-second segments in sequence order under
+`~/vgt-kpop-eval/gt/sequence/{majmin,sevenths}/vgt21-kpop-v1/`, frozen by the manifest
+`~/vgt-kpop-eval/gt/sequence/manifest-vgt21-kpop-v1.json` (sha256
+`fb685c699203b685ea272b92be757d5d7e2533d4be53cdd405265c7b629022c3`; generator
+`~/vgt-kpop-eval/tools/sheets/sequence_refs.py` sha256 26552273ef059f21...).
+Chosen keys (shift from the base sheet): jbj-cherry 0 and akmu-200 0 by the synced-lyric tie-break (chroma had -5 for
+both), all others the chroma shift. Majmin wildcards: 12.9% of the K-pop reference tokens (song mean). A K-pop reference
+is compared with the whole chart (`--whole-chart`, offset 0, rate 1).
+
+**Billboard side by side.** The same command on the 18 held-out TEST songs with the official v2 charts (original
+recognizer) and the official v2 maps, the reference cut to the part of the song the chart covers. These are the only
+Billboard charts that still exist (the VGT-18 TEST replay charts were deleted with the audio), so the domain comparison
+uses the original recognizer in both sets: K-pop arm A = replay `{}`. With a map, chart chords outside the annotated
+part of the song are not counted (neither matches nor insertions). K-pop arm B (shipped recognizer) is reported next
+to it with its A-to-B change.
+
+**Decision rule (replaces the one above).** G = Billboard TEST song-mean majmin F - K-pop song-mean majmin F, both arm A,
+with both song sets resampled independently. Worth a small trial: G >= 5.0 pp, its 95% interval above 0, and G >= 3.0 pp
+with any one artist left out. Not now: G < 2.0 pp and the interval's upper end below 5.0 pp. Inconclusive: anything else,
+or when wildcards exceed 15% of the K-pop reference tokens (song mean). Chord order is a more lenient measure than
+time-weighted accuracy, and web sheets are simpler than the curated Billboard annotations; the results state both limits.
+
+**Reference only (never in the decision).** Time-weighted majmin/root/sevenths, chord-change precision and the top-k
+family oracle need a timed reference; they are computed on the lyric-anchored alignment of the same references (prototype aligner
+`~/vgt-kpop-eval/tools/proto/`: `consensus_proto.py` 9d068c2837e9b649, `gt_anchor.py` a1f81edad39c1ae1, `proto_run.py` 1bea6306c6d0edcb, `sounding_keys.py` a108e867f18266b8) and labelled "reference only: timing validation failed". The alignment gate, spot checks and the confirmation page above no
+longer apply.
+
 ## Recorded during implementation
-(none yet)
+All entries below were made before any recognizer output of these songs was opened or scored.
+- 2026-11-14, PR #40 review r2 follow-up R2-F1: the alignment gate's displaced-line control and permutation now use the
+  original lyric-line order over every paired line (a line without its own aligned first chord stays a miss in every
+  arrangement), as this protocol already describes; `gt_validate.py` sha256 540e35cdad876bdb... -> f78f0459245799c4...
+- 2026-11-14, spot checks: the unit is a maximal run of at least 2 consecutive agreed items (its first 4 items), not a
+  whole agreed line, because in jbj-karaoke every line contains a question item; draw = `random.Random(2111)` over each
+  song's sorted run start item ids, songs in the order of the table, one check per song. With the final parser no song
+  is single-lineage, so no song gets a second check.
+- 2026-11-14, confirmation page: a majority question whose occurrences disagree on the majority candidate is
+  pre-selected by the candidate most occurrences hold, then by lineage votes, otherwise not pre-selected (it then
+  counts as a tie). Timing items are the timing tool's low-confidence segments (consecutive ones merged) and skips.
+- The inputs manifest was regenerated with these tool hashes and the confirmation-page tools
+  (`~/vgt-kpop-eval/gt/inputs-manifest.json`, sha256 1d4844a5747c4648755f903520ef75f7130a7ceab4cb0531d7e80364e7a9b148).
