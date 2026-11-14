@@ -277,3 +277,43 @@ describe('play model marks and the 불확실한 곳 표시 switch', () => {
     expect(normalizeSettings({ showUncertain: false }).showUncertain).toBe(false);
   });
 });
+
+describe('lane: a visible stretch is always drawn (review vgt19-flags-ui-r1 F1)', () => {
+  // 120 BPM 4/4: bars of 2 s, beats (= big beats) of 0.5 s; one auto G 0–8 s.
+  const g = (s: UncertainSpan): Chart => chart([[0, 'G']], [[0, 8]], [s]);
+  const lane = (s: UncertainSpan) => {
+    const m = buildPlayModel(g(s), { level: 'novice', capo: 0 }, null);
+    expect(m.uncertain).toHaveLength(1);
+    return { m, bars: m.bars.map((b) => b.segments.map((x) => [x.startSec, x.endSec, x.flag])) };
+  };
+
+  it('a bound within 0.1 s after the bar start snaps to it (G 0–8, Em at 0.05–1)', () => {
+    const { m, bars } = lane(span(0.05, 1, 'G', 'Em'));
+    expect(validateChart(g(span(0.05, 1, 'G', 'Em'))).ok).toBe(true);
+    expect(frameAt(m, 0.5).uncertain).toBe(0);
+    expect(bars[0]).toEqual([[0, 1, 0], [1, 2, -1]]);
+  });
+
+  it('a bound within 0.1 s before the bar end snaps to it', () => {
+    expect(lane(span(2.5, 3.95, 'G', 'Em')).bars[1]).toEqual([[2, 2.5, -1], [2.5, 4, 0]]);
+  });
+
+  it('a stretch shorter than one big beat still gets its own flagged segment', () => {
+    const { m, bars } = lane(span(5.2, 5.4, 'G', 'Em'));
+    expect(bars[2]).toEqual([[4, 5.2, -1], [5.2, 5.4, 0], [5.4, 6, -1]]);
+    expect(m.bars[2].segments[1].weight).toBeCloseTo(0.4);
+  });
+
+  it('a stretch covering a whole bar flags that bar, which is not drawn as a repeat', () => {
+    const { m, bars } = lane(span(6, 8, 'G', 'Em'));
+    expect(bars[3]).toEqual([[6, 8, 0]]);
+    expect(m.bars[3].repeat).toBe(false);
+    expect(bars.slice(0, 3).flat().every(([, , f]) => f === -1)).toBe(true);
+  });
+
+  it('a sliver under 0.1 s past a bar line is drawn only in the bar that holds the stretch', () => {
+    const { bars } = lane(span(1, 2.05, 'G', 'Em'));
+    expect(bars[0]).toEqual([[0, 1, -1], [1, 2, 0]]);
+    expect(bars[1]).toEqual([[2, 4, -1]]);
+  });
+});

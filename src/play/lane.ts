@@ -56,6 +56,9 @@ const isActive = (e: ArrangedEvent | undefined, t: number) => !!e && t >= e.star
  * of a different event, so its change marker stays visible.
  * Uncertain stretches (`flags`) cut segments at their own bounds, so a stretch covering only part of
  * a bar or an event is drawn at its own beats; segments inside one carry its index in `flag`.
+ * Unlike event cuts, a stretch is never lost: inside each bar its bounds within 0.1 s of the bar's
+ * start or end snap to that edge, and a cut anywhere else is kept however short the stretch is. Only a
+ * sliver under 0.1 s of a stretch that has at least 0.1 s in another bar is left out of this bar.
  */
 export function buildLane(a: Arrangement, t: Timing, big: BigBeat, toSec: number, keyOf: (i: number) => string, changed: (i: number) => boolean = () => false, flags?: readonly { fromSec: number; toSec: number }[]): LaneBar[] {
   const from = a.events.length ? Math.min(0, a.events[0].startSec) : 0;
@@ -70,14 +73,15 @@ export function buildLane(a: Arrangement, t: Timing, big: BigBeat, toSec: number
       const i = findEventIndex(a.events, sec);
       return isActive(a.events[i], sec) && !a.events[i].rest ? i : -1;
     };
-    const flagAt = (sec: number): number => (flags ? flags.findIndex((f) => sec >= f.fromSec && sec < f.toSec) : -1);
+    const barFlags = flagsInBar(flags ?? [], b.startSec, b.endSec);
+    const flagAt = (sec: number): number => barFlags.find((f) => sec >= f.fromSec && sec < f.toSec)?.index ?? -1;
     const cuts = [b.startSec];
     for (const e of a.events) {
       for (const x of [e.startSec, e.endSec]) if (x > b.startSec + 0.1 && x < b.endSec - 0.1) cuts.push(x);
     }
     let flagCut = false;
-    for (const f of flags ?? []) {
-      for (const x of [f.fromSec, f.toSec]) if (x > b.startSec + 0.1 && x < b.endSec - 0.1) {
+    for (const f of barFlags) {
+      for (const x of [f.fromSec, f.toSec]) if (x > b.startSec + 1e-6 && x < b.endSec - 1e-6) {
         cuts.push(x);
         flagCut = true;
       }
@@ -86,7 +90,7 @@ export function buildLane(a: Arrangement, t: Timing, big: BigBeat, toSec: number
     const parts: { id: number; flag: number; st: number }[] = [];
     for (const c of cuts) {
       const id = chordAt(c + 0.01);
-      const flag = id < 0 ? -1 : flagAt(c + 0.01);
+      const flag = id < 0 ? -1 : flagAt(c + 1e-6);
       const last = parts[parts.length - 1];
       if (!last || last.id !== id || last.flag !== flag) parts.push({ id, flag, st: c });
     }
@@ -104,6 +108,27 @@ export function buildLane(a: Arrangement, t: Timing, big: BigBeat, toSec: number
     prevEvent = segments[segments.length - 1]?.event ?? -1;
     return { ...b, segments, repeat };
   });
+}
+
+const EDGE_SNAP_SEC = 0.1;
+
+/**
+ * The parts of uncertain stretches inside one bar, with bounds near the bar's edges snapped to them
+ * (see buildLane). `index` is the stretch's index in `flags`.
+ */
+export function flagsInBar(flags: readonly { fromSec: number; toSec: number }[], barStart: number, barEnd: number): { index: number; fromSec: number; toSec: number }[] {
+  const out: { index: number; fromSec: number; toSec: number }[] = [];
+  flags.forEach((f, index) => {
+    let from = Math.max(f.fromSec, barStart);
+    let to = Math.min(f.toSec, barEnd);
+    if (to <= from) return;
+    const inBar = to - from;
+    if (inBar < EDGE_SNAP_SEC && f.toSec - f.fromSec - inBar >= EDGE_SNAP_SEC) return; // drawn in its other bar
+    if (from - barStart < EDGE_SNAP_SEC) from = barStart;
+    if (barEnd - to < EDGE_SNAP_SEC) to = barEnd;
+    out.push({ index, fromSec: from, toSec: to });
+  });
+  return out;
 }
 
 const normText = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
