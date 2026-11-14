@@ -1,5 +1,8 @@
-/** Shared fixtures for tests/audio-dump.test.ts and tests/replay.test.ts. */
+/** Shared fixtures for tests/audio-dump.test.ts, tests/replay.test.ts and tests/baseline-analysis.test.ts. */
+import { mkdirSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
 import { MODEL_SAMPLE_RATE } from '../src/audio/features';
+import { CAPTURE_SAMPLE_RATE, CAPTURE_SCHEMA } from '../src/replay/capture';
 import { ListeningSession } from '../src/recognize/session';
 
 /** Deterministic noise-plus-tone audio (non-trivial features). */
@@ -34,4 +37,32 @@ export function liveLikeSession(): ListeningSession {
     }
   }
   return s; // the last stretch is still the open segment
+}
+
+/**
+ * Writes a capture folder as the audio-dump receiver does: <audio>/<youtubeId>/<captureId>/meta.json +
+ * seg-<i>.f32 (little-endian Float32 at the capture rate).
+ */
+export function writeCaptureFolder(audioDir: string, youtubeId: string, segments: { startSec: number; samples: Float32Array }[], durationSec: number, captureId = '2026-11-14T00-00-00-000Z'): string {
+  const dir = path.join(audioDir, youtubeId, captureId);
+  mkdirSync(dir, { recursive: true });
+  const recording = { source: 'youtube' as const, id: youtubeId, title: youtubeId, artist: 'synthetic' };
+  segments.forEach((s, i) => writeFileSync(path.join(dir, `seg-${i}.f32`), Buffer.from(s.samples.buffer, s.samples.byteOffset, s.samples.byteLength)));
+  const meta = {
+    schema: CAPTURE_SCHEMA,
+    recordingKey: `youtube:${youtubeId}`,
+    recording,
+    durationSec,
+    sessionCoverage: [],
+    chart: { schemaVersion: 1, recording, timing: { bpm: 120, beatsPerBar: 4, beatUnit: 4, firstDownbeatSec: 0 }, events: [], coverage: [], provenance: { createdBy: 'recognizer', createdAt: '1970-01-01T00:00:00.000Z' } },
+    build: { commit: 'test', dirty: false },
+    models: {},
+    capturedAt: '2026-11-14T00:00:00.000Z',
+    sampleRate: CAPTURE_SAMPLE_RATE,
+    captureId,
+    receivedAt: '2026-11-14T00:00:00.000Z',
+    segments: segments.map((s, i) => ({ startSec: s.startSec, samples: s.samples.length, file: `seg-${i}.f32` })),
+  };
+  writeFileSync(path.join(dir, 'meta.json'), JSON.stringify(meta));
+  return dir;
 }

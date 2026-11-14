@@ -64,6 +64,13 @@ async function main(): Promise<void> {
   const meta = JSON.parse(readFileSync(path.join(modelsDir, MODEL_FILES.btcMeta), 'utf8')) as BtcMeta;
   const models: ReplayModels = { beat: await make(MODEL_FILES.beat), chords: await make(MODEL_FILES.chords), chordMeta: meta.models.large };
   const modelSha = Object.fromEntries([MODEL_FILES.beat, MODEL_FILES.chords, MODEL_FILES.btcMeta].map((f) => [f, sha256File(path.join(modelsDir, f))]));
+  // btc_majmin.onnx is not packaged (captures record no hash for it): loaded and hashed only for C5,
+  // recorded apart from the packaged files so the live-bytes check stays about those.
+  const candidateModels: Record<string, string> = {};
+  if (config.recognizer.majmin) {
+    models.majmin = { runner: await make(MODEL_FILES.chordsMajmin), meta: meta.models.majmin };
+    candidateModels[MODEL_FILES.chordsMajmin] = sha256File(path.join(modelsDir, MODEL_FILES.chordsMajmin));
+  }
   const commit = git('rev-parse', 'HEAD');
   const dirty = git('status', '--porcelain', '--untracked-files=no') !== '';
   const tool = `vibe-guitar offline replay (${runtime})${config.label ? `: ${config.label}` : ''}`;
@@ -77,7 +84,9 @@ async function main(): Promise<void> {
     writeFileSync(path.join(outDir, `${c.key}.json`), `${JSON.stringify(r.chart, null, 2)}\n`);
     const modelMismatch = modelHashMismatches(c.meta.models ?? {}, modelSha);
     const audioSec = segments.reduce((s, g) => s + g.samples.length, 0) / c.meta.sampleRate;
-    songs.push({ key: c.key, captureId: c.captureId, captureBuild: c.meta.build, segments: segments.length, analysedSegments: r.analysedSegments, audioSec, events: r.chart.events.length, ms: { ...r.ms, total: Date.now() - t0 }, modelMismatch });
+    // C4: the global key the second decode pass used.
+    const keyPrior = r.key === undefined ? {} : { keyPrior: r.key ? { tonic: r.key.tonicName, mode: r.key.mode, margin: r.key.margin } : null };
+    songs.push({ key: c.key, captureId: c.captureId, captureBuild: c.meta.build, segments: segments.length, analysedSegments: r.analysedSegments, audioSec, events: r.chart.events.length, ms: { ...r.ms, total: Date.now() - t0 }, modelMismatch, ...keyPrior });
     console.log(`${c.key} ${c.captureId}: ${segments.length} segments, ${audioSec.toFixed(1)} s, ${r.chart.events.length} events, ${Date.now() - t0} ms`);
     for (const x of modelMismatch) console.warn(`WARNING ${c.key}: ${x.file} loaded ${x.loaded.slice(0, 12)}, capture recorded ${x.recorded ? x.recorded.slice(0, 12) : 'no hash'}: the replay does not run the live model bytes`);
   }
@@ -91,6 +100,7 @@ async function main(): Promise<void> {
     node: process.version,
     platform: `${process.platform}/${process.arch}`,
     models: modelSha,
+    ...(Object.keys(candidateModels).length ? { candidateModels } : {}),
     audio: path.resolve(args.audio),
     songs,
     skipped,

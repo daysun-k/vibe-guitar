@@ -21,7 +21,31 @@ vs frame). Those analyses are recorded below under "Baseline analyses"; they nev
 and only apply the gates written in the candidate entries.
 
 ## Baseline analyses
-(to be filled before the first candidate is scored)
+Replay reproduction on the new DEV recording (2026-11-14; 23/23 songs captured with the dump build at
+9cd43e1, one capture each, no failures):
+- R1 identity (main 1513b58 replay vs the live chart of the same capture): 23/23 identical (max
+  confidence difference 0.000).
+- R2 drift (replayed baseline vs `officialChartScore`, frozen maps): song-mean majmin 81.01 vs 81.28
+  (-0.27, limit 1.0: met); one song above the 5-point per-song limit, `billboard-0879-run-d-m-c-walk-this-way`
+  +6.29. Investigated: not alignment (the unchanged aligner picks an offset within 60 ms of the frozen map),
+  not replay (R1 identical); the chart content differs between the official and the new capture (60 vs 53
+  events, 87.6% time agreement, flips on ambiguous passages), i.e. capture-to-capture variability. The
+  user chose to proceed with the new recording: "새 녹음으로 진행 (Recommended)". Maps stay frozen.
+
+Baseline analysis (`npm run baseline-analysis`, main defaults, commit 68cdf50, 23 DEV songs, song means;
+`baseline-analysis.json` in the briefing folder):
+- Error anatomy (share of evaluated majmin time): exact 81.0%, fifth-related root 6.9%, other 4.4%,
+  parallel 2.9%, relative 2.6%, semitone root 0.7%, auto chord where the reference is N 0.96%, false N
+  (auto N where the reference has a chord) 0.51%.
+- BTC top-k family oracle per beat unit (C1 family classes): reference family top-1 81.4%, within top-2
+  91.5%, within top-3 94.7%.
+- Unit-grid oracle ceilings (majority reference label per unit): beat units 97.90, half-beat units 98.12
+  (+0.22 pp), frame units 99.06.
+- btc_majmin vs the large model (per beat unit, 25 majmin families): the family argmax differs in 9.2%
+  of units (8.8% of evaluated time); per-unit argmax majmin WCSR large 81.43, majmin model 80.91, oracle
+  picking whichever matches 84.56 (+3.13 pp over the large model).
+- Gates: U skipped (half-beat ceiling +0.22 pp < 1 pp); C7 skipped (false N 0.51% < 1%); C5 gate passed
+  (oracle +3.13 pp >= 1 pp).
 
 ## Candidates
 
@@ -100,5 +124,128 @@ and only apply the gates written in the candidate entries.
 - A tuning-mismatch candidate only if the baseline analyses show detuning errors (earlier diagnostics
   found none).
 
+### Appended after the main list converged (pass 3, 2026-11-14; settings fixed before scoring)
+Scored in pass 4 against incumbent inc2 (`{"emission":"meanLog","pitchShift":[-1,1]}`), C10 then C8;
+both compose with the incumbent options and are off unless set.
+
+#### C10 Bass-aware root correction
+- Evidence: fifth-related root errors are 6.9% of evaluated majmin time on DEV, the largest error
+  type (baseline analysis).
+- Method (`recognizer.bassRoot`): per decode unit, bass chroma from the two lowest CQT octaves, bins
+  0-47 = C1 (32.7 Hz) to a quarter tone above B2 (about 127 Hz): linear magnitude (exp of the log-CQT,
+  unshifted) summed by pitch class over the unit's frames, quarter-tone bins split between their two
+  semitones. Only in units where the top-2 decode classes by mean probability (after the incumbent's
+  processing: pitch-shift averaging, and C8 smoothing when set) are fifth-related (roots 7 semitones
+  apart, both in the major family maj/7/maj7 or both minor min/m7), their probabilities are within the
+  margin, and the decoder chose one of them: output the one whose root is the strongest bass pitch
+  class; keep the decoder's choice when the bass matches neither. Applied after the Viterbi, per unit.
+- Expected: 0 to +1.5 pp (bass is not always the root: inversions, pedal points). Cost: negligible.
+- Settings: margin 0.15; margin 0.30.
+
+#### C8 Repetition smoothing
+- Evidence: the top-2 family oracle is 91.5 vs top-1 81.4 on DEV (many near-misses).
+- Method (`recognizer.repetition`): beat-synchronous decode-class probability vectors (the unit means
+  the Viterbi uses; with the incumbent's meanLog emission, the per-unit geometric-mean probabilities).
+  For each beat, its k most similar other beats of the same segment by cosine similarity of beat chroma
+  (all 144 CQT bins folded to 12 pitch classes, linear magnitude; audio chroma rather than the
+  probability vectors, so model errors do not choose the neighbours), excluding beats within +-4 of
+  itself; new vector = (1 - w) * own + w * mean(neighbours); then decode as usual.
+- Expected: 0 to +1.5 pp. Cost: O(beats^2) similarity per segment, negligible.
+- Settings: k 2, w 0.3; k 4, w 0.5.
+
 ## Results log
 (one entry per scored setting: date, commit, setting, DEV deltas, eligibility, decision)
+
+Pass 1, incumbent = main defaults (`{"recognizer":{}}`), charts replayed on the new DEV recording;
+`npm run candidate-step` (deltas in pp: mean majmin delta [2.5th pct of the paired bootstrap],
+Billboard-subset delta, smallest leave-one-out delta, boundary precision delta):
+- 2026-11-14, da21561, c2-1.5-3-4.5: +1.02 [+0.04], Billboard +1.16, min LOO +0.50, precision -2.21; not eligible (P5 flicker); rejected.
+- 2026-11-14, da21561, c2-1-2-3: +1.49 [+0.01], Billboard +1.71, min LOO +0.71, precision -4.23; not eligible (P5 flicker); rejected.
+- 2026-11-14, da21561, c2-0.5-1-1.5: +1.48 [-0.39], Billboard +1.71, min LOO +0.62, precision -8.94; not eligible (P2, P5; group alarm complexity:moderate); rejected.
+- 2026-11-14, da21561, c2-0-0-0: +0.25 [-1.91], Billboard +0.32, min LOO -0.57, precision -19.46; not eligible (P1, P2, P4, P5; group alarm complexity:moderate); rejected.
+- 2026-11-14, da21561, c1-scale1: +0.41 [-0.04], Billboard +0.42, min LOO +0.25, precision -0.33; not eligible (P1, P2); rejected.
+- 2026-11-14, da21561, c1-scale1.25: -0.37 [-1.01], Billboard -0.49, min LOO -0.51, precision +0.81; not eligible (P1-P5; group alarms billboard, simple, moderate); rejected.
+- 2026-11-14, U: skipped by its gate (half-beat ceiling 98.12 vs beat 97.90, +0.22 pp < 1 pp); not scored.
+- 2026-11-14, da21561, e-durationWeighted: -0.02 [-0.17], Billboard -0.04, min LOO -0.04, precision +0.03; not eligible (P1-P5; group alarm complexity:simple); rejected.
+- 2026-11-14, da21561, e-meanLog: +0.91 [+0.25], Billboard +0.95, min LOO +0.65, precision -0.28; eligible, no alarm; promoted.
+- 2026-11-14, C7: skipped by its gate (false N 0.51% < 1%); not scored.
+- Pass 1 stopped after E (eligible setting); C5, C6, C4 not run in pass 1. Scored settings: 8 of 50.
+
+**Promotion 1: e-meanLog** (`{"recognizer":{"emission":"meanLog"}}`, commit da21561). DEV song means
+before -> after: majmin 81.0 -> 81.9, root 83.1 -> 83.9, sevenths 69.1 -> 70.1, boundary F 74.1 -> 76.0
+(precision 86.9 -> 86.6, recall 66.9 -> 69.5). Mean majmin delta +0.91 pp, 95% paired bootstrap
+[+0.25, +1.71]; Billboard-subset delta +0.95; smallest leave-one-out delta +0.65 (without
+pilot-talking-heads-and-she-was). All five groups not lower; no song loss >= 5 pp; resources within limits.
+
+Pass 2, incumbent = inc1-meanLog (`{"recognizer":{"emission":"meanLog"}}`), charts of e-meanLog; alarms
+against the incumbent and the original baseline:
+- 2026-11-14, da21561, c2-1.5-3-4.5: +0.52 [-0.24], Billboard +0.58, min LOO +0.12, precision -2.08; not eligible (P2, P5); group alarm moderate; rejected.
+- 2026-11-14, da21561, c2-1-2-3: +0.83 [-0.33], Billboard +0.93, min LOO +0.28, precision -4.49; not eligible (P2, P5); group alarm moderate; rejected.
+- 2026-11-14, da21561, c2-0.5-1-1.5: +0.66 [-0.72], Billboard +0.88, min LOO +0.09, precision -9.46; not eligible (P2, P5); group alarm isophonics-btc-overlap, moderate; rejected.
+- 2026-11-14, da21561, c2-0-0-0: -0.58 [-2.29], Billboard -0.56, min LOO -1.14, precision -19.32; not eligible (P1, P2, P3, P4, P5); group alarm billboard, complex, isophonics-btc-overlap, moderate; 4 songs lose 5-10 pp; rejected.
+- 2026-11-14, da21561, c1-scale1: +0.29 [-0.15], Billboard +0.26, min LOO +0.10, precision -0.25; not eligible (P1, P2, P5); rejected.
+- 2026-11-14, da21561, c1-scale1.25: -0.74 [-1.73], Billboard -0.83, min LOO -0.93, precision +0.60; not eligible (P1, P2, P3, P4, P5); group alarm billboard, complex, isophonics-btc-overlap, moderate, simple; 1 song loses 5-10 pp; rejected.
+- 2026-11-14, U: skipped by its gate (same record as pass 1); not scored.
+- 2026-11-14, da21561, c5-familyDecide: +0.27 [-1.49], Billboard -0.24, min LOO -0.11, precision -0.58; not eligible (P1, P2, P3, P4, P6); group alarm billboard, complex, moderate; song loss >= 10 pp billboard-0879-run-d-m-c-walk-this-way; rejected.
+- 2026-11-14, da21561, c5-average: +0.74 [-0.43], Billboard +0.27, min LOO +0.38, precision +0.95; not eligible (P2, P6); group alarm complex; rejected.
+- 2026-11-14, C7: skipped by its gate (same record as pass 1); not scored.
+- 2026-11-14, da21561, c6-shift-1: +1.50 [+0.58], Billboard +1.54, min LOO +1.28, precision +1.55; eligible, no alarm; promoted.
+- 2026-11-14, da21561, c6-shift-2: +1.25 [+0.08], Billboard +1.02, min LOO +0.96, precision +1.83; eligible, no alarm; not promoted (smaller mean delta than c6-shift-1).
+- Pass 2 stopped after C6 (eligible settings); C4 not run in pass 2. Scored settings: 18 of 50.
+
+**Promotion 2: c6-shift-1** (`{"recognizer":{"emission":"meanLog","pitchShift":[-1,1]}}`, commit da21561;
+largest mean delta among C6's eligible settings). DEV song means before -> after: majmin 81.9 -> 83.4,
+root 83.9 -> 85.5, sevenths 70.1 -> 71.3, boundary F 76.0 -> 76.7 (precision 86.6 -> 88.1, recall
+69.5 -> 69.8). Mean majmin delta +1.50 pp, 95% paired bootstrap [+0.58, +2.38]; Billboard-subset delta
++1.54; smallest leave-one-out delta +1.28 (without billboard-0891-the-who-happy-jack). No group lower
+against the incumbent or the original baseline; worst song -4.56 pp (iron butterfly); resources within
+limits. Cumulative against the original baseline (main defaults): +2.41 pp mean majmin (81.0 -> 83.4).
+
+Pass 3, incumbent = inc2-meanLog-shift1 (`{"recognizer":{"emission":"meanLog","pitchShift":[-1,1]}}`), charts of
+pass-2 c6-shift-1; alarms against the incumbent and the original baseline:
+- 2026-11-14, da21561, c2-1.5-3-4.5: +0.37 [-0.47], Billboard +0.28, min LOO +0.03, precision -1.96; not eligible (P1, P2); group alarm moderate; 1 song loses 5-10 pp; rejected.
+- 2026-11-14, da21561, c2-1-2-3: +0.71 [-0.45], Billboard +0.60, min LOO +0.20, precision -4.55; not eligible (P2, P5); group alarm moderate; 1 song loses 5-10 pp; rejected.
+- 2026-11-14, da21561, c2-0.5-1-1.5: +0.43 [-1.06], Billboard +0.19, min LOO -0.13, precision -8.13; not eligible (P1, P2, P4, P5); group alarm moderate; 2 songs lose 5-10 pp; rejected.
+- 2026-11-14, da21561, c2-0-0-0: -1.00 [-2.70], Billboard -1.21, min LOO -1.56, precision -18.54; not eligible (P1, P2, P3, P4, P5); group alarm billboard, complex, isophonics-btc-overlap, moderate; 5 songs lose 5-10 pp; rejected.
+- 2026-11-14, da21561, c1-scale1: -0.15 [-0.56], Billboard -0.22, min LOO -0.31, precision -0.08; not eligible (P1, P2, P3, P4, P5); group alarm billboard, moderate, simple; rejected.
+- 2026-11-14, da21561, c1-scale1.25: -1.00 [-2.20], Billboard -1.21, min LOO -1.15, precision +0.95; not eligible (P1, P2, P3, P4, P5); group alarm billboard, complex, isophonics-btc-overlap, moderate, simple; song loss >= 10 pp pilot-talking-heads-and-she-was; rejected.
+- 2026-11-14, U: skipped by its gate (same record as pass 1); not scored.
+- 2026-11-14, da21561, c5-familyDecide: -0.52 [-2.15], Billboard -1.05, min LOO -0.92, precision +0.31; not eligible (P1, P2, P3, P4, P5, P6); group alarm billboard, complex, moderate; song loss >= 10 pp billboard-0879-run-d-m-c-walk-this-way; 2 songs lose 5-10 pp; resources packagedBytes, medianAnalyzeMs; rejected.
+- 2026-11-14, da21561, c5-average: -0.21 [-1.22], Billboard -0.50, min LOO -0.56, precision +0.43; not eligible (P1, P2, P3, P4, P5, P6); group alarm billboard, complex, moderate; 2 songs lose 5-10 pp; resources packagedBytes, medianAnalyzeMs; rejected.
+- 2026-11-14, C7: skipped by its gate (same record as pass 1); not scored.
+- 2026-11-14, da21561, c4-bonus0.5: +0.04 [-0.25], Billboard +0.03, min LOO -0.07, precision +0.25; not eligible (P1, P2, P4, P5); group alarm complex, moderate; rejected.
+- 2026-11-14, da21561, c4-bonus1.0: +0.07 [-0.24], Billboard +0.03, min LOO -0.07, precision +0.42; not eligible (P1, P2, P4, P5); group alarm complex, moderate; rejected.
+- Main list converged after pass 3 (no promotion); incumbent inc2 (`{"emission":"meanLog","pitchShift":[-1,1]}`,
+  DEV majmin 83.41). Scored settings: 28 of 50.
+
+Pass 4 (appended candidates only), incumbent = inc2, charts of pass-2 c6-shift-1; alarms against the
+incumbent and the original baseline:
+- 2026-11-14, 4cb38cf, c10-m0.15: -0.44 [-0.74], Billboard -0.54, min LOO -0.46, precision -3.91; not eligible (P1, P2, P3, P4, P5); group alarm billboard, complex, isophonics-btc-overlap, moderate, simple; rejected.
+- 2026-11-14, 4cb38cf, c10-m0.30: -0.77 [-1.24], Billboard -0.94, min LOO -0.82, precision -6.11; not eligible (P1, P2, P3, P4, P5); group alarm billboard, complex, isophonics-btc-overlap, moderate, simple; rejected.
+- 2026-11-14, 4cb38cf, c8-k2-w0.3: -0.17 [-0.78], Billboard -0.15, min LOO -0.36, precision +1.22; not eligible (P1, P2, P3, P4, P5); group alarm billboard, complex, isophonics-btc-overlap; 1 song loses 5-10 pp; rejected.
+- 2026-11-14, 4cb38cf, c8-k4-w0.5: -0.78 [-1.88], Billboard -0.97, min LOO -1.07, precision +1.73; not eligible (P1, P2, P3, P4, P5); group alarm billboard, complex, isophonics-btc-overlap, simple; 2 songs lose 5-10 pp; rejected.
+- C10 check (synthetic, not a scored setting): on 6 synthetic clips with a root-position bass line (92
+  chords), the bass-chroma argmax of bins 0-47 equals the chord root 92/92, so the bin-to-pitch-class
+  mapping is right; on DEV the rule changed no song for the better at margin 0.15 (14 lower, 9 equal),
+  i.e. the strongest low pitch class is often not the annotated root in real recordings (inversions,
+  pedal points, kick drum energy).
+- Pass 4 promoted nothing. Scored settings: 32 of 50.
+
+**Search end (2026-11-14): converged.** The main list converged after pass 3 and the two appended
+candidates (C10, C8) promoted nothing in pass 4. The remaining later candidates are not appended:
+C3 median smoothing (deprioritised; C8 already showed that extra smoothing hurts), C9 HPSS (changes
+the model's input features; no DEV evidence), a tuning candidate (the baseline analyses found no
+detuning errors), C11 (no public chord model with a checkpoint-specific training list that excludes
+the Billboard TEST songs), C12 fine-tuning (waiting on the user's decision). Budget used: 32 of 50.
+
+Finalist: inc2 = `{"recognizer":{"emission":"meanLog","pitchShift":[-1,1]}}` (promotion 1 e-meanLog,
+promotion 2 c6-shift-1; code at da21561). DEV song means (23 songs, frozen maps, replayed charts):
+
+| Arm | majmin | root | sevenths | boundary F |
+|---|---|---|---|---|
+| Original baseline (main defaults) | 81.01 | 83.1 | 69.1 | 74.1 |
+| Promotion 1: e-meanLog | 81.92 | 83.9 | 70.1 | 76.0 |
+| Promotion 2: c6-shift-1 (finalist) | 83.41 | 85.5 | 71.3 | 76.7 |
+
+Finalist vs original baseline: +2.41 pp mean majmin. These are provisional DEV choices; the one-shot
+TEST confirmation of the protocol decides whether the result holds.
