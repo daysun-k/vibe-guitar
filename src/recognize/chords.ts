@@ -141,6 +141,67 @@ export async function predictChordProbs(runner: ModelRunner, logCqt: Float32Arra
   return probs;
 }
 
+// ---------------------------------------------------------------- Pitch-shift averaging (VGT-18 C6)
+
+const PITCH_CLASS: Record<string, number> = { C: 0, 'C#': 1, D: 2, 'D#': 3, E: 4, F: 5, 'F#': 6, G: 7, 'G#': 8, A: 9, 'A#': 10, B: 11 };
+
+/** Bins per semitone of the log-CQT (24 bins per octave). */
+export const BINS_PER_SEMITONE = CQT.binsPerOctave / 12;
+
+/**
+ * Log-CQT frames shifted up by `semitones` (2 bins each), repeating the edge bin (never circular):
+ * out[k] = in[clamp(k − 2·semitones)]. Shifting before or after normalisation is the same (affine per bin).
+ */
+export function shiftCqt(cqt: Float32Array, frames: number, semitones: number, nBins = CQT.nBins): Float32Array {
+  const d = Math.round(semitones * BINS_PER_SEMITONE);
+  const out = new Float32Array(frames * nBins);
+  for (let f = 0; f < frames; f++) {
+    const o = f * nBins;
+    for (let k = 0; k < nBins; k++) out[o + k] = cqt[o + Math.min(nBins - 1, Math.max(0, k - d))];
+  }
+  return out;
+}
+
+/**
+ * For model labels ("C#:min7", "C", "N", "X"): index of the label with the root moved by `delta`
+ * semitones and the same quality; N and X map to themselves.
+ */
+export function rootRotation(labels: string[], delta: number): Int32Array {
+  const index = new Map<string, number>();
+  const parsed = labels.map((l, i) => {
+    if (l === 'N' || l === 'X') return null;
+    const [root, q = 'maj'] = l.split(':');
+    if (PITCH_CLASS[root] === undefined) throw new Error(`pitch shift: unexpected label ${l}`);
+    index.set(`${PITCH_CLASS[root]}|${q}`, i);
+    return { pc: PITCH_CLASS[root], q };
+  });
+  return Int32Array.from(parsed, (p, i) => {
+    if (!p) return i;
+    const j = index.get(`${(((p.pc + delta) % 12) + 12) % 12}|${p.q}`);
+    if (j === undefined) throw new Error(`pitch shift: no rotated label for ${labels[i]}`);
+    return j;
+  });
+}
+
+/**
+ * Frame-wise class probabilities averaged (equal weights) over the unshifted run and one run per
+ * semitone shift of the log-CQT, each shifted run's chord roots rotated back (N and X kept).
+ */
+export async function predictChordProbsShifted(runner: ModelRunner, logCqt: Float32Array, frames: number, meta: BtcModelMeta, shifts: number[]): Promise<Float32Array> {
+  const base = await predictChordProbs(runner, logCqt, frames, meta);
+  if (!shifts.length) return base;
+  const C = meta.num_chords;
+  const sum = Float32Array.from(base);
+  for (const s of shifts) {
+    const p = await predictChordProbs(runner, shiftCqt(logCqt, frames, s), frames, meta);
+    // The shifted run hears every chord s semitones higher: its root r is the original r − s.
+    const rot = rootRotation(meta.labels, -s);
+    for (let f = 0; f < frames; f++) for (let c = 0; c < C; c++) sum[f * C + rot[c]] += p[f * C + c];
+  }
+  for (let i = 0; i < sum.length; i++) sum[i] /= shifts.length + 1;
+  return sum;
+}
+
 /** Collapses class probabilities onto the output vocabulary and renormalises (drops "X"). */
 export function reduceProbs(probs: Float32Array, frames: number, numClasses: number, map: Int32Array, numOut: number): Float32Array {
   const out = new Float32Array(frames * numOut);
@@ -173,19 +234,23 @@ export interface DecodedUnit extends DecodeUnit {
 export interface DecodeOptions {
   /** Log-probability penalty for a chord change at a bar start, half bar and other beats. */
   changePenalty: [number, number, number];
+  /** Unit emission: log of the mean frame probability (default) or the mean of frame log-probabilities. */
+  emission?: 'meanLog';
 }
 
 export const DEFAULT_DECODE: DecodeOptions = { changePenalty: [2, 4, 6] };
 
 /**
  * Beat-synchronous Viterbi: averages frame probabilities inside each unit (usually a
- * beat), then finds the label sequence maximising sum(log p) − change penalties.
+ * beat), then finds the label sequence maximising sum(log p) − change penalties. With
+ * emission 'meanLog' a unit's log p is the mean of its frame log-probabilities.
  * `frameStartSec` is the time of frame 0 (frame f is centred at frameStartSec + f*frameSec).
  */
 export function decodeUnits(probs: Float32Array, frames: number, numOut: number, frameSec: number, frameStartSec: number, units: DecodeUnit[], symbols: string[], opts: DecodeOptions = DEFAULT_DECODE): DecodedUnit[] {
   const U = units.length;
   if (!U) return [];
   const avg = new Float32Array(U * numOut);
+  const meanLog = opts.emission === 'meanLog' ? new Float64Array(U * numOut) : null;
   for (let u = 0; u < U; u++) {
     const { startSec, endSec } = units[u];
     let f0 = Math.round((startSec - frameStartSec) / frameSec);
@@ -194,8 +259,12 @@ export function decodeUnits(probs: Float32Array, frames: number, numOut: number,
     f1 = Math.max(f0 + 1, Math.min(frames, f1));
     for (let f = f0; f < f1; f++) for (let j = 0; j < numOut; j++) avg[u * numOut + j] += probs[f * numOut + j];
     for (let j = 0; j < numOut; j++) avg[u * numOut + j] /= f1 - f0;
+    if (meanLog) {
+      for (let f = f0; f < f1; f++) for (let j = 0; j < numOut; j++) meanLog[u * numOut + j] += Math.log(probs[f * numOut + j] + 1e-9);
+      for (let j = 0; j < numOut; j++) meanLog[u * numOut + j] /= f1 - f0;
+    }
   }
-  const logp = (u: number, j: number) => Math.log(avg[u * numOut + j] + 1e-9);
+  const logp = meanLog ? (u: number, j: number) => meanLog[u * numOut + j] : (u: number, j: number) => Math.log(avg[u * numOut + j] + 1e-9);
   let score = new Float64Array(numOut);
   const back = new Int32Array(U * numOut);
   for (let j = 0; j < numOut; j++) score[j] = logp(0, j);

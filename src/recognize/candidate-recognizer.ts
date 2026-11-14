@@ -13,13 +13,11 @@ import {
   decodeCandidate,
   majminLabelFamily,
   MAJMIN_FAMILIES,
-  rootRotation,
-  shiftCqt,
   sumClasses,
   type CandidateDecodeInput,
   type CandidateRecognizerOptions,
 } from './candidate-decode';
-import { buildVocabulary, predictChordProbs, reduceProbs, type BtcModelMeta, type DecodeUnit } from './chords';
+import { buildVocabulary, predictChordProbsShifted, reduceProbs, type BtcModelMeta, type DecodeUnit } from './chords';
 import { computeFeatures, unitsFromBeats, type SegmentAnalysis, type SegmentFeatures } from './recognizer';
 import type { ModelRunner } from './runner';
 import { segmentBeatLogits, type Segment } from './session';
@@ -60,19 +58,7 @@ export class CandidateRecognizer {
 
   /** Model class probabilities, averaged over the pitch-shifted runs (C6) with roots rotated back. */
   async modelProbs(runner: ModelRunner, meta: BtcModelMeta, cqt: Float32Array, frames: number): Promise<Float32Array> {
-    const base = await predictChordProbs(runner, cqt, frames, meta);
-    const shifts = this.opts.pitchShift ?? [];
-    if (!shifts.length) return base;
-    const C = meta.num_chords;
-    const sum = Float32Array.from(base);
-    for (const s of shifts) {
-      const p = await predictChordProbs(runner, shiftCqt(cqt, frames, s), frames, meta);
-      // The shifted run hears every chord s semitones higher: its root r is the original r − s.
-      const rot = rootRotation(meta.labels, -s);
-      for (let f = 0; f < frames; f++) for (let c = 0; c < C; c++) sum[f * C + rot[c]] += p[f * C + c];
-    }
-    for (let i = 0; i < sum.length; i++) sum[i] /= shifts.length + 1;
-    return sum;
+    return predictChordProbsShifted(runner, cqt, frames, meta, this.opts.pitchShift ?? []);
   }
 
   async analyzeSessionSegment(seg: Segment): Promise<SegmentAnalysis> {

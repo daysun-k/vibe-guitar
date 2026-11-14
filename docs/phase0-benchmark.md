@@ -50,6 +50,11 @@ nearest matching). Rerunning `npm run bench` and `npm run bench -- --runtime web
 numbers to all printed digits (beat F 0.8378972468992273, downbeat F 0.8897616468574271 in both). The browser
 column was not rerun and still comes from the greedy matcher.
 
+Shipped recognizer (VGT-18, 2026-11-14): the extension now decodes with `emission: meanLog` and averages BTC over
+pitch shifts of -1 and +1 semitone (`src/recognize/extension-options.ts`). `npm run bench -- --config` with that
+setting gives WCSR majmin 98.80 %, root 96.82 %, sevenths 92.55 % in Node (the table above is the original
+pipeline, which `npm run bench` still measures by default). Real-song results: docs/recognition-candidates.md.
+
 Ablations (majmin, Node): frame-wise argmax without beat sync 96.46 %; Viterbi on fixed 0.5 s units without
 beats 89.38 %; BTC 25-class majmin model with the same pipeline 97.05 %. Beat-synchronous smoothing adds
 about 0.6 points over frame argmax; using beats instead of fixed units adds about 7.7 points.
