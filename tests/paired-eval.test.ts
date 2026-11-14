@@ -183,4 +183,29 @@ describe('paired frozen-map scorer', () => {
     expect(matchChanges([1, 1.1], [1.05])).toBe(1);
     expect(matchChanges([1, 2], [0.8, 1.9])).toBe(2);
   });
+
+  it('maskUnknownBoundaries: off by default and unchanged; on, it masks X in boundaries only and is recorded', () => {
+    const now = new Date(0);
+    const inputs = { maps: 'm.json' };
+    // Without X in the annotation the mask changes nothing.
+    const plain = pairedEvaluate(maps(), named(), io(charts(fx.chart), charts(fx.chart)), { inputs, now });
+    expect(pairedEvaluate(maps(), named(), io(charts(fx.chart), charts(fx.chart)), { inputs, now, maskUnknownBoundaries: true }).songs).toEqual(plain.songs);
+
+    const xLab = fx.lab.replace('\n40 42 G:maj\n', '\n40 42 X\n');
+    expect(xLab).not.toBe(fx.lab);
+    const xFiles: Record<string, string> = { ...files, 'iso/a.lab': xLab, 'iso/b.lab': xLab, 'iso/c.lab': xLab };
+    const xio: PairedIo = { ...io(charts(fx.chart), charts(fx.chart)), readAnnotation: (f, r) => xFiles[`${f}/${r}`] ?? null };
+    const off = pairedEvaluate(maps(), named(), xio, { inputs, now });
+    const offExplicit = pairedEvaluate(maps(), named(), xio, { inputs, now, maskUnknownBoundaries: false });
+    expect(JSON.stringify(offExplicit)).toBe(JSON.stringify(off));
+    expect(off.inputs).toEqual({ maps: 'm.json' });
+    expect(pairedSummary(off)).not.toMatch(/mask-unknown-boundaries/);
+    expect(off.songs[0].baseline.boundaries).toMatchObject({ predicted: 96, annotated: 96, matched: 96 });
+
+    const on = pairedEvaluate(maps(), named(), xio, { inputs, now, maskUnknownBoundaries: true });
+    expect(on.inputs).toEqual({ maps: 'm.json', maskUnknownBoundaries: true });
+    expect(on.songs[0].baseline.boundaries).toMatchObject({ predicted: 94, annotated: 94, matched: 94 });
+    expect(on.all.baseline).toEqual(off.all.baseline); // WCSR is untouched
+    expect(pairedSummary(on)).toMatch(/exclude X\/unmapped reference regions .*\(--mask-unknown-boundaries\)/);
+  });
 });

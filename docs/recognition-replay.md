@@ -154,6 +154,12 @@ protocol's flicker guard: not lower by more than 2.0 pp), and mean deltas per gr
 `{ "<group>": [songId…] }`, whose ids must be in the maps). The result JSON (`--out`; non-finite numbers
 written as null) and a short text summary in percentage points.
 
+`--mask-unknown-boundaries` (opt-in; off by default, and without it the output is unchanged) leaves out of
+the chord-change diagnostics the reference regions labelled `X` or with an unmapped label (the seconds
+WCSR already leaves out), mapped to media time and widened by ±250 ms, so changes into or out of them and
+chart changes inside them are not counted; the result records it as `inputs.maskUnknownBoundaries: true`
+and the summary says so.
+
 ## Cleanup
 
 After the campaign: delete the capture folder (`rm -rf ~/vg-captures/<campaign>`) and the replay charts,

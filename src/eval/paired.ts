@@ -5,6 +5,7 @@
  * evaluator's unchanged scoreSong against the annotation (annotation beats, never chart beats),
  * with the annotation read through the song list exactly as evaluateSongs reads it.
  */
+import { subtractCoverage } from '../chart/merge';
 import type { Chart, CoverageRange } from '../chart/types';
 import { reduceSymbol, type Reduction } from './metrics';
 import {
@@ -12,6 +13,7 @@ import {
   changeTimes,
   chartFromExport,
   EvalInputError,
+  harteToSymbol,
   overlapRanges,
   parseBeats,
   parseLab,
@@ -203,13 +205,37 @@ export function matchChanges(ref: number[], est: number[], windowSec = BOUNDARY_
   return matched;
 }
 
+/** Media-time ranges of the X/unmapped reference segments, each widened by padSec on both sides (unmerged). */
+export function unknownRanges(segs: ReturnType<typeof parseLab>, offsetSec: number, rate: number, padSec: number): CoverageRange[] {
+  const m = (t: number) => offsetSec + rate * t;
+  return segs
+    .filter((s) => {
+      const kind = harteToSymbol(s.label).kind;
+      return kind === 'X' || kind === 'unmapped';
+    })
+    .map((s) => ({ fromSec: m(s.startSec) - padSec, toSec: m(s.endSec) + padSec }));
+}
+
 /**
  * Chord-change diagnostics inside the region both the time-mapped annotation and the chart cover:
  * changes of the majmin-reduced label, matched one-to-one within ±250 ms.
+ * With maskUnknown (opt-in; off by default), the reference regions labelled X or with an unmapped
+ * label (the seconds scoreSong counts as unknownSec), mapped to media time and widened by windowSec
+ * on both sides, are removed from that region first, as WCSR leaves them out: a reference change
+ * into or out of such a region and a chart change inside or near it are not counted.
  */
-export function boundaryStats(segs: ReturnType<typeof parseLab>, chart: Chart, offsetSec: number, mediaDurationSec: number | null, rate: number, windowSec = BOUNDARY_WINDOW_SEC): BoundaryStats {
+export function boundaryStats(
+  segs: ReturnType<typeof parseLab>,
+  chart: Chart,
+  offsetSec: number,
+  mediaDurationSec: number | null,
+  rate: number,
+  windowSec = BOUNDARY_WINDOW_SEC,
+  maskUnknown = false,
+): BoundaryStats {
   const ref = annotationChart(segs, offsetSec, null, mediaDurationSec, false, rate);
-  const both: CoverageRange[] = overlapRanges(ref.coverage, chart.coverage);
+  const covered: CoverageRange[] = overlapRanges(ref.coverage, chart.coverage);
+  const both = maskUnknown ? subtractCoverage(covered, unknownRanges(segs, offsetSec, rate, windowSec)) : covered;
   const reduce = (events: { startSec: number; chord: string }[]) => events.map((e) => ({ startSec: e.startSec, chord: majminLabel(e.chord) }));
   const refChanges = changeTimes(reduce(ref.events), both);
   const estChanges = changeTimes(reduce(chart.events), both);
@@ -243,7 +269,7 @@ function armScore(score: SongScore, boundaries: BoundaryStats): ArmScore {
 const sameCoverage = (a: CoverageRange[], b: CoverageRange[]) => a.length === b.length && a.every((r, i) => r.fromSec === b[i].fromSec && r.toSec === b[i].toSec);
 
 /** Scores one map song in both arms; throws when the arms do not cover the same audio. */
-export function scorePairedSong(m: MapEntry, entry: { song: SongEntry; list: SongList }, io: PairedIo): PairedSong {
+export function scorePairedSong(m: MapEntry, entry: { song: SongEntry; list: SongList }, io: PairedIo, maskUnknownBoundaries = false): PairedSong {
   const folder = entry.list.datasets[entry.song.dataset].folder;
   const labText = io.readAnnotation(folder, entry.song.chords);
   if (labText === null) throw new EvalInputError(`${m.id}: annotation file not found: ${folder}/${entry.song.chords}`);
@@ -265,8 +291,8 @@ export function scorePairedSong(m: MapEntry, entry: { song: SongEntry; list: Son
     const b = sc.comparison[k].evaluatedSec;
     if (Math.abs(a - b) > EVALUATED_SEC_TOLERANCE) throw new EvalInputError(`${m.id}: evaluated ${k} seconds differ (baseline ${a}, candidate ${b})`);
   }
-  const baseline = armScore(sb, boundaryStats(segs, base, m.offsetSec, m.mediaDurationSec, m.rate));
-  const candidate = armScore(sc, boundaryStats(segs, cand, m.offsetSec, m.mediaDurationSec, m.rate));
+  const baseline = armScore(sb, boundaryStats(segs, base, m.offsetSec, m.mediaDurationSec, m.rate, BOUNDARY_WINDOW_SEC, maskUnknownBoundaries));
+  const candidate = armScore(sc, boundaryStats(segs, cand, m.offsetSec, m.mediaDurationSec, m.rate, BOUNDARY_WINDOW_SEC, maskUnknownBoundaries));
   const delta = Object.fromEntries(METRICS.map((k) => [k, candidate[k] - baseline[k]])) as Record<Reduction, number>;
   const boundaryDelta = Object.fromEntries(BOUNDARY_RATES.map((k) => [k, candidate.boundaries[k] - baseline.boundaries[k]])) as Record<BoundaryRate, number>;
   return { id: m.id, dataset: m.dataset, youtubeId: m.youtubeId, btcTraining: m.btcTraining, groups: m.groups, baseline, candidate, delta, boundaryDelta };
@@ -332,7 +358,8 @@ export function aggregate(rows: PairedSong[], resamples = BOOTSTRAP_RESAMPLES, s
 export interface PairedResult {
   schema: string;
   generatedAt: string;
-  inputs: Record<string, string | null>;
+  /** Caller's inputs; maskUnknownBoundaries: true is added only when that option is on (absent means off). */
+  inputs: Record<string, string | boolean | null>;
   boundaryWindowSec: number;
   songs: PairedSong[];
   all: PairedAggregate;
@@ -344,10 +371,11 @@ export function pairedEvaluate(
   maps: PairedMaps,
   lists: NamedSongList[],
   io: PairedIo,
-  opts: { fallbackLists?: string[]; subset?: { field: keyof MapEntry; value: string }; groups?: Record<string, string[]>; inputs?: Record<string, string | null>; now?: Date } = {},
+  opts: { fallbackLists?: string[]; subset?: { field: keyof MapEntry; value: string }; groups?: Record<string, string[]>; inputs?: Record<string, string | null>; now?: Date; maskUnknownBoundaries?: boolean } = {},
 ): PairedResult {
   const entries = lookupSongs(lists, maps, opts.fallbackLists);
-  const songs = maps.songs.map((m) => scorePairedSong(m, entries.get(m.id)!, io));
+  const mask = opts.maskUnknownBoundaries === true;
+  const songs = maps.songs.map((m) => scorePairedSong(m, entries.get(m.id)!, io, mask));
   const groupIds = new Map<string, Set<string>>();
   for (const s of songs) for (const g of s.groups) (groupIds.get(g) ?? groupIds.set(g, new Set()).get(g)!).add(s.id);
   for (const [g, ids] of Object.entries(opts.groups ?? {})) for (const id of ids) (groupIds.get(g) ?? groupIds.set(g, new Set()).get(g)!).add(id);
@@ -360,7 +388,7 @@ export function pairedEvaluate(
   return {
     schema: PAIRED_RESULT_SCHEMA,
     generatedAt: (opts.now ?? new Date()).toISOString(),
-    inputs: opts.inputs ?? {},
+    inputs: mask ? { ...opts.inputs, maskUnknownBoundaries: true } : (opts.inputs ?? {}),
     boundaryWindowSec: BOUNDARY_WINDOW_SEC,
     songs,
     all: aggregate(songs),
@@ -392,5 +420,6 @@ export function pairedSummary(r: PairedResult): string {
   const lines = aggregateLines('all', r.all);
   if (r.subset) lines.push(...aggregateLines(`subset ${r.subset.field}=${r.subset.value}`, r.subset.aggregate));
   for (const [g, v] of Object.entries(r.groups)) lines.push(`group ${g} (${v.n}): mean Δ majmin ${pp(v.meanDelta.majmin)}, root ${pp(v.meanDelta.root)}, sevenths ${pp(v.meanDelta.sevenths)}`);
+  if (r.inputs.maskUnknownBoundaries === true) lines.push(`boundaries exclude X/unmapped reference regions widened by ±${BOUNDARY_WINDOW_SEC * 1000} ms (--mask-unknown-boundaries)`);
   return lines.join('\n');
 }

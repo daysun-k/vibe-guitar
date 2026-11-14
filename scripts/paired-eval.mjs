@@ -1,11 +1,15 @@
 // Paired frozen-map comparison of a baseline and a candidate chart set (docs/recognition-replay.md).
 //   npm run paired-eval -- --maps <maps.json> --annotations <dir> --baseline <charts dir> --candidate <charts dir>
 //     [--out <result.json>] [--subset-field btcTraining=not-known] [--groups <groups.json>] [--songs <list.json>]…
+//     [--mask-unknown-boundaries]
 // Only the songs of the maps file are read and scored; each with its frozen offsetSec/rate/mediaDurationSec
 // and the evaluator's unchanged scoreSong. Song lists are used only to find each song's annotation files,
 // read exactly as eval-annotations reads them: a maps entry's songList (repository-relative) for that song,
 // otherwise the --songs lists, otherwise the two DEV lists (docs/annotation-eval-songs.json and
 // docs/annotation-eval-songs-heldout-v1.json). A held-out TEST list is read only when named.
+// --mask-unknown-boundaries (opt-in, off by default): the chord-change metrics leave out the reference
+// regions labelled X or unmapped, widened by the ±250 ms window, as WCSR leaves them out; recorded in the
+// result as inputs.maskUnknownBoundaries: true. Without it the output is unchanged.
 // Local files only (no network).
 import * as esbuild from 'esbuild';
 import { createHash } from 'node:crypto';
@@ -16,7 +20,7 @@ import path from 'node:path';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const USAGE =
-  'usage: npm run paired-eval -- --maps <maps.json> --annotations <dir> --baseline <charts dir> --candidate <charts dir> [--out <result.json>] [--subset-field field=value] [--groups <groups.json>] [--songs <list.json>]…';
+  'usage: npm run paired-eval -- --maps <maps.json> --annotations <dir> --baseline <charts dir> --candidate <charts dir> [--out <result.json>] [--subset-field field=value] [--groups <groups.json>] [--songs <list.json>]… [--mask-unknown-boundaries]';
 
 /** Key a song list is named by: repository-relative inside the repository, absolute outside it. */
 export function listKey(file) {
@@ -26,11 +30,15 @@ export function listKey(file) {
 }
 
 export function parseArgs(argv) {
-  const out = { songs: [] };
+  const out = { songs: [], maskUnknownBoundaries: false };
   const keys = { '--maps': 'maps', '--annotations': 'annotations', '--baseline': 'baseline', '--candidate': 'candidate', '--out': 'out', '--subset-field': 'subset', '--groups': 'groups' };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--help' || a === '-h') return { help: true };
+    if (a === '--mask-unknown-boundaries') {
+      out.maskUnknownBoundaries = true;
+      continue;
+    }
     const value = argv[i + 1];
     if (value === undefined) throw new Error(`${a} needs a value\n${USAGE}`);
     if (a === '--songs') out.songs.push(value);
@@ -97,7 +105,7 @@ export async function run(args, m) {
     songLists: files.join(', '),
     groups: args.groups ? path.resolve(args.groups) : null,
   };
-  return m.pairedEvaluate(maps, lists, fileIo(args), { fallbackLists: fallback, subset, groups, inputs });
+  return m.pairedEvaluate(maps, lists, fileIo(args), { fallbackLists: fallback, subset, groups, inputs, maskUnknownBoundaries: args.maskUnknownBoundaries === true });
 }
 
 async function main() {
