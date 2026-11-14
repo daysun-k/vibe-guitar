@@ -25,7 +25,8 @@
     "replay-audio": "node scripts/replay-audio.mjs",
     "replay-parity": "node scripts/replay-parity.mjs",
     "paired-eval": "node scripts/paired-eval.mjs",
-    "baseline-analysis": "node scripts/baseline-analysis.mjs"
+    "baseline-analysis": "node scripts/baseline-analysis.mjs",
+    "candidate-step": "node scripts/candidate-step.mjs"
   },
   "devDependencies": {
     "@types/chrome": "^0.3.7",
