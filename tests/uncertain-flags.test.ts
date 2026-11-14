@@ -10,6 +10,7 @@ import { validateChart } from '../src/chart/validate';
 import { CorrectionConflict, acceptUncertainAlt, correctChordEvent, eventEndSec, uncertainSpanEvent } from '../src/editor/correct';
 import { ChartStore, handleChartWrite, normalizeSettings, type StorageArea } from '../src/extension/storage';
 import { demoChart } from '../src/play/demo';
+import { flagsInBar } from '../src/play/lane';
 import { buildPlayModel, frameAt } from '../src/play/model';
 import { altNames, markAt, visibleSpans, withRo } from '../src/play/uncertain';
 
@@ -315,5 +316,48 @@ describe('lane: a visible stretch is always drawn (review vgt19-flags-ui-r1 F1)'
     const { bars } = lane(span(1, 2.05, 'G', 'Em'));
     expect(bars[0]).toEqual([[0, 1, -1], [1, 2, 0]]);
     expect(bars[1]).toEqual([[2, 4, -1]]);
+  });
+});
+
+describe('lane: segment content by overlap (review vgt19-flags-ui-r2)', () => {
+  const lane = (c: Chart, marks: number) => {
+    const m = buildPlayModel(c, { level: 'novice', capo: 0 }, null);
+    expect(validateChart(c).ok).toBe(true);
+    expect(m.uncertain).toHaveLength(marks);
+    return { m, bars: m.bars.map((b) => b.segments.map((x) => [x.startSec, x.endSec, x.flag, x.event])) };
+  };
+
+  it('F1: event and coverage from 0.05 s, stretch 0.05–1 s → the first bar has a flagged segment with the G event', () => {
+    const c = chart([[0.05, 'G']], [[0.05, 8]], [span(0.05, 1, 'G', 'Em')]);
+    const { m, bars } = lane(c, 1);
+    expect(frameAt(m, 0.5).uncertain).toBe(0);
+    const g = m.arrangement.events.findIndex((e) => e.original === 'G');
+    expect(bars[0]).toEqual([[0, 1, 0, g], [1, 2, -1, g]]);
+    expect(m.labels[g].name).toBe('G');
+  });
+
+  it('F2: a short later stretch is not hidden behind an earlier one mapped to the bar end', () => {
+    const c = chart([[0, 'G']], [[0, 8]], [span(0.5, 1.95, 'G', 'Em'), span(1.95, 2, 'G', 'Am')]);
+    const { m, bars } = lane(c, 2);
+    // Em keeps 0.5–1.95; Am, 0.05 s long, is drawn as its own short segment at the bar end.
+    expect(bars[0]).toEqual([[0, 0.5, -1, 0], [0.5, 1.95, 0, 0], [1.95, 2, 1, 0]]);
+    expect(m.uncertain.map((u) => u.alt)).toEqual(['Em', 'Am']);
+    expect(frameAt(m, 1.97).uncertain).toBe(1);
+  });
+
+  it('lane stretches never overlap; one clipped to zero width is not drawn in the lane', () => {
+    expect(flagsInBar([{ fromSec: 0.5, toSec: 1.95 }, { fromSec: 1.95, toSec: 2 }], 0, 2)).toEqual([
+      { index: 0, fromSec: 0.5, toSec: 1.95 },
+      { index: 1, fromSec: 1.95, toSec: 2 },
+    ]);
+    // both map onto the bar start: the first collapses, the second keeps 0–1
+    expect(flagsInBar([{ fromSec: 0, toSec: 0.04 }, { fromSec: 0.04, toSec: 1 }], 0, 2)).toEqual([{ index: 1, fromSec: 0, toSec: 1 }]);
+  });
+
+  it('an event start dropped by the 0.1 s rule still gives the bar the event that fills it', () => {
+    // C 0–0.05 s, then G: the bar is drawn as G (it was drawn as C before).
+    const c = chart([[0, 'C'], [0.05, 'G']], [[0, 8]]);
+    const m = buildPlayModel(c, { level: 'novice', capo: 0 }, null);
+    expect(m.bars[0].segments.map((x) => m.labels[x.event].name)).toEqual(['G']);
   });
 });

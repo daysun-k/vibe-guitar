@@ -48,8 +48,6 @@ export function barsBetween(t: Timing, fromSec: number, toSec: number): { bar: n
   return out;
 }
 
-const isActive = (e: ArrangedEvent | undefined, t: number) => !!e && t >= e.startSec && t < e.endSec;
-
 /**
  * Bars with their chord segments. `keyOf` names an event's displayed shape, used to mark
  * a bar that repeats the previous one. A changed event (`changed`) is never drawn as a repeat
@@ -57,8 +55,12 @@ const isActive = (e: ArrangedEvent | undefined, t: number) => !!e && t >= e.star
  * Uncertain stretches (`flags`) cut segments at their own bounds, so a stretch covering only part of
  * a bar or an event is drawn at its own beats; segments inside one carry its index in `flag`.
  * Unlike event cuts, a stretch is never lost: inside each bar its bounds within 0.1 s of the bar's
- * start or end snap to that edge, and a cut anywhere else is kept however short the stretch is. Only a
+ * start or end map to that edge, and a cut anywhere else is kept however short the stretch is. Only a
  * sliver under 0.1 s of a stretch that has at least 0.1 s in another bar is left out of this bar.
+ * Each segment's content is decided by overlap, not by a lookup at one instant (bounds dropped or
+ * moved by the 0.1 s rules would otherwise point just past the event or the stretch): its chord is
+ * the event overlapping it most (no chord when that is a rest or nothing overlaps), its flag the
+ * stretch overlapping it most (ties: the earlier stretch).
  */
 export function buildLane(a: Arrangement, t: Timing, big: BigBeat, toSec: number, keyOf: (i: number) => string, changed: (i: number) => boolean = () => false, flags?: readonly { fromSec: number; toSec: number }[]): LaneBar[] {
   const from = a.events.length ? Math.min(0, a.events[0].startSec) : 0;
@@ -69,12 +71,31 @@ export function buildLane(a: Arrangement, t: Timing, big: BigBeat, toSec: number
     // Split at every event start and end inside the bar (ends mark coverage gaps), so time
     // without analysis is drawn empty. Rests and gaps are both "no chord" (-1); equal
     // neighbours merge.
-    const chordAt = (sec: number): number => {
-      const i = findEventIndex(a.events, sec);
-      return isActive(a.events[i], sec) && !a.events[i].rest ? i : -1;
+    const chordOver = (st: number, en: number): number => {
+      let best = -1;
+      let bestLen = 0;
+      for (let k = Math.max(0, findEventIndex(a.events, st)); k < a.events.length && a.events[k].startSec < en; k++) {
+        const len = Math.min(en, a.events[k].endSec) - Math.max(st, a.events[k].startSec);
+        if (len > bestLen + 1e-9) {
+          best = k;
+          bestLen = len;
+        }
+      }
+      return best >= 0 && !a.events[best].rest ? best : -1;
     };
     const barFlags = flagsInBar(flags ?? [], b.startSec, b.endSec);
-    const flagAt = (sec: number): number => barFlags.find((f) => sec >= f.fromSec && sec < f.toSec)?.index ?? -1;
+    const flagOver = (st: number, en: number): number => {
+      let best = -1;
+      let bestLen = 0;
+      for (const f of barFlags) {
+        const len = Math.min(en, f.toSec) - Math.max(st, f.fromSec);
+        if (len > bestLen + 1e-9) {
+          best = f.index;
+          bestLen = len;
+        }
+      }
+      return best;
+    };
     const cuts = [b.startSec];
     for (const e of a.events) {
       for (const x of [e.startSec, e.endSec]) if (x > b.startSec + 0.1 && x < b.endSec - 0.1) cuts.push(x);
@@ -88,9 +109,12 @@ export function buildLane(a: Arrangement, t: Timing, big: BigBeat, toSec: number
     }
     cuts.sort((x, y) => x - y);
     const parts: { id: number; flag: number; st: number }[] = [];
-    for (const c of cuts) {
-      const id = chordAt(c + 0.01);
-      const flag = id < 0 ? -1 : flagAt(c + 1e-6);
+    for (let n = 0; n < cuts.length; n++) {
+      const c = cuts[n];
+      const en = n + 1 < cuts.length ? cuts[n + 1] : b.endSec;
+      if (en - c < 1e-9) continue; // a duplicate cut
+      const id = chordOver(c, en);
+      const flag = id < 0 ? -1 : flagOver(c, en);
       const last = parts[parts.length - 1];
       if (!last || last.id !== id || last.flag !== flag) parts.push({ id, flag, st: c });
     }
@@ -117,7 +141,7 @@ const EDGE_SNAP_SEC = 0.1;
  * (see buildLane). `index` is the stretch's index in `flags`.
  */
 export function flagsInBar(flags: readonly { fromSec: number; toSec: number }[], barStart: number, barEnd: number): { index: number; fromSec: number; toSec: number }[] {
-  const out: { index: number; fromSec: number; toSec: number }[] = [];
+  const mapped: { index: number; fromSec: number; toSec: number }[] = [];
   flags.forEach((f, index) => {
     let from = Math.max(f.fromSec, barStart);
     let to = Math.min(f.toSec, barEnd);
@@ -126,7 +150,18 @@ export function flagsInBar(flags: readonly { fromSec: number; toSec: number }[],
     if (inBar < EDGE_SNAP_SEC && f.toSec - f.fromSec - inBar >= EDGE_SNAP_SEC) return; // drawn in its other bar
     if (from - barStart < EDGE_SNAP_SEC) from = barStart;
     if (barEnd - to < EDGE_SNAP_SEC) to = barEnd;
-    out.push({ index, fromSec: from, toSec: to });
+    mapped.push({ index, fromSec: from, toSec: to });
+  });
+  // Mapping to the edges can make neighbours overlap: an earlier stretch's lane end is clipped to the
+  // next stretch's lane start, so a short later stretch is not hidden behind it. A stretch clipped to
+  // zero width (both mapped onto the same edge) is not drawn in the lane; the playhead line under the
+  // strip still offers it while the playhead is inside its real time.
+  mapped.sort((x, y) => x.fromSec - y.fromSec || x.index - y.index);
+  const out: { index: number; fromSec: number; toSec: number }[] = [];
+  mapped.forEach((f, k) => {
+    const next = mapped[k + 1];
+    const to = next ? Math.min(f.toSec, next.fromSec) : f.toSec;
+    if (to - f.fromSec > 1e-9) out.push({ ...f, toSec: to });
   });
   return out;
 }
