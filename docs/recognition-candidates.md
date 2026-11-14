@@ -147,3 +147,27 @@ before -> after: majmin 81.0 -> 81.9, root 83.1 -> 83.9, sevenths 69.1 -> 70.1, 
 (precision 86.9 -> 86.6, recall 66.9 -> 69.5). Mean majmin delta +0.91 pp, 95% paired bootstrap
 [+0.25, +1.71]; Billboard-subset delta +0.95; smallest leave-one-out delta +0.65 (without
 pilot-talking-heads-and-she-was). All five groups not lower; no song loss >= 5 pp; resources within limits.
+
+Pass 2, incumbent = inc1-meanLog (`{"recognizer":{"emission":"meanLog"}}`), charts of e-meanLog; alarms
+against the incumbent and the original baseline:
+- 2026-11-14, da21561, c2-1.5-3-4.5: +0.52 [-0.24], Billboard +0.58, min LOO +0.12, precision -2.08; not eligible (P2, P5); group alarm moderate; rejected.
+- 2026-11-14, da21561, c2-1-2-3: +0.83 [-0.33], Billboard +0.93, min LOO +0.28, precision -4.49; not eligible (P2, P5); group alarm moderate; rejected.
+- 2026-11-14, da21561, c2-0.5-1-1.5: +0.66 [-0.72], Billboard +0.88, min LOO +0.09, precision -9.46; not eligible (P2, P5); group alarm isophonics-btc-overlap, moderate; rejected.
+- 2026-11-14, da21561, c2-0-0-0: -0.58 [-2.29], Billboard -0.56, min LOO -1.14, precision -19.32; not eligible (P1, P2, P3, P4, P5); group alarm billboard, complex, isophonics-btc-overlap, moderate; 4 songs lose 5-10 pp; rejected.
+- 2026-11-14, da21561, c1-scale1: +0.29 [-0.15], Billboard +0.26, min LOO +0.10, precision -0.25; not eligible (P1, P2, P5); rejected.
+- 2026-11-14, da21561, c1-scale1.25: -0.74 [-1.73], Billboard -0.83, min LOO -0.93, precision +0.60; not eligible (P1, P2, P3, P4, P5); group alarm billboard, complex, isophonics-btc-overlap, moderate, simple; 1 song loses 5-10 pp; rejected.
+- 2026-11-14, U: skipped by its gate (same record as pass 1); not scored.
+- 2026-11-14, da21561, c5-familyDecide: +0.27 [-1.49], Billboard -0.24, min LOO -0.11, precision -0.58; not eligible (P1, P2, P3, P4, P6); group alarm billboard, complex, moderate; song loss >= 10 pp billboard-0879-run-d-m-c-walk-this-way; rejected.
+- 2026-11-14, da21561, c5-average: +0.74 [-0.43], Billboard +0.27, min LOO +0.38, precision +0.95; not eligible (P2, P6); group alarm complex; rejected.
+- 2026-11-14, C7: skipped by its gate (same record as pass 1); not scored.
+- 2026-11-14, da21561, c6-shift-1: +1.50 [+0.58], Billboard +1.54, min LOO +1.28, precision +1.55; eligible, no alarm; promoted.
+- 2026-11-14, da21561, c6-shift-2: +1.25 [+0.08], Billboard +1.02, min LOO +0.96, precision +1.83; eligible, no alarm; not promoted (smaller mean delta than c6-shift-1).
+- Pass 2 stopped after C6 (eligible settings); C4 not run in pass 2. Scored settings: 18 of 50.
+
+**Promotion 2: c6-shift-1** (`{"recognizer":{"emission":"meanLog","pitchShift":[-1,1]}}`, commit da21561;
+largest mean delta among C6's eligible settings). DEV song means before -> after: majmin 81.9 -> 83.4,
+root 83.9 -> 85.5, sevenths 70.1 -> 71.3, boundary F 76.0 -> 76.7 (precision 86.6 -> 88.1, recall
+69.5 -> 69.8). Mean majmin delta +1.50 pp, 95% paired bootstrap [+0.58, +2.38]; Billboard-subset delta
++1.54; smallest leave-one-out delta +1.28 (without billboard-0891-the-who-happy-jack). No group lower
+against the incumbent or the original baseline; worst song -4.56 pp (iron butterfly); resources within
+limits. Cumulative against the original baseline (main defaults): +2.41 pp mean majmin (81.0 -> 83.4).
