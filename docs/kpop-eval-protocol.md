@@ -28,7 +28,9 @@ captured but only replace a song of the same artist that fails qualification **b
   analyzers) and paid image scores are not used. Sheets whose whole chord-family sequence agrees >= 0.97
   (difflib ratio after the best of 12 transpositions) form one **lineage** (one source copied from another);
   lineages, not sheets, vote. A song whose sheets form a single lineage is kept and flagged ("single lineage").
-  All 12 listed songs qualified on 2026-11-14 (heejae is single lineage), so the reserves are not used.
+  All 12 listed songs qualified on 2026-11-14, so the reserves are not used. With the final parser every song has at
+  least 2 lineages; heejae's two lineages agree on 99% of positions (probably related copies), which the results
+  state as a limit.
 - **Synced lyrics:** one LRCLIB synced-lyrics version per song, chosen by rule before alignment: duration within
   1 s of the art track, album title matching the art track's album, then the version whose line times agree best
   with the other matching versions. Used only for line timing (the gate below); lyric text is never stored.
@@ -73,16 +75,23 @@ Nobody looks at the captured charts or any score until the references are frozen
 2. **Transposition:** each sheet is moved to the recording's key. The shift is proposed by a chord-template vs
    global-chroma fit over 12 shifts (librosa CQT chroma of the capture, not the recognizer's features) and must
    agree with the sheet's stated key/capo when one is stated; an unexplained conflict is an ambiguity for the user.
-3. **Consensus:** one representative sheet per lineage; sequences are aligned to each other (global sequence
-   alignment of chord tokens). Where lineages agree at the majmin level the chord is taken (the richer spelling,
-   e.g. a seventh, only when every seventh-writing lineage agrees on it). Every majmin-level difference
-   (different chord, extra or missing chord) goes to the user with the lineage majority pre-selected when one
-   exists. Repeats are expanded only as a sheet itself marks them; a passage no sheet writes stays uncovered.
-4. **User confirmation:** one page lists, per song, the differences, the passages whose timing is uncertain, and
-   one randomly chosen agreed passage per song (two for a single-lineage song) as a spot check. Each item has the
-   time, the candidates, a YouTube timestamp link and synthesized candidate chords. The user picks a candidate or
-   "모르겠음" (can't tell). Spot-check answers are reported; they do not edit agreed chords unless the user marks a
-   passage wrong and picks the correct chord.
+3. **Consensus:** one representative sheet per lineage (most chords in synced-lyric-paired rows, then most chords);
+   the base is the representative with the most chords in paired rows. Each other representative is moved to its best
+   transposition and globally aligned to the base on (root, family) tokens (family: maj, min, dim, aug, sus, 5); it
+   votes only where its agreement with the base (matches / shorter sequence) is >= 0.6 and its aligned span covers
+   >= 25% of the base (a key-consistency check: sheets were collected by title, so they are the same song). Where
+   every covering lineage agrees, the chord is taken (a seventh only when every seventh-writing lineage agrees on it).
+   Every difference becomes a question: **majority** when one candidate is held by a strict majority of the covering
+   lineages (pre-selected), **tie** otherwise (no pre-selection). An inserted run of >= 4 chords that one lineage
+   writes and the base omits is accepted as coverage; shorter insertions are questions with a "(없음)" candidate.
+   Identical questions within a song are grouped (one answer applies to every occurrence). Repeats are expanded only
+   as a sheet itself marks them.
+4. **User confirmation:** one page lists, per song, the questions (ties first; majority questions shown with their
+   pre-selection), the passages whose timing is uncertain (alignment skips and segments whose template margin is below
+   0.05), and spot checks of agreed passages (below). Each item has the time, the candidates, a YouTube timestamp link
+   and synthesized candidate chords. The user picks a candidate or "모르겠음" (can't tell). An unanswered majority
+   question keeps its pre-selection; an unanswered tie and every "모르겠음" make those chords X. Spot-check answers are
+   reported; they do not edit agreed chords unless the user marks a passage wrong and picks the correct chord.
 5. **Timing:** the consensus sequence is aligned to the capture with a monotonic semi-Markov Viterbi alignment on
    beat-synchronous harmonic chroma (librosa beats, never the extension's Beat This! beats or charts); chords last
    at least one beat; a sheet chord missing from the recording may be skipped (reported); leading/trailing
@@ -103,19 +112,26 @@ Nobody looks at the captured charts or any score until the references are frozen
 
 ## Alignment gate (independent of the recognizer and of the chroma fit)
 For each song, every synced-lyric line that a consensus chord row is paired with: Δ = aligned start of that
-row's first chord - the line's LRCLIB time. **Pass:** at least 80% of paired lines have |Δ| within one bar (4 beats
+row's first chord - the line's LRCLIB time. The denominator is every paired line: a line whose own first chord was
+skipped or left unaligned counts as a miss, and no later chord of that line stands in for it. **Pass:** at least 80% of
+paired lines have |Δ| within one bar (4 beats
 at the song's median beat period), and the same statistic with each line compared against a displaced line
 (1-3 lines away, both directions) is lower with a one-sided permutation p < 0.01. The chroma-template fit vs
 circularly shifted copies is reported as a diagnostic only (the alignment optimised it). A song that fails is
 reported separately with the reason and left out of the headline means. If 2 or more of the 12 songs fail, work
-stops and the user decides.
+stops and the user decides. If exactly 2 fail and the user lets the work continue, the decision rule below applies as written
+(the inconclusive outcome is forced only at 3 or more failures).
 
 ## Scoring
 Arms on the same captured PCM, replayed offline: **A** = original recognizer (replay config `{}`, the
 `Recognizer` defaults at main 6d7ca60, unchanged since before VGT-18), **B** = shipped recognizer (config above).
 The unchanged evaluator (`paired-eval`, `scoreSong`) with `docs/kpop-eval-songs.json`, maps written from the
 captures (offset 0, rate 1, `mediaDurationSec` = the upload length measured during capture) before scoring, and
-the frozen LAB files (majmin view for majmin and root, sevenths view for sevenths). `baseline-analysis` on the
+the frozen LAB files (majmin view for majmin and root, sevenths view for sevenths), with `--mask-unknown-boundaries`
+(reference X/unmapped regions, widened by the 250 ms window, are left out of both reference and chart changes; the
+Billboard runs never used it). A song whose sevenths view has no evaluable seconds gets "sevenths not computable":
+the sevenths song mean is taken over the songs that have evaluable sevenths, through a maps file that omits the
+others, and the count is reported; its other metrics are unaffected. `baseline-analysis` on the
 same captures for arm A and arm B.
 - **Per song, per artist (unweighted song mean within the artist) and overall (song mean):** majmin, root and
   sevenths WCSR; chord-change precision, recall and F within +-250 ms (majmin labels, one-to-one) and change counts;
@@ -144,6 +160,26 @@ All 14 candidates through qualification, capture, R1, alignment gate and scoring
 number of user questions and answers ("모르겠음" included); X shares; the decision with its numbers; limits (12
 songs from 4 artists, web-sheet references, beat-grid boundaries, one capture per song, audio deleted so a later
 trial compares baseline and candidate on a new capture with the same references).
+
+## Execution specification (frozen before scoring)
+- Inputs manifest `~/vgt-kpop-eval/gt/inputs-manifest.json` (sha256
+  `ae1d86569cfdfdb89459beac32f1e5d52c7772feae8de4a2c806159ac799554a`): sha256 of every tool file and every stored
+  sheet (127 sheets with source URLs) and the LRCLIB ids. Tool file sha256 prefixes: `gt.py` fcafd8adabfb1460,
+  `gt_align.py` 29b4a6cc7e64724a, `gt_capture.py` 17c30141d5b6d4db, `gt_chords.py` e508a84b960d90b3,
+  `gt_features.py` 9f5f5d2fd1d40bd5, `gt_out.py` ecb6c7a519cf166f, `gt_validate.py` 540e35cdad876bdb,
+  `sheets.py` 9499ed3e96b7fb42, `consensus.py` fafda6848334cb97. The consensus rules and exact parameters are in
+  `~/vgt-kpop-eval/tools/sheets/README.md`; the timing tool in `~/vgt-kpop-eval/tools/gt/README.md`.
+- Sheet parsing and pairing: chord rows above lyric rows; a lyric row pairs with a synced-lyric line by character-bigram
+  Dice >= 0.45 under a monotonic dynamic-programming match. Lineages: transitive closure of sheet pairs whose collapsed
+  family sequences reach difflib ratio >= 0.97 after the best of 12 transpositions.
+- Timing tool parameters are the tool defaults: skip penalty 1.5, duration weight 0.5, X score 0.2, silence -30 dB,
+  review confidence threshold 0.05, gate share 0.8, gate p 0.01, bar = 4 beats, 10 000 permutations (seed 20261114).
+  The absolute transposition per song comes from `gt.py key` on the capture and is checked against stated keys/capos.
+- Spot checks: population = agreed lines (every item agreed, no question) with a synced-lyric time; one line per song,
+  two for a single-lineage song, drawn with Python `random.Random(2111)` over the sorted line indices of each song in
+  the song order of the table above; the window is that line's span on the aligned time axis.
+- A change to any of these after the first score is not allowed; a change before scoring is recorded below with its
+  reason, and the manifest is regenerated.
 
 ## Recorded during implementation
 (none yet)
