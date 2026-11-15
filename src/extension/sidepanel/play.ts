@@ -6,7 +6,7 @@
 import type { Arrangement } from '../../arrange/arrange';
 import { prettyChord, shapeName } from '../../music/key';
 import { bigBeatSeconds } from '../../music/meter';
-import { barsForChartEvent, barsForHardChord, changeConcertLabel, frameAt, upcomingShapes, type PlayModel } from '../../play/model';
+import { barsForChartEvent, barsForHardChord, barsForUncertainStretch, changeConcertLabel, frameAt, upcomingShapes, type PlayModel } from '../../play/model';
 import { bassHTML, slashChordHTML, splitSlashBass } from './chord-name';
 import { escapeHtml, renderShapeDiagram, shapeDiagramHeight } from './diagram';
 import { ScrubState } from './scrub';
@@ -233,10 +233,11 @@ export class PlayScreen {
 
   /**
    * Dashed outline on every lane bar drawing chart event `event` (the chord being fixed, see
-   * barsForChartEvent), scrolled into view by scrollToFix. null clears it.
+   * barsForChartEvent), or at a "?" stop only on the bars drawing the stretch whose first mark is
+   * `stretchMark` (barsForUncertainStretch); scrolled into view by scrollToFix. null clears it.
    */
-  markFix(event: number | null): void {
-    const on = new Set(event === null || !this.m ? [] : barsForChartEvent(this.m, event));
+  markFix(event: number | null, stretchMark?: number): void {
+    const on = new Set(event === null || !this.m ? [] : stretchMark !== undefined ? barsForUncertainStretch(this.m, stretchMark) : barsForChartEvent(this.m, event));
     this.barEls.forEach((b, i) => b.classList.toggle('fix-at', on.has(i)));
     if (event === null) this.fol.reset();
     else if (on.size) {

@@ -3,7 +3,7 @@ import { DEFAULT_PROFILE, type Level, type Profile } from '../arrange/levels';
 import { chartStorageKey, type Chart, type RecordingSource, type UncertainSpan } from '../chart/types';
 import { mergeAutoCharts } from '../chart/merge';
 import { validateChart } from '../chart/validate';
-import { CorrectionConflict, acceptUncertainAlt, autoChordAt, correctChordEvent, findEvent, restoreAutoChord, type EventRef } from '../editor/correct';
+import { CorrectionConflict, acceptUncertainAlt, autoChordAt, correctChordEvent, correctChordStretch, findEvent, restoreAutoChord, type EventRef, type FixStretch } from '../editor/correct';
 import type { AccuracyPair } from '../eval/overview';
 import type { ChartWriteMessage, ChartWriteResult } from './messages';
 
@@ -247,13 +247,15 @@ export class ChartStore {
    * applies to the stored chart even if an auto chart arrived after the panel read it.
    * The result is stored under the requested recording (like adoptAuto), even when the chart
    * was found through the YouTube / YouTube Music fallback, so later auto charts and undo of
-   * this recording see it first.
+   * this recording see it first. With `stretch` (a "?" stop) only that stretch of the event changes
+   * (correctChordStretch).
    */
-  correctEvent(source: RecordingSource, id: string, event: EventRef, chord: string, at: Date): Promise<{ before: Chart; after: Chart }> {
+  correctEvent(source: RecordingSource, id: string, event: EventRef, chord: string, at: Date, stretch?: FixStretch): Promise<{ before: Chart; after: Chart }> {
     return this.exclusive(async () => {
       const before = await this.load(source, id);
       if (!before) throw new CorrectionConflict('저장된 코드표가 없어요.');
-      const after = checked(correctChordEvent({ ...before, recording: { ...before.recording, source, id } }, event, chord, at));
+      const c = { ...before, recording: { ...before.recording, source, id } };
+      const after = checked(stretch ? correctChordStretch(c, event, stretch, chord, at) : correctChordEvent(c, event, chord, at));
       await this.area.set({ [chartStorageKey(source, id)]: after });
       return { before, after };
     });
@@ -344,9 +346,9 @@ export async function adoptAutoChart(source: RecordingSource, id: string): Promi
   return r.chart ?? null;
 }
 
-/** Side panel: fixes one chord of the chart in use through the serialized ChartStore. */
-export async function correctChartEvent(source: RecordingSource, id: string, event: EventRef, chord: string): Promise<{ before: Chart; after: Chart }> {
-  const r = await requestWrite({ type: 'chart-write', op: 'correct-event', source, id, event, chord, at: new Date().toISOString() });
+/** Side panel: fixes one chord (or, with `stretch`, one "?" stretch of it) of the chart in use through the serialized ChartStore. */
+export async function correctChartEvent(source: RecordingSource, id: string, event: EventRef, chord: string, stretch?: FixStretch): Promise<{ before: Chart; after: Chart }> {
+  const r = await requestWrite({ type: 'chart-write', op: 'correct-event', source, id, event, chord, at: new Date().toISOString(), ...(stretch ? { stretch: { fromSec: stretch.fromSec, toSec: stretch.toSec } } : {}) });
   if (!r.chart || !r.before) throw new Error('서비스 워커가 고친 코드표를 돌려주지 않았어요');
   return { before: r.before, after: r.chart };
 }
@@ -380,7 +382,7 @@ export async function handleChartWrite(store: ChartStore, msg: ChartWriteMessage
       return { ok: true };
     }
     if (msg.op === 'correct-event') {
-      const { before, after } = await store.correctEvent(msg.source, msg.id, msg.event, msg.chord, new Date(msg.at));
+      const { before, after } = await store.correctEvent(msg.source, msg.id, msg.event, msg.chord, new Date(msg.at), msg.stretch);
       return { ok: true, chart: after, before };
     }
     if (msg.op === 'accept-alt') {

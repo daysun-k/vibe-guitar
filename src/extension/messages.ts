@@ -1,7 +1,7 @@
 /** Messages exchanged between content scripts, service worker, offscreen document and side panel. */
 import type { Chart, CoverageRange, Recording, RecordingSource, UncertainSpan } from '../chart/types';
 import type { RecordingIdSource } from './content/recording-id';
-import type { EventRef } from '../editor/correct';
+import type { EventRef, FixStretch } from '../editor/correct';
 
 export type AdapterVia = 'video-element' | 'musickit' | 'media-element' | 'unreachable';
 
@@ -135,8 +135,8 @@ export interface AutoChartSavedMessage {
 export type ChartWriteMessage =
   | { type: 'chart-write'; op: 'save'; chart: Chart }
   | { type: 'chart-write'; op: 'adopt-auto'; source: RecordingSource; id: string }
-  /** Play view: fix one event's chord (identified by its start and current chord). */
-  | { type: 'chart-write'; op: 'correct-event'; source: RecordingSource; id: string; event: EventRef; chord: string; at: string }
+  /** Play view: fix one event's chord (identified by its start and current chord), or only its "?" `stretch`. */
+  | { type: 'chart-write'; op: 'correct-event'; source: RecordingSource; id: string; event: EventRef; chord: string; at: string; stretch?: FixStretch }
   /** Play view (VGT-19): play an uncertain stretch of an auto event as its second choice. */
   | { type: 'chart-write'; op: 'accept-alt'; source: RecordingSource; id: string; event: EventRef; span: UncertainSpan; at: string }
   /** Play view: a manual event plays its first recognized chord again (처음 코드로 되돌리기). */

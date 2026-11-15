@@ -23,7 +23,7 @@ import {
   undoStamp,
   type StampState,
 } from '../../editor/core';
-import { acceptUncertainAlt, autoChordAt, correctChordEvent, restoreAutoChord, type EventRef } from '../../editor/correct';
+import { acceptUncertainAlt, autoChordAt, correctChordEvent, correctChordStretch, restoreAutoChord, type EventRef, type FixStretch } from '../../editor/correct';
 import { DraftBook, chartWriteTarget, checkSaveTarget, isDraftEmpty, reattachDraft, recordingKeyOf, type EditorDraft } from '../../editor/drafts';
 import type { Lyrics } from '../../lyrics/types';
 import { keyLabel, prettyChord, respellChartForKey, shapeName } from '../../music/key';
@@ -1007,11 +1007,14 @@ function renderFixNote(): void {
   $('fix-undo').hidden = !fixNote!.undo || !lastFix || lastFix.key !== shownKey();
 }
 
-/** Stores one fixed chord: through the service worker's serialized writes, or in memory during demo. */
-function saveFix(event: EventRef, concert: string, names: { from: string; to: string }): Promise<void> {
+/**
+ * Stores one fixed chord (with `stretch`, a "?" stop: only that stretch of the event): through the
+ * service worker's serialized writes, or in memory during demo.
+ */
+function saveFix(event: EventRef, concert: string, names: { from: string; to: string }, stretch?: FixStretch): Promise<void> {
   return storeChartChange(
-    (c) => correctChordEvent(c, event, concert),
-    (r) => correctChartEvent(r.source, r.id, event, concert),
+    (c) => (stretch ? correctChordStretch(c, event, stretch, concert) : correctChordEvent(c, event, concert)),
+    (r) => correctChartEvent(r.source, r.id, event, concert, stretch),
     `고쳤어요: ${names.from} → ${names.to}`,
   );
 }
@@ -1895,7 +1898,7 @@ async function main(): Promise<void> {
     now: () => positionNow(),
     seek: (sec) => void seekTo(sec),
     showSounding: () => settings.showSounding,
-    mark: (event) => screen.markFix(event),
+    mark: (event, stretchMark) => screen.markFix(event, stretchMark),
     save: saveFix,
     acceptAlt,
     restore: restoreFirst,

@@ -127,7 +127,17 @@ Port of the approved mockup B ("진행표형", diagrams 3x):
   loop repeats only seek and never count in. A speed change during a count-in cancels it ("속도가 바뀌어서
   카운트인을 멈췄어요. 다시 눌러 주세요.").
 - **Fixing one chord (코드 고치기)**: the button opens a small panel at the chord under the playhead (‹ ›
-  step to the previous/next chord event and seek there). Every lane bar the selected event is drawn in gets a
+  step to the previous/next stop and seek there). The stops, in time order: each chord event's start, then
+  every "?" stretch the lane draws inside that chord (marks joined over a small gap count once, as drawn; a
+  stretch covering its whole chord is no separate stop; only while 불확실한 곳 표시 is on), then the next chord,
+  so a "?" inside a long chord can be reached and fixed by itself. At a "?" stop the header names the stretch's
+  time ("0:17~0:19") with "자동으로 들은 코드 · 확실하지 않음" and the 대안 of the mark under the stop as before,
+  only the bars the stretch is drawn in are outlined, and "이 코드로 고치기" changes only that stretch: the chord
+  is split at the stretch bounds like a 대안 replacement (the parts before and after keep the auto chord; the
+  stretch becomes a manual chord whose `auto.split` records its own `fromSec`/`toSec`, no span is consumed),
+  sent as `correct-event` with `stretch` (`ChartStore.correctEvent` → `correctChordStretch`, a conflict when
+  the chord, its "?" spans or the stretch changed meanwhile). The "?" spans inside it stay stored, hidden while
+  it is fixed. At a chord event's own stop everything below is as before. Every lane bar the selected event is drawn in gets a
   dashed outline, so a chord held over several bars shows its whole range (the lane's own cuts decide: a
   sliver under 0.1 s it leaves out of a bar is not outlined); when the outlined bars do not all fit in view, the
   lane scrolls the first outlined row to the top, just under its section header. The header names the event's time range,
@@ -151,7 +161,8 @@ Port of the approved mockup B ("진행표형", diagrams 3x):
   되돌리기": one tap makes it the auto chord again; a chord made by 대안 is merged back with the parts that split
   made (only those, and only while each is still the untouched auto part; an auto chord that was already
   there, even the same chord, is never merged) and its span returns to `uncertain`, so the chart reads as
-  before the replacement. If one of those parts was changed since, only the chord comes back (no merge, no span).
+  before the replacement; a "?" stretch fixed at its own stop is merged back the same way (its "?" spans show
+  again). If one of those parts was changed since, only the chord comes back (no merge, no span).
   Chords fixed before this existed (no `auto`) get the recording's stored auto chart's chord at their start
   (`autochart:<source>:<id>`, only when it differs; none without an auto chart). It is stored like a fix
   (serialized `ChartStore.restoreAuto`, a conflict when the chart changed meanwhile, the status line "바꿨어요:
