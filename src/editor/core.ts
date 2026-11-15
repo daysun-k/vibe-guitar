@@ -177,6 +177,9 @@ export function buildChartDetailed(input: BuildChartInput): BuiltChart {
     provenance: existing
       ? { ...existing.provenance, createdBy: 'edited', updatedAt: nowIso, example: undefined }
       : { createdBy: 'manual', createdAt: nowIso, tool: 'vibe-guitar side panel editor' },
+    // Kept times keep the "?" stretches too: a span shows only while its event is still that auto chord,
+    // so a changed (now manual) chord hides its spans, as 코드 고치기 does.
+    ...(preservation === 'kept' && existing!.uncertain ? { uncertain: existing!.uncertain.map((s) => ({ ...s })) } : {}),
   };
   if (chart.provenance.example === undefined) delete chart.provenance.example;
   const v = validateChart(chart);
