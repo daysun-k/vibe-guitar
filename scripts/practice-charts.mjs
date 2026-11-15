@@ -66,7 +66,7 @@ async function loadModules() {
         "export { parseLab, parseBeats } from './src/eval/annotations.ts';",
         "export { validateChart } from './src/chart/validate.ts';",
         "export { prepareChart } from './src/play/prepare.ts';",
-        "export { chartToInputEvents, mergeShortEvents } from './src/arrange/arrange.ts';",
+        "export { chartToInputEvents, levelEvents } from './src/arrange/arrange.ts';",
         "export { LEVEL_CONFIGS } from './src/arrange/levels.ts';",
         "export { beatsBetween } from './src/chart/timing.ts';",
       ].join('\n'),
@@ -197,15 +197,17 @@ function buildOne(m, args, maps, key) {
   // The same check away from annotated boundaries (moves onto the grid are at most SNAP_MAX_SEC):
   // 100% means the chords and their order are the annotation's.
   const awayFromBoundaries = m.practiceAgreement(chart, segs, map, 0.005, m.SNAP_MAX_SEC);
-  // Beginner view: chords shorter than minChordBeats are merged into the previous one. A sounding
-  // chord just under that length is the sign of chord times off the grid.
+  // Beginner view: chords shorter than minChordBeats are combined with a neighbour (levelEvents:
+  // equal 입문 chords join, runs of short chords become groups of at least minChordBeats). A
+  // sounding chord just under that length is the sign of chord times off the grid.
   const input = m.chartToInputEvents(chart);
-  const minBeats = m.LEVEL_CONFIGS.beginner.minChordBeats;
+  const beginner = m.LEVEL_CONFIGS.beginner;
+  const minBeats = beginner.minChordBeats;
   const lengths = input.filter((e) => e.chord !== 'N').map((e) => m.beatsBetween(chart.timing, e.startSec, e.endSec));
   const beginnerView = {
     minChordBeats: minBeats,
     chords: input.length,
-    afterMerge: m.mergeShortEvents(input, chart.timing, minBeats).length,
+    afterMerge: m.levelEvents(input, chart.timing, beginner).length,
     shorterThanMin: lengths.filter((b) => b < minBeats - 1e-6).length,
     justUnderMin: lengths.filter((b) => b >= minBeats - 0.15 && b < minBeats - 1e-6).length,
   };

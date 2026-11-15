@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { arrangeChart, chartToInputEvents, mergeShortEvents } from '../src/arrange/arrange';
+import { arrangeChart, chartToInputEvents, levelEvents } from '../src/arrange/arrange';
 import { LEVEL_CONFIGS } from '../src/arrange/levels';
 import { beatTimeAt, barPosition } from '../src/chart/timing';
 import { validateChart } from '../src/chart/validate';
@@ -173,7 +173,7 @@ describe('practice charts in the beginner view', () => {
     // As annotated, G and F measure 1.92 and 1.96 beats and fold into the chord before them.
     const raw = { ...buildPracticeChart({ segs, map, mediaDurationSec: 30, recording, timing: grid.timing, createdAt: 'x', tool: 't', note: 'n' }).chart };
     raw.events = practiceEvents(segs, map, 30).events;
-    expect(mergeShortEvents(chartToInputEvents(raw), raw.timing, minBeats).map((e) => e.chord)).toEqual(['N', 'C', 'Am', 'C', 'N']);
+    expect(levelEvents(chartToInputEvents(raw), raw.timing, LEVEL_CONFIGS.beginner).map((e) => e.chord)).toEqual(['N', 'C', 'Am', 'C', 'N']);
     const { chart, snap } = buildPracticeChart({ segs, map, mediaDurationSec: 30, recording, timing: grid.timing, createdAt: 'x', tool: 't', note: 'n' });
     expect(snap).toMatchObject({ moved: 5, kept: 1 });
     expect(chart.events.map((e) => [e.startSec, e.chord])).toEqual([
@@ -185,7 +185,7 @@ describe('practice charts in the beginner view', () => {
       [5.1, 'C'],
       [6.1, 'N'],
     ]);
-    expect(mergeShortEvents(chartToInputEvents(chart), chart.timing, minBeats)).toHaveLength(7);
+    expect(levelEvents(chartToInputEvents(chart), chart.timing, LEVEL_CONFIGS.beginner)).toHaveLength(7);
     const a = arrangeChart(chart, { level: 'beginner', capo: 0 });
     expect(a.events.filter((e) => e.change?.codes.includes('merge'))).toEqual([]);
     // The chord order is the annotation's: away from its boundaries the chart agrees everywhere.

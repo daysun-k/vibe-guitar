@@ -107,15 +107,21 @@ export function chartToInputEvents(chart: Chart): ArrangeInputEvent[] {
   return out;
 }
 
-interface WorkEvent extends ArrangeInputEvent {
+export interface WorkEvent extends ArrangeInputEvent {
   mergedFrom: string[];
+  /** How many of mergedFrom sounded before the event's own chord (0: all merged chords came after it). */
+  mergedBefore: number;
 }
 
 const GAP_EPS = 1e-6;
+const BEAT_EPS = 1e-6;
+/** 입문 short-chord rule: a chord this close to the minimum counts as long enough. */
+const GROUP_TOLERANCE_BEATS = 0.02;
 
 /**
  * Merge chords shorter than level.minChordBeats into the previous chord. Never merges
- * across a rest ("N") on either side, nor across a coverage gap.
+ * across a rest ("N") on either side, nor across a coverage gap. Used by every level
+ * except 입문 (see groupShortEvents).
  */
 export function mergeShortEvents(events: ArrangeInputEvent[], timing: Timing, minBeats: number): WorkEvent[] {
   const out: WorkEvent[] = [];
@@ -125,7 +131,7 @@ export function mergeShortEvents(events: ArrangeInputEvent[], timing: Timing, mi
     const mergeable =
       prev !== undefined &&
       minBeats > 0 &&
-      beats < minBeats - 1e-6 &&
+      beats < minBeats - BEAT_EPS &&
       !isNoChord(e.chord) &&
       !isNoChord(prev.chord) &&
       prev.endSec >= e.startSec - GAP_EPS;
@@ -134,9 +140,162 @@ export function mergeShortEvents(events: ArrangeInputEvent[], timing: Timing, mi
       prev.mergedFrom.push(e.chord);
       continue;
     }
-    out.push({ ...e, mergedFrom: [] });
+    out.push({ ...e, mergedFrom: [], mergedBefore: 0 });
   }
   return out;
+}
+
+/**
+ * The chord a level actually plays, for comparing neighbours: the level's mandatory
+ * simplification with every slash bass dropped (Am/G and Am, Fmaj7 and F6 are the same
+ * 입문 chord). A symbol that does not parse is its own key.
+ */
+export function levelChordKey(symbol: string, level: LevelConfig): string {
+  try {
+    return formatChord(reduceForLevel(parseChord(symbol), level, { prev: null, next: null }).chord);
+  } catch {
+    return symbol.trim();
+  }
+}
+
+/** One or more consecutive input chords played as one event. */
+interface Unit {
+  members: ArrangeInputEvent[];
+  /** Index of the member whose chord is played: the longest (the first on a tie). */
+  rep: number;
+  /** levelChordKey of the played chord. */
+  key: string;
+  beats: number;
+}
+
+/**
+ * A unit as one event: the played member's chord over the whole span; the other members
+ * (except repeats of that same symbol) are listed in mergedFrom.
+ */
+function unitToEvent(u: Unit): WorkEvent {
+  const main = u.members[u.rep];
+  // The played chord is heard from its first occurrence (C, G, C joined is played from the first C).
+  const first = u.members.findIndex((m) => m.chord === main.chord);
+  const merged = u.members.filter((m) => m.chord !== main.chord);
+  return {
+    startSec: u.members[0].startSec,
+    endSec: u.members[u.members.length - 1].endSec,
+    chord: main.chord,
+    confidence: main.confidence,
+    mergedFrom: merged.map((m) => m.chord),
+    mergedBefore: u.members.slice(0, first).length,
+  };
+}
+
+/**
+ * 입문 short-chord rule. Short chords (under minBeats) are still combined so changes never
+ * come faster than the level allows, but a run of them no longer disappears into the chord
+ * before it (Let It Be: Am, Am/G, Fmaj7, F6 all became G). Inside each stretch without a
+ * rest or a coverage gap:
+ *   1. A short chord joins a neighbour that is the same 입문 chord (levelChordKey): Am + Am/G
+ *      is one Am, Fmaj7 + F6 one F.
+ *   2. A run of consecutive short chords that together last at least minBeats is cut, from its
+ *      start, into groups of at least minBeats. Each group is played as its longest chord (the
+ *      first on a tie), so the chords keep their order and only the shortest ones in a group
+ *      are dropped. A remainder shorter than minBeats joins the last group, which keeps its chord.
+ *   3. A run shorter than minBeats in total (a lone passing chord) joins the chord before it,
+ *      as before, and when the chord after it is the same 입문 chord that one joins too
+ *      (C, G for half a beat, C is one C); the chord before keeps playing. At the start of a
+ *      stretch the run stays on its own.
+ * Long chords are never combined with each other, so a long Am/G after a long Am keeps its
+ * bass line. Lengths within GROUP_TOLERANCE_BEATS of minBeats count as long enough.
+ */
+export function groupShortEvents(events: ArrangeInputEvent[], timing: Timing, level: LevelConfig): WorkEvent[] {
+  const minBeats = level.minChordBeats;
+  // Chart times are rounded to milliseconds, so a chord on the grid can measure 1.9986 beats.
+  const enough = (beats: number): boolean => beats >= minBeats - GROUP_TOLERANCE_BEATS;
+  const isShort = (u: Unit): boolean => minBeats > 0 && !enough(u.beats);
+  const span = (a: ArrangeInputEvent, b: ArrangeInputEvent): number => beatsBetween(timing, a.startSec, b.endSec);
+  const unitOf = (members: ArrangeInputEvent[]): Unit => {
+    let rep = 0;
+    members.forEach((m, i) => {
+      if (span(m, m) > span(members[rep], members[rep]) + BEAT_EPS) rep = i;
+    });
+    return { members, rep, key: levelChordKey(members[rep].chord, level), beats: span(members[0], members[members.length - 1]) };
+  };
+  /** Chords joining a unit that keeps playing its own chord. */
+  const extend = (u: Unit, more: ArrangeInputEvent[]): Unit => {
+    const members = [...u.members, ...more];
+    return { ...u, members, beats: span(members[0], members[members.length - 1]) };
+  };
+  const out: WorkEvent[] = [];
+  let stretch: ArrangeInputEvent[] = [];
+
+  const flush = (): void => {
+    if (!stretch.length) return;
+    // Step 1: short chords join an equal neighbour.
+    const units: Unit[] = [];
+    for (const e of stretch) {
+      const u = unitOf([e]);
+      const prev = units[units.length - 1];
+      if (prev && prev.key === u.key && (isShort(prev) || isShort(u))) {
+        units[units.length - 1] = unitOf([...prev.members, e]);
+      } else {
+        units.push(u);
+      }
+    }
+    // Steps 2 and 3: runs of short units.
+    const result: Unit[] = [];
+    let i = 0;
+    while (i < units.length) {
+      if (!isShort(units[i])) {
+        result.push(units[i++]);
+        continue;
+      }
+      let j = i;
+      while (j < units.length && isShort(units[j])) j++;
+      const run = units.slice(i, j);
+      const total = span(run[0].members[0], run[run.length - 1].members.at(-1)!);
+      if (!enough(total)) {
+        const prev = result[result.length - 1];
+        const members = run.flatMap((u) => u.members);
+        if (prev) {
+          const next = units[j];
+          const joinNext = next !== undefined && next.key === prev.key;
+          result[result.length - 1] = extend(prev, [...members, ...(joinNext ? next.members : [])]);
+          if (joinNext) j++;
+        } else {
+          result.push(unitOf(members));
+        }
+      } else {
+        let group: ArrangeInputEvent[] = [];
+        for (const u of run) {
+          group.push(...u.members);
+          if (enough(span(group[0], group[group.length - 1]))) {
+            result.push(unitOf(group));
+            group = [];
+          }
+        }
+        if (group.length) result[result.length - 1] = extend(result[result.length - 1], group);
+      }
+      i = j;
+    }
+    for (const u of result) out.push(unitToEvent(u));
+    stretch = [];
+  };
+
+  for (const e of events) {
+    const prev = stretch[stretch.length - 1];
+    if (isNoChord(e.chord)) {
+      flush();
+      out.push({ ...e, mergedFrom: [], mergedBefore: 0 });
+      continue;
+    }
+    if (prev && prev.endSec < e.startSec - GAP_EPS) flush();
+    stretch.push(e);
+  }
+  flush();
+  return out;
+}
+
+/** The level's short-chord rule: 입문 groups runs of short chords, the other levels merge into the previous chord. */
+export function levelEvents(events: ArrangeInputEvent[], timing: Timing, level: LevelConfig): WorkEvent[] {
+  return level.shortChords === 'group' ? groupShortEvents(events, timing, level) : mergeShortEvents(events, timing, level.minChordBeats);
 }
 
 /** 1 original (after reduction), 2 same-root change, 3 relative major/minor (opt-in), 4 original kept, hard. */
@@ -211,7 +370,7 @@ export function changeCodes(original: Chord, sounding: Chord): ChangeCode[] {
   return CHANGE_ORDER.filter((c) => out.has(c));
 }
 
-function changeRecord(original: Chord, sounding: Chord, stage: Stage, mergedFrom: string[], capo: number, level: Level): ChangeRecord | null {
+function changeRecord(original: Chord, sounding: Chord, stage: Stage, mergedFrom: string[], mergedBefore: number, capo: number, level: Level): ChangeRecord | null {
   const codes = changeCodes(original, sounding);
   if (mergedFrom.length) codes.push('merge');
   if (!codes.length) return null;
@@ -220,7 +379,9 @@ function changeRecord(original: Chord, sounding: Chord, stage: Stage, mergedFrom
   const reasons = codes.filter((c): c is Exclude<ChangeCode, 'merge'> => c !== 'merge');
   const action = reasons.map((c) => c === 'drop-seventh' && original.seventh === '6' ? '6음을 빼고' : CHANGE_TEXT[c]).join(', ');
   const prefix = stage === 2 || stage === 3 ? `${from} 모양은 ${LEVEL_NAME[level]}에서 어려워서, ` : `${LEVEL_NAME[level]}이라 `;
-  const merge = mergedFrom.length ? `짧게 지나가는 코드(${mergedFrom.map((n) => shapeName(n, capo)).join(', ')})를 앞 코드에 합쳤어요` : '';
+  // 입문 may play a group as a later, longer chord: the merged chords then came before it.
+  const into = mergedBefore > 0 ? '이 코드에' : '앞 코드에';
+  const merge = mergedFrom.length ? `짧게 지나가는 코드(${mergedFrom.map((n) => shapeName(n, capo)).join(', ')})를 ${into} 합쳤어요` : '';
   const main = reasons.length ? `${prefix}${action} ${to} 모양으로 쳐요${codes.includes('relative') ? ' (근음이 바뀌어 멜로디와 어긋날 수 있어요)' : ''}` : '';
   return {
     original: formatChord(original),
@@ -336,7 +497,7 @@ function parseOrNull(sym: string): Chord | null {
   return parseChord(sym);
 }
 
-/** Events after the level's short-chord merge, parsed, with their context; plans cached per capo. */
+/** Events after the level's short-chord rule (levelEvents), parsed, with their context; plans cached per capo. */
 interface Prepared {
   levelName: Level;
   level: LevelConfig;
@@ -349,7 +510,7 @@ interface Prepared {
 
 function prepare(input: ArrangeInputEvent[], timing: Timing, levelName: Level, profile: Profile): Prepared {
   const level = LEVEL_CONFIGS[levelName];
-  const events = mergeShortEvents(input, timing, level.minChordBeats);
+  const events = levelEvents(input, timing, level);
   return { levelName, level, profile, timing, events, chords: events.map((e) => parseOrNull(e.chord)), plans: new Map() };
 }
 
@@ -495,7 +656,7 @@ function solve(p: Prepared, capo: number, mask: boolean[] | null): Arrangement {
       stage: c.stage,
       hard: c.stage === 4 || !c.voicing || !inLevel(c.voicing, p.levelName),
       shapeLevel,
-      change: changeRecord(plan.original, c.sounding!, c.stage, e.mergedFrom, capo, p.levelName),
+      change: changeRecord(plan.original, c.sounding!, c.stage, e.mergedFrom, e.mergedBefore, capo, p.levelName),
     };
   });
 
