@@ -161,7 +161,9 @@ button.link{color:var(--accent);text-decoration:underline;font-weight:600}
 .segs{flex:1;display:flex;min-width:0}
 .sg{padding:6px 0 0 8px;min-width:0;display:flex;flex-direction:row;align-items:baseline;gap:5px;overflow:hidden}
 .sg+.sg{border-left:1.5px solid var(--line)}
-.sg .cn{font-size:20px;line-height:1.1}
+.sg .cn{font-size:20px;line-height:1.1;flex:none;max-width:100%;overflow:hidden}
+/* A name wider than its cell is drawn smaller (lane-fit.ts); below the minimum the ellipsis ends it (.cut). */
+.sg .cn.cut{text-overflow:ellipsis}
 .sg small{font-size:10.5px;color:var(--ink-3);line-height:1;white-space:nowrap}
 .sg .alt{color:var(--ink-2)}
 .sg.rep{align-items:center;justify-content:center;padding:0}
