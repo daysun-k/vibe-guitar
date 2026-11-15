@@ -122,6 +122,18 @@ frozen VGT-21 chord-order references (`npm run uncertainty-sequence`, `--whole-c
   adds more insertions than it removes deletions, so F falls. This agrees with the two-tier design. Realignment
   can relabel operations, so these are net changes, not localized captures of missed changes.
 
+## Browser check (2026-11-15)
+The audio-dump build of main e2c89ce was loaded in the user's Aside; after one toolbar click, Drive My Car
+(kfSQkZuIx84) and Something (VWO3nEuWo4k) were played and captured. Replaying the same captures offline on
+e2c89ce reproduced both live charts with every confidence (R1 2/2). The live `uncertain` spans equal the
+offline ones: the union of flagged time equals the flag-threshold run, and the replace-tier spans (7 and 17)
+equal the replace-threshold run in bounds and second choice. In the panel, the replace-tier row, the one-tap
+replacement (status "바꿨어요: Am -> D" and 되돌리기), the undo, an info-only stretch and the switch turned off were
+captured (side panel only, lyrics hidden while capturing). A replaced 0.48 s stretch is shown at beginner level
+as "D 합침" (the arrangement merges chords that short), as for any short chord. After seeing the screenshots the
+user asked for a quieter design (no dashed outline, no row under the shapes, the second choice shown in the
+코드 고치기 panel); that change follows in a separate pull request and does not change any number above.
+
 ## Resources (A5)
 Measured on this Mac by replaying the 23 DEV captures with the shipped config, twice per arm in alternation,
 before VGT-19 (fd4203d) and with the wired feature (475dddb / 743bb25, the same recognizer code as 8c7686e), while the K-pop capture was running in
