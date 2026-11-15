@@ -64,22 +64,26 @@ export interface UncertainMark extends VisibleSpan {
   altSounding: string;
   /** Replace tier: the panel offers the one-tap replacement (else the second choice is only shown). */
   replace: boolean;
+  /** The stretch was heard as no chord (its lane segment is empty; the second choice is a chord). */
+  noChord: boolean;
 }
 
 /**
  * Marks of the play model: visible spans whose stretch is drawn as the span's chord (a short chord
  * merged into the previous one by the arrangement is not marked) and whose second choice reads
- * differently from the shown chord after the level's simplification.
+ * differently from the shown chord after the level's simplification. A no-chord span is marked where
+ * the arrangement draws its stretch as a rest (the lane's empty segment).
  */
 export function uncertainMarks(chart: Chart, arrangement: Arrangement, key: KeyEstimate | null, timing: Timing, labelAt: (sec: number) => string | null, on: boolean, o: AltNameOptions): UncertainMark[] {
   const out: UncertainMark[] = [];
   for (const v of visibleSpans(chart, on)) {
     const mid = (v.span.fromSec + v.span.toSec) / 2;
     const ev = arrangement.events.find((e) => mid >= e.startSec && mid < e.endSec);
-    if (!ev || ev.rest || !sameChordSymbol(ev.original, v.span.chord)) continue;
+    if (!ev) continue;
+    if (isNoChord(v.span.chord) ? !ev.rest : ev.rest || !sameChordSymbol(ev.original, v.span.chord)) continue;
     const names = altNames(v.span.alt, key, timing, v.span, o);
     if (names.name === labelAt(mid)) continue;
-    out.push({ ...v, fromSec: v.span.fromSec, toSec: v.span.toSec, alt: names.name, altSounding: names.sounding, replace: v.span.replace === true });
+    out.push({ ...v, fromSec: v.span.fromSec, toSec: v.span.toSec, alt: names.name, altSounding: names.sounding, replace: v.span.replace === true, noChord: isNoChord(v.span.chord) });
   }
   return out;
 }

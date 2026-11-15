@@ -156,7 +156,9 @@ export function buildChartDetailed(input: BuildChartInput): BuiltChart {
     if (old && sameChordSymbol(old.chord, input.chords[i])) events.push({ ...old });
     else {
       if (sameTimes) changed++;
-      events.push({ startSec: input.stamps[i], chord: input.chords[i], confidence: 1, source: 'manual' });
+      // A changed chord at a kept time remembers the first recognized one, as 코드 고치기 does.
+      const auto = old ? (old.source === 'auto' ? { chord: old.chord, confidence: old.confidence } : old.auto) : undefined;
+      events.push({ startSec: input.stamps[i], chord: input.chords[i], confidence: 1, source: 'manual', ...(auto ? { auto } : {}) });
     }
   }
   const barSec = (60 / input.timing.bpm) * input.timing.beatsPerBar;

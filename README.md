@@ -138,6 +138,19 @@ Port of the approved mockup B ("진행표형", diagrams 3x):
   so it applies to the stored chart even if an auto chart arrived meanwhile. "되돌리기" in the status line
   undoes the last fix while the stored chart is still the fixed one. Clicking a bar still only seeks. In demo
   playback the fix changes only the in-memory demo chart.
+  **처음 코드로 되돌리기**: a fixed auto chord remembers the chord first recognized there (`auto` on the manual
+  event: chord and confidence, plus, when 대안 replaced it, the uncertain span and which parts before and
+  after the split made; a second fix keeps the first one,
+  and so does an editor save that changes a chord at a kept time). For such a chord the panel shows "처음 들은
+  코드: X" (named like the panel's other chords, a capo shape name or 코드 없음) with the button "처음 코드로
+  되돌리기": one tap makes it the auto chord again; a chord made by 대안 is merged back with the parts that split
+  made (only those, and only while each is still the untouched auto part; an auto chord that was already
+  there, even the same chord, is never merged) and its span returns to `uncertain`, so the chart reads as
+  before the replacement. If one of those parts was changed since, only the chord comes back (no merge, no span).
+  Chords fixed before this existed (no `auto`) get the recording's stored auto chart's chord at their start
+  (`autochart:<source>:<id>`, only when it differs; none without an auto chart). It is stored like a fix
+  (serialized `ChartStore.restoreAuto`, a conflict when the chart changed meanwhile, the status line "바꿨어요:
+  A → B" with 되돌리기).
 - **Uncertainty**: at 중급/상급 an actionable hint such as "Em도 돼요" on low-confidence 7th chords. 입문
   reduces 7/maj7 to triads; the change mark (●) and its tooltip say so (no superscript 7 next to the name).
 - **불확실한 곳 (VGT-19)**: where an auto chart has an uncertain stretch (`chart.uncertain`) the lane shows only
@@ -155,7 +168,10 @@ Port of the approved mockup B ("진행표형", diagrams 3x):
   event with the second choice (confidence 1), the parts before and after keep the auto chord and confidence,
   and the stretch leaves `uncertain`. It is stored like 코드 고치기 (serialized `ChartStore.acceptAlt`, chart
   `edited`, the status line "바꿨어요: A → B" with 되돌리기; in demo only the in-memory chart); after 되돌리기 the
-  status line simply clears. **불확실한 곳 표시** in the settings sheet (on by default) hides every mark.
+  status line simply clears. Stretches heard as no chord show the same way: the "?" sits on the empty lane
+  segment ("—") and 코드 고치기 on that 코드 없음 offers "대안: X" (a replace-tier tap makes the stretch X; the
+  no-chord parts before and after stay). **불확실한 곳 표시** in the settings sheet (on by default) hides every
+  mark, on the [phone music stand](#phone-music-stand-휴대폰-악보대) too.
   Re-analyses merge stretches like chords: the newer chart's stretches, plus the older chart's stretches lying
   wholly in ranges only it heard.
   In the lane a stretch is drawn at its own beats: a stretch covering only part of a bar or a chord is its own
@@ -204,6 +220,14 @@ away after a few seconds or when that ends; while the link to the Mac is down, t
 Portrait and landscape both work. In portrait the bar card sits between the two chords and the buttons along
 the bottom; in landscape the current chord's column ends with the bar card and the next chord's column with the
 buttons, so the current chord's diagram gets the height a full-width button row would take.
+A chord holding an uncertain stretch (VGT-19, see 불확실한 곳 in the play view) gets the same small quiet "?"
+after its name, for the current and the next chord; the phone only shows it (no 대안, no replacing), and
+불확실한 곳 표시 off in the panel removes it. The song view carries only a yes/no per chord (`uncertain`: event
+indices). Older relays reject a song view with that field, so the panel sends it only after the relay
+announced it (`{"t":"caps","uncertain":true}` when the panel connects); with an older relay, or a panel from
+before this, the stand simply shows no "?". To see it without a player: `npm run phone-layout -- --serve
+--demo --at 12.5` serves the demo song held at 12.5 s (verse: Em? now, C? next with the auto capo 1) and
+prints the phone page URL.
 
 **Run it**
 
@@ -336,12 +360,14 @@ cached lyrics only (no request in demo mode). Query parameters: `t=<sec>`, `play
 names), `unc=0` (불확실한 곳 표시 off), `fix` (open 코드 고치기), `sheet=1`, `lyrics=0`, `mute` (no count-in click), `phonectl` (휴대폰에서 조작 허용 on), `phone` (휴대폰 악보대 switch on; connects to
 `127.0.0.1` only).
 
-The synthetic song carries four uncertain stretches (whole verse Fm at 11.6–13.6 s, the second half of verse
-C♯ at 14.6–15.6 s, the low-confidence Fm7 at 19.6–21.6 s, chorus C♯ → A♯m at 27.6–29.6 s). In the panel's
+The synthetic song carries five uncertain stretches (whole verse Fm at 11.6–13.6 s, the second half of verse
+C♯ at 14.6–15.6 s, the low-confidence Fm7 at 19.6–21.6 s, chorus C♯ → A♯m at 27.6–29.6 s, and the ringing end
+heard as no chord at 89.6–90.6 s, replace tier, second choice G♯ shown as G with the auto capo). In the panel's
 DevTools console, `await vibeGuitar.seek(12.4)` moves the demo there and resolves once it is drawn (demo
 only: it does nothing while a real player is followed); then `document.getElementById('fix-open').click()` opens
 코드 고치기 at that chord: at 12.4 s (verse Fm, replace tier) it shows the "대안: G" button, at 14.0 s or 15.0 s
-(verse C♯, info only) the text "대안: D".
+(verse C♯, info only) the text "대안: D", at 90.0 s (코드 없음) the "대안: G" button. After tapping a 대안 (or
+saving a fix), opening 코드 고치기 again at that chord shows "처음 들은 코드: Em" with "처음 코드로 되돌리기".
 
 Opened outside the extension (file://) the page runs the synthetic demo with default settings, which is
 how `node scripts/screens.mjs` (after `npm run build`) writes `docs/screens/*.png` at 400 and 600 px, light

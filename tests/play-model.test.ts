@@ -22,9 +22,10 @@ describe('play model on the synthetic demo song', () => {
     // one chord per bar (a bar may still be cut at a synthetic uncertain stretch, VGT-19)
     expect(m.bars.slice(0, -1).every((b) => new Set(b.segments.map((s) => s.event)).size === 1)).toBe(true);
     expect(m.bars.slice(0, -1).filter((b) => b.segments.length > 1)).toHaveLength(1);
-    // the last bar runs past the end of coverage (90.6 s): that tail is drawn empty
+    // the last bar starts with the ringing end heard as no chord (89.6–90.6 s, an uncertain stretch,
+    // drawn empty with its "?") and runs past the end of coverage (90.6 s): that tail is drawn empty
     const last = m.bars[m.bars.length - 1];
-    expect(last.segments.map((s) => [s.event >= 0, s.endSec])).toEqual([[true, 90.6], [false, last.endSec]]);
+    expect(last.segments.map((s) => [s.event >= 0, s.flag >= 0, s.endSec])).toEqual([[false, true, 90.6], [false, false, last.endSec]]);
     expect(m.bars.some((b) => b.repeat)).toBe(true);
   });
 

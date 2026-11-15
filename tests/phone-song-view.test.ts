@@ -75,7 +75,8 @@ describe('song view builder', () => {
     expect(m.lyrics).not.toBeNull();
     const json = JSON.stringify(viewOf(m));
     for (const line of lyrics.lines) for (const w of line.words) expect(json).not.toContain(w.text);
-    expect(Object.keys(viewOf(m)).sort()).toEqual(['artist', 'bars', 'capo', 'durationSec', 'events', 'sections', 'shapes', 'showSounding', 'timing', 'title', 'v']);
+    // `uncertain`: event indices of the demo's flagged chords (a yes/no per chord, no second choice)
+    expect(Object.keys(viewOf(m)).sort()).toEqual(['artist', 'bars', 'capo', 'durationSec', 'events', 'sections', 'shapes', 'showSounding', 'timing', 'title', 'uncertain', 'v']);
     // section names come from the lyric structure ("1절", "후렴"), not from lyric text
     expect(viewOf(m).sections.map((s) => s[0])).toContain('후렴');
   });

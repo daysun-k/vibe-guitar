@@ -1,3 +1,4 @@
+import { slashChordHTML } from '../extension/sidepanel/chord-name';
 import type { CommandFailure, CommandOutcome } from './protocol';
 
 /**
@@ -15,6 +16,18 @@ export function beatSegments(bigPerBar: number, bar: number, bigInBar: number): 
   const total = Math.max(1, Math.min(16, Math.round(bigPerBar) || 1));
   const filled = bar < 0 ? 0 : Math.max(0, Math.min(total, Math.floor(bigInBar) + 1));
   return { total, filled };
+}
+
+/** Screen-reader wording of the phone's "?" (the stand never names the second choice). */
+export const UNCERTAIN_LABEL = '확실하지 않아요';
+
+/**
+ * A chord name as the stand draws it: the slash bass smaller and, for a chord holding an uncertain
+ * stretch (VGT-19), a small quiet "?" after it, as the side panel's lane does. The "?" sits inside the
+ * name so fitting the name to its box shrinks it too.
+ */
+export function chordNameHTML(name: string, uncertain: boolean): string {
+  return slashChordHTML(name) + (uncertain ? `<i class="unc-q" role="img" aria-label="${UNCERTAIN_LABEL}">?</i>` : '');
 }
 
 export interface StatusInput {

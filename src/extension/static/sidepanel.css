@@ -337,6 +337,9 @@ textarea{width:100%;resize:vertical}
 .fix-which button.fix-alt{height:24px;padding:0 9px;border-radius:99px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-weight:600;cursor:pointer}
 .fix-which button.fix-alt:hover{border-color:var(--unc)}
 .fix-which button.fix-alt:disabled{opacity:.5;cursor:default}
+.fix-which .fix-first{font-size:12px;color:var(--ink-2);display:inline-flex;align-items:center;gap:6px}
+.fix-which button.fix-restore{height:24px;padding:0 9px;border-radius:99px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-weight:600;font-size:12px;cursor:pointer}
+.fix-which button.fix-restore:hover{border-color:var(--ink-3)}
 .fix-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:3px}
 .fix-grid.kinds{display:flex;overflow-x:auto;scrollbar-width:none}
 .fix-grid.kinds button{flex:none;padding:5px 9px}

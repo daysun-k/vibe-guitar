@@ -16,6 +16,11 @@
 // (or a real phone on the same Wi-Fi): prints the phone URL, approves the first phone that connects,
 // and switches the chord name on GET http://127.0.0.1:<control port>/name?n=<name>; GET /stop ends it.
 // The served page measures itself (MEASURE_SOURCE) every 500 ms and shows the result in its title.
+//
+// --at <sec>: hold the song at that position instead of the first one with a current and a next chord
+// (e.g. --at 12.5: the demo's verse, both chords carrying the uncertain "?" of VGT-19).
+// --demo (with --serve): publish the demo song with its own chord names (no long names, no cycling),
+// for a screenshot of the stand as a real song looks.
 import { spawn } from 'node:child_process';
 import http from 'node:http';
 import { randomBytes } from 'node:crypto';
@@ -26,7 +31,10 @@ import { buildViewer, loadRelay, loadSongTools, parseArgs } from './phone-lib.mj
 
 const R = await loadRelay();
 const S = await loadSongTools();
-const opts = parseArgs(process.argv.slice(2).filter((a) => a !== '--serve'));
+const atArg = process.argv.indexOf('--at');
+const atSec = atArg >= 0 ? Number(process.argv[atArg + 1]) : null;
+if (atSec !== null && !(Number.isFinite(atSec) && atSec >= 0)) throw new Error('--at needs a song position in seconds');
+const opts = parseArgs(process.argv.slice(2).filter((a, i, all) => a !== '--serve' && a !== '--demo' && a !== '--at' && all[i - 1] !== '--at'));
 const EXT_ID = 'a'.repeat(32);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const results = [];
@@ -57,6 +65,7 @@ function findChrome() {
 }
 
 const serve = process.argv.includes('--serve');
+const demoNames = serve && process.argv.includes('--demo');
 const chromePath = serve ? null : findChrome();
 if (!serve && !chromePath) {
   console.log('No Chromium found: set CHROME=/path/to/chrome, or run with --serve and measure in another browser');
@@ -175,12 +184,13 @@ try {
   const TITLE = '아이유(IU) - 밤편지 [가사/Lyrics] Through the Night 공식 뮤직비디오 가사 포함 1시간 연속 듣기';
   const epoch = 'phonelayout1';
   let rev = 0;
-  const viewWith = (name) => ({ ...base, title: TITLE, capo: 2, showSounding: true, shapes: base.shapes.map((s) => ({ ...s, name, sounding: name })) });
+  const viewWith = (name) => (demoNames ? base : { ...base, title: TITLE, capo: 2, showSounding: true, shapes: base.shapes.map((s) => ({ ...s, name, sounding: name })) });
   const song0 = R.readSongView(viewWith('C#m7b5/G#'));
   if (!song0) throw new Error('song view with long names did not validate');
   // A position with a chord now and a next chord.
   let pos = 0;
   while (pos < base.durationSec && !(R.phoneFrame(song0, pos).nowEvent >= 0 && R.phoneFrame(song0, pos).nextEvent >= 0)) pos += 0.25;
+  if (atSec !== null) pos = Math.min(atSec, base.durationSec);
   const pub = await wsConnect('127.0.0.1', pubPort, '/publish', { Host: `127.0.0.1:${pubPort}`, Origin: `chrome-extension://${EXT_ID}` });
   const publish = (name) => {
     const v = viewWith(name);
@@ -225,7 +235,7 @@ try {
     // Cycle through the long names (one per second) unless one was picked on the control port.
     let cycle = 0;
     let picked = false;
-    const cycler = setInterval(() => !picked && publish(NAMES[++cycle % NAMES.length]), 1000);
+    const cycler = setInterval(() => !picked && !demoNames && publish(NAMES[++cycle % NAMES.length]), 1000);
     ctl.on('close', () => clearInterval(cycler));
     console.log(`phone page: http://${relay.lanHost}/?t=${relay.token}`);
     console.log(`control: http://127.0.0.1:${ctl.address().port}/name?n=<chord name>  (/stop ends)`);

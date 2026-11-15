@@ -250,7 +250,9 @@ export function frameAt(m: PlayModel, t: number): Frame {
   const lines = m.lyrics?.lines ?? [];
   const line = lines.length ? pinnedLineAt(lines, t) : -1;
   const nextLine = lines.length ? nextLineAfter(lines, t, line) : -1;
-  const uncertain = event >= 0 ? markAt(m.uncertain, t) : -1;
+  // A chord stretch counts under a sounding chord, a no-chord stretch where none sounds.
+  const k = markAt(m.uncertain, t);
+  const uncertain = k >= 0 && m.uncertain[k].noChord === event < 0 ? k : -1;
   return { event, next, bigLeft, bar, bigInBar, barFraction, section, line, nextLine, uncertain };
 }
 

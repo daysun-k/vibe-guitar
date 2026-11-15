@@ -5,7 +5,7 @@
 import { formatChord, isNoChord, parseChord, qualitySuffix, sameChord, transposeChord } from '../arrange/chord';
 import { spellPitchClass } from '../arrange/notes';
 import { coverageRangeAt, normalizeCoverage } from '../chart/coverage';
-import { NO_CHORD, type Chart, type ChordEvent, type UncertainSpan } from '../chart/types';
+import { NO_CHORD, type AutoOrigin, type Chart, type ChordEvent, type UncertainSpan } from '../chart/types';
 import { validateChart } from '../chart/validate';
 import { respellChord, type KeyEstimate } from '../music/key';
 
@@ -44,13 +44,19 @@ function storedChord(symbol: string): string {
 /**
  * A copy of the chart with one event's chord replaced. The event becomes a manual event
  * (confidence 1); the chart becomes 'edited' (a hand-made chart stays 'manual'), so a later
- * auto analysis is stored as pending instead of replacing it.
+ * auto analysis is stored as pending instead of replacing it. A fixed auto event remembers its
+ * chord in `auto`; fixing it again keeps that first one.
  */
 export function correctChordEvent(chart: Chart, ref: EventRef, chord: string, now: Date = new Date()): Chart {
   const i = findEvent(chart, ref);
   if (i < 0) throw new CorrectionConflict('코드표가 그 사이에 바뀌었어요. 다시 골라 주세요.');
   const next = storedChord(chord);
-  const events = chart.events.map((e, k) => (k === i ? { ...e, chord: next, confidence: 1, source: 'manual' as const } : e));
+  const fixed = (e: ChordEvent): ChordEvent => {
+    const { auto: kept, ...rest } = e;
+    const auto: AutoOrigin | undefined = e.source === 'auto' ? { chord: e.chord, confidence: e.confidence } : kept;
+    return { ...rest, chord: next, confidence: 1, source: 'manual', ...(auto ? { auto } : {}) };
+  };
+  const events = chart.events.map((e, k) => (k === i ? fixed(e) : e));
   const out: Chart = {
     ...chart,
     events,
@@ -77,8 +83,9 @@ export function eventEndSec(chart: Chart, i: number): number {
 
 /**
  * Index of the event an uncertain span applies to, or -1: the span lies inside that one event,
- * the event is still an auto event and still has the span's chord (any spelling). A manual fix
- * of the event, or a chord change, therefore hides the span.
+ * the event is still an auto event and still has the span's chord (any spelling; a no-chord span
+ * applies to an auto no-chord event). A manual fix of the event, or a chord change, therefore hides
+ * the span.
  */
 export function uncertainSpanEvent(chart: Chart, span: UncertainSpan): number {
   let i = -1;
@@ -88,7 +95,7 @@ export function uncertainSpanEvent(chart: Chart, span: UncertainSpan): number {
   }
   if (i < 0) return -1;
   const e = chart.events[i];
-  if (e.source !== 'auto' || isNoChord(e.chord) || !sameChordSymbol(e.chord, span.chord)) return -1;
+  if (e.source !== 'auto' || !sameChordSymbol(e.chord, span.chord)) return -1;
   return span.toSec <= eventEndSec(chart, i) + 1e-6 ? i : -1;
 }
 
@@ -98,8 +105,9 @@ const sameSpan = (a: UncertainSpan, b: UncertainSpan): boolean =>
 /**
  * "2순위로 바꾸기": a copy of the chart where the span's stretch of the event plays the span's
  * second choice. The event is split at the span bounds: the head before the span and the tail
- * after it keep the auto chord with its confidence; the span part becomes a manual event
- * (confidence 1) with `span.alt`. Empty heads/tails are not created. The span is removed from
+ * after it keep the auto chord (or no chord) with its confidence; the span part becomes a manual event
+ * (confidence 1) with `span.alt` that remembers the auto chord, the span and which fragments the
+ * split made in `auto` (so restoreAutoChord can undo exactly this split). Empty heads/tails are not created. The span is removed from
  * `uncertain`; the chart becomes 'edited' (a hand-made chart stays 'manual') like
  * correctChordEvent. A CorrectionConflict when the event or the span changed meanwhile.
  */
@@ -116,10 +124,13 @@ export function acceptUncertainAlt(chart: Chart, ref: EventRef, span: UncertainS
   if (uncertainSpanEvent(chart, stored) !== i) throw conflict();
   const e = chart.events[i];
   const end = eventEndSec(chart, i);
+  const head = stored.fromSec - e.startSec > EDGE_SEC;
+  const tail = end - stored.toSec > EDGE_SEC;
   const parts: ChordEvent[] = [];
-  if (stored.fromSec - e.startSec > EDGE_SEC) parts.push(e);
-  parts.push({ startSec: parts.length ? stored.fromSec : e.startSec, chord: storedChord(stored.alt), confidence: 1, source: 'manual' });
-  if (end - stored.toSec > EDGE_SEC) parts.push({ ...e, startSec: stored.toSec });
+  if (head) parts.push(e);
+  const split = { startSec: e.startSec, head, tail };
+  parts.push({ startSec: head ? stored.fromSec : e.startSec, chord: storedChord(stored.alt), confidence: 1, source: 'manual', auto: { chord: e.chord, confidence: e.confidence, span: { ...stored }, split } });
+  if (tail) parts.push({ ...e, startSec: stored.toSec });
   const events = [...chart.events.slice(0, i), ...parts, ...chart.events.slice(i + 1)];
   const uncertain = chart.uncertain!.filter((_, k) => k !== si);
   const out: Chart = {
@@ -130,6 +141,91 @@ export function acceptUncertainAlt(chart: Chart, ref: EventRef, span: UncertainS
   };
   const v = validateChart(out);
   if (!v.ok) throw new Error(`chart with the second choice is invalid: ${v.errors.join('; ')}`);
+  return out;
+}
+
+/**
+ * The auto chord of `auto` (the recording's stored auto chart) sounding at `sec`: its last event
+ * starting at or before `sec`, while `sec` lies inside that event's heard range. Null when none.
+ * Used for "처음 들은 코드" of events fixed before ChordEvent.auto existed.
+ */
+export function autoChordAt(auto: Chart, sec: number): AutoOrigin | null {
+  let k = -1;
+  for (let j = 0; j < auto.events.length; j++) {
+    if (auto.events[j].startSec <= sec + 1e-6) k = j;
+    else break;
+  }
+  if (k < 0 || !(sec < eventEndSec(auto, k))) return null;
+  const e = auto.events[k];
+  return { chord: e.chord, confidence: e.confidence };
+}
+
+/**
+ * The first recognized chord to offer for a shown event ("처음 들은 코드: X"), or null: a manual event's
+ * own `auto`, else (an event fixed before `auto` existed) `fallback`, the stored auto chart's chord
+ * there, when it differs from the event's chord. Auto events have nothing to restore.
+ */
+export function firstHeard(e: ChordEvent, fallback: AutoOrigin | null): AutoOrigin | null {
+  if (e.source !== 'manual') return null;
+  if (e.auto) return e.auto;
+  if (!fallback || sameChordSymbol(fallback.chord, e.chord)) return null;
+  return { chord: fallback.chord, confidence: fallback.confidence };
+}
+
+/**
+ * "처음 코드로 되돌리기": a copy of the chart where a manual event plays its first recognized chord
+ * again as an auto event (its `auto`, else `fallback` from the stored auto chart). An event made by
+ * 2순위로 바꾸기 is merged back with the fragments that split recorded making (`auto.split`) while
+ * each is still exactly that fragment, so the original event comes back exactly, and the consumed
+ * span returns to `uncertain` (unless a span stored since overlaps it). An auto neighbour the split
+ * did not make is never merged, even with the same chord and confidence; when a recorded fragment
+ * changed (or the record is incomplete) only the chord comes back: no merge, no span. The chart becomes 'edited' like correctChordEvent. A CorrectionConflict
+ * when the event changed meanwhile or there is nothing to restore.
+ */
+export function restoreAutoChord(chart: Chart, ref: EventRef, fallback: AutoOrigin | null = null, now: Date = new Date()): Chart {
+  const i = findEvent(chart, ref);
+  if (i < 0) throw new CorrectionConflict('코드표가 그 사이에 바뀌었어요. 다시 골라 주세요.');
+  const e = chart.events[i];
+  const origin = firstHeard(e, fallback);
+  if (!origin) throw new CorrectionConflict('처음 들은 코드를 찾지 못했어요.');
+  let restored: ChordEvent = { startSec: e.startSec, chord: origin.chord, confidence: origin.confidence, source: 'auto' };
+  let from = i;
+  let to = i + 1;
+  const span = e.auto?.span;
+  const split = e.auto?.split;
+  let uncertain = chart.uncertain;
+  // A fragment the split made, still exactly as made: auto, the original chord and confidence, at `startSec`.
+  const fragment = (x: ChordEvent | undefined, startSec: number): x is ChordEvent =>
+    !!x && x.source === 'auto' && x.auto === undefined && x.chord === origin.chord && x.confidence === origin.confidence && x.startSec === startSec;
+  const prev = chart.events[i - 1];
+  const next = chart.events[i + 1];
+  const intact =
+    !!span &&
+    !!split &&
+    e.startSec === (split.head ? span.fromSec : split.startSec) &&
+    (!split.head || fragment(prev, split.startSec)) &&
+    (!split.tail || fragment(next, span.toSec));
+  if (span && split && intact) {
+    if (split.head) {
+      from = i - 1;
+      restored = prev!;
+    }
+    if (split.tail) to = i + 2;
+    const list = chart.uncertain ?? [];
+    const at = list.findIndex((s) => s.fromSec >= span.fromSec);
+    const k = at < 0 ? list.length : at;
+    const fits = (k === 0 || list[k - 1].toSec <= span.fromSec) && (k === list.length || list[k].fromSec >= span.toSec);
+    if (fits) uncertain = [...list.slice(0, k), { ...span }, ...list.slice(k)];
+  }
+  const events = [...chart.events.slice(0, from), restored, ...chart.events.slice(to)];
+  const out: Chart = {
+    ...chart,
+    events,
+    provenance: { ...chart.provenance, createdBy: chart.provenance.createdBy === 'manual' ? 'manual' : 'edited', updatedAt: now.toISOString() },
+  };
+  if (uncertain !== undefined) out.uncertain = uncertain;
+  const v = validateChart(out);
+  if (!v.ok) throw new Error(`chart with the first chord is invalid: ${v.errors.join('; ')}`);
   return out;
 }
 

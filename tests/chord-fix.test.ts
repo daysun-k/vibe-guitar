@@ -69,7 +69,8 @@ describe('correctChordEvent: one event, nothing else', () => {
     // The panel shows key-respelled names ("A♭" for a stored "G#"): the event is still found.
     const after = correctChordEvent(before, { startSec: 2, chord: 'Ab' }, 'Em', NOW);
     expect(before).toEqual(copy); // not mutated
-    expect(after.events[1]).toEqual({ startSec: 2, chord: 'Em', confidence: 1, source: 'manual' });
+    // the first recognized chord is remembered for 처음 코드로 되돌리기
+    expect(after.events[1]).toEqual({ startSec: 2, chord: 'Em', confidence: 1, source: 'manual', auto: { chord: before.events[1].chord, confidence: before.events[1].confidence } });
     expect([after.events[0], after.events[2], after.events[3]]).toEqual([before.events[0], before.events[2], before.events[3]]);
     expect(after.coverage).toEqual(before.coverage);
     expect(after.timing).toEqual(before.timing);
@@ -243,7 +244,8 @@ describe('editor save of a loaded auto chart', () => {
     const existing = auto();
     const r = buildChartDetailed({ ...base, chords: ['C', 'Em', 'Am', 'F'], stamps: existing.events.map((e) => e.startSec), existing });
     expect(r.changed).toBe(1);
-    expect(r.chart.events[1]).toEqual({ startSec: 2, chord: 'Em', confidence: 1, source: 'manual' });
+    // it remembers the first recognized chord like 코드 고치기
+    expect(r.chart.events[1]).toEqual({ startSec: 2, chord: 'Em', confidence: 1, source: 'manual', auto: { chord: existing.events[1].chord, confidence: existing.events[1].confidence } });
     expect(r.chart.events[3]).toEqual(existing.events[3]);
     expect(r.chart.coverage).toEqual(existing.coverage);
   });

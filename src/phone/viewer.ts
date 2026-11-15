@@ -7,7 +7,6 @@
  * after a reconnect. Chord names are fitted to the space beside their diagrams (fit.ts) so the page
  * never gets wider than the screen.
  */
-import { slashChordHTML } from '../extension/sidepanel/chord-name';
 import { renderShapeDiagram } from '../extension/sidepanel/diagram';
 import { NEXT_SCALE, fitText } from './fit';
 import {
@@ -28,7 +27,7 @@ import {
   type PhoneCommand,
 } from './protocol';
 import { phoneFrame, readSongView, shapeVoicing, type PhoneSong } from './song-view';
-import { beatSegments, outcomeText, statusLine, toggleLook } from './stand';
+import { beatSegments, chordNameHTML, outcomeText, statusLine, toggleLook } from './stand';
 
 const $ = (id: string) => document.getElementById(id)!;
 const now = () => performance.timeOrigin + performance.now();
@@ -183,7 +182,7 @@ function watchdog() {
 
 // ---------- drawing ----------
 
-const shown = { nowShape: -3, nextShape: -3 };
+const shown = { nowShape: -3, nextShape: -3, nowQ: false, nextQ: false };
 /** The chord names must be fitted again (new name, new screen size, or not measurable yet). */
 let fitDirty = true;
 
@@ -192,12 +191,13 @@ function setText(id: string, text: string) {
   if (el.textContent !== text) el.textContent = text;
 }
 
-/** A chord name with its slash bass drawn smaller; the element's text stays the full name. */
-function setChordName(id: string, name: string) {
+/** A chord name with its slash bass drawn smaller and, when uncertain, a small "?" after it. */
+function setChordName(id: string, name: string, uncertain: boolean) {
   const el = $(id);
-  if (el.dataset.name === name) return;
-  el.dataset.name = name;
-  el.innerHTML = slashChordHTML(name);
+  const key = uncertain ? `${name}?` : name;
+  if (el.dataset.name === key) return;
+  el.dataset.name = key;
+  el.innerHTML = chordNameHTML(name, uncertain);
 }
 
 function setClass(el: HTMLElement, name: string, on: boolean) {
@@ -301,20 +301,22 @@ function frame() {
   const f = phoneFrame(s, pos);
   const nowShape = f.nowEvent >= 0 ? s.events[f.nowEvent]!.shape : -1;
   const nextShape = f.nextEvent >= 0 ? s.events[f.nextEvent]!.shape : -1;
-  if (nowShape !== shown.nowShape) {
+  if (nowShape !== shown.nowShape || f.nowUncertain !== shown.nowQ) {
     const n = nameOf(s, nowShape);
-    setChordName('now-name', n.name);
+    setChordName('now-name', n.name, f.nowUncertain);
     setText('now-snd', n.snd);
     $('now-dia').innerHTML = diagramHtml(s, nowShape, 170);
     shown.nowShape = nowShape;
+    shown.nowQ = f.nowUncertain;
     fitDirty = true;
   }
-  if (nextShape !== shown.nextShape) {
+  if (nextShape !== shown.nextShape || f.nextUncertain !== shown.nextQ) {
     const n = nameOf(s, nextShape);
-    setChordName('next-name', n.name);
+    setChordName('next-name', n.name, f.nextUncertain);
     setText('next-snd', n.snd);
     $('next-dia').innerHTML = diagramHtml(s, nextShape, 130);
     shown.nextShape = nextShape;
+    shown.nextQ = f.nextUncertain;
     fitDirty = true;
   }
   const seg = beatSegments(s.big.bigPerBar, f.bar, f.bigInBar);

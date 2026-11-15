@@ -21,6 +21,13 @@ export interface LaneSegment {
   flag: number;
 }
 
+/** An uncertain stretch for buildLane; `noChord` marks a stretch heard as no chord (drawn empty). */
+export interface LaneFlag {
+  fromSec: number;
+  toSec: number;
+  noChord?: boolean;
+}
+
 export interface LaneBar {
   /** Bar number in the timing grid (0 = first downbeat; may be negative for a pickup). */
   bar: number;
@@ -62,9 +69,10 @@ export function barsBetween(t: Timing, fromSec: number, toSec: number): { bar: n
  * bounds dropped or moved by the 0.1 s rules would otherwise point just past the event or the
  * stretch: its chord is the candidate covering most of it, where "no chord" (time with no event, a
  * rest or outside the heard ranges) competes like an event; its flag is the stretch overlapping it
- * most. Ties go to the candidate that starts earlier in the segment.
+ * most. Ties go to the candidate that starts earlier in the segment. A stretch flags only segments of
+ * its own kind: a `noChord` stretch an empty segment, any other stretch a chord segment.
  */
-export function buildLane(a: Arrangement, t: Timing, big: BigBeat, toSec: number, keyOf: (i: number) => string, changed: (i: number) => boolean = () => false, flags?: readonly { fromSec: number; toSec: number }[]): LaneBar[] {
+export function buildLane(a: Arrangement, t: Timing, big: BigBeat, toSec: number, keyOf: (i: number) => string, changed: (i: number) => boolean = () => false, flags?: readonly LaneFlag[]): LaneBar[] {
   const from = a.events.length ? Math.min(0, a.events[0].startSec) : 0;
   const bars = barsBetween(t, from, toSec);
   let prevKey: string | null = null;
@@ -100,10 +108,11 @@ export function buildLane(a: Arrangement, t: Timing, big: BigBeat, toSec: number
       return best ? best.id : -1;
     };
     const barFlags = flagsInBar(flags ?? [], b.startSec, b.endSec);
-    const flagOver = (st: number, en: number): number => {
+    const flagOver = (st: number, en: number, empty: boolean): number => {
       let best = -1;
       let bestLen = 0;
       for (const f of barFlags) {
+        if (!!flags![f.index].noChord !== empty) continue;
         const len = Math.min(en, f.toSec) - Math.max(st, f.fromSec);
         if (len > bestLen + 1e-9) {
           best = f.index;
@@ -134,7 +143,7 @@ export function buildLane(a: Arrangement, t: Timing, big: BigBeat, toSec: number
       else {
         if (en - c < 1e-9) continue; // a duplicate cut
         id = chordOver(c, en);
-        flag = id < 0 ? -1 : flagOver(c, en);
+        flag = flagOver(c, en, id < 0);
       }
       const last = parts[parts.length - 1];
       if (!last || last.id !== id || last.flag !== flag) parts.push({ id, flag, st: c });

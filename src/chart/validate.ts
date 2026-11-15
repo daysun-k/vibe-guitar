@@ -23,6 +23,56 @@ function checkKeys(o: Obj, path: string, allowed: string[], required: string[], 
   for (const k of Object.keys(o)) if (!allowed.includes(k)) errors.push(`${path}.${k} is not allowed`);
 }
 
+/** A chord symbol field: non-empty, "N" or parseable. */
+function checkChord(c: unknown, path: string, errors: string[]): void {
+  if (!isStr(c) || c.length === 0) errors.push(`${path} must be a non-empty string`);
+  else if (!isNoChord(c)) {
+    try {
+      parseChord(c);
+    } catch (err) {
+      errors.push(`${path}: ${(err as Error).message}`);
+    }
+  }
+}
+
+/** An uncertain span's own fields; true when its bounds are valid numbers (for the order check). */
+function checkSpan(s: Obj, p: string, errors: string[]): boolean {
+  checkKeys(s, p, ['fromSec', 'toSec', 'chord', 'alt', 'replace'], ['fromSec', 'toSec', 'chord', 'alt'], errors);
+  if ('replace' in s && s.replace !== true) errors.push(`${p}.replace must be true when present`);
+  checkChord(s.chord, `${p}.chord`, errors);
+  checkChord(s.alt, `${p}.alt`, errors);
+  if (!isNum(s.fromSec) || !isNum(s.toSec) || s.fromSec < 0 || s.toSec <= s.fromSec) {
+    errors.push(`${p} must satisfy 0 <= fromSec < toSec`);
+    return false;
+  }
+  return true;
+}
+
+/** ChordEvent.auto: the first recognized chord of a manual event (and the span it was split at). */
+function checkAutoOrigin(a: unknown, p: string, errors: string[]): void {
+  if (!isObj(a)) {
+    errors.push(`${p} must be an object`);
+    return;
+  }
+  checkKeys(a, p, ['chord', 'confidence', 'span', 'split'], ['chord', 'confidence'], errors);
+  if ((a.span === undefined) !== (a.split === undefined)) errors.push(`${p}.span and ${p}.split go together`);
+  if (a.split !== undefined) {
+    const sp = a.split;
+    if (!isObj(sp)) errors.push(`${p}.split must be an object`);
+    else {
+      checkKeys(sp, `${p}.split`, ['startSec', 'head', 'tail'], ['startSec', 'head', 'tail'], errors);
+      if (!isNum(sp.startSec) || sp.startSec < 0) errors.push(`${p}.split.startSec must be a number >= 0`);
+      if (typeof sp.head !== 'boolean' || typeof sp.tail !== 'boolean') errors.push(`${p}.split.head and .tail must be booleans`);
+    }
+  }
+  checkChord(a.chord, `${p}.chord`, errors);
+  if (!isNum(a.confidence) || a.confidence < 0 || a.confidence > 1) errors.push(`${p}.confidence must be in [0, 1]`);
+  if (a.span !== undefined) {
+    if (!isObj(a.span)) errors.push(`${p}.span must be an object`);
+    else checkSpan(a.span, `${p}.span`, errors);
+  }
+}
+
 export function validateChart(input: unknown): ValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -77,7 +127,7 @@ export function validateChart(input: unknown): ValidationResult {
         errors.push(`${p} must be an object`);
         return;
       }
-      checkKeys(e, p, ['startSec', 'chord', 'confidence', 'source'], ['startSec', 'chord', 'confidence', 'source'], errors);
+      checkKeys(e, p, ['startSec', 'chord', 'confidence', 'source', 'auto'], ['startSec', 'chord', 'confidence', 'source'], errors);
       if (!isNum(e.startSec) || e.startSec < 0) errors.push(`${p}.startSec must be a number >= 0`);
       else {
         if (e.startSec <= prev) errors.push(`${p}.startSec must be greater than the previous event`);
@@ -93,6 +143,10 @@ export function validateChart(input: unknown): ValidationResult {
       }
       if (!isNum(e.confidence) || e.confidence < 0 || e.confidence > 1) errors.push(`${p}.confidence must be in [0, 1]`);
       if (e.source !== 'manual' && e.source !== 'auto') errors.push(`${p}.source must be manual|auto`);
+      if (e.auto !== undefined) {
+        if (e.source !== 'manual') errors.push(`${p}.auto is allowed on manual events only`);
+        checkAutoOrigin(e.auto, `${p}.auto`, errors);
+      }
     });
   }
 
@@ -121,23 +175,9 @@ export function validateChart(input: unknown): ValidationResult {
           errors.push(`${p} must be an object`);
           return;
         }
-        checkKeys(s, p, ['fromSec', 'toSec', 'chord', 'alt', 'replace'], ['fromSec', 'toSec', 'chord', 'alt'], errors);
-        if ('replace' in s && s.replace !== true) errors.push(`${p}.replace must be true when present`);
-        if (!isNum(s.fromSec) || !isNum(s.toSec) || s.fromSec < 0 || s.toSec <= s.fromSec) errors.push(`${p} must satisfy 0 <= fromSec < toSec`);
-        else {
-          if (s.fromSec < prevTo) errors.push(`${p} must start at or after the previous span's end`);
-          prevTo = s.toSec;
-        }
-        for (const k of ['chord', 'alt'] as const) {
-          const c = s[k];
-          if (!isStr(c) || c.length === 0) errors.push(`${p}.${k} must be a non-empty string`);
-          else if (!isNoChord(c)) {
-            try {
-              parseChord(c);
-            } catch (err) {
-              errors.push(`${p}.${k}: ${(err as Error).message}`);
-            }
-          }
+        if (checkSpan(s, p, errors)) {
+          if ((s.fromSec as number) < prevTo) errors.push(`${p} must start at or after the previous span's end`);
+          prevTo = s.toSec as number;
         }
       });
     }
