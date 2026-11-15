@@ -77,8 +77,9 @@ export function eventEndSec(chart: Chart, i: number): number {
 
 /**
  * Index of the event an uncertain span applies to, or -1: the span lies inside that one event,
- * the event is still an auto event and still has the span's chord (any spelling). A manual fix
- * of the event, or a chord change, therefore hides the span.
+ * the event is still an auto event and still has the span's chord (any spelling; a no-chord span
+ * applies to an auto no-chord event). A manual fix of the event, or a chord change, therefore hides
+ * the span.
  */
 export function uncertainSpanEvent(chart: Chart, span: UncertainSpan): number {
   let i = -1;
@@ -88,7 +89,7 @@ export function uncertainSpanEvent(chart: Chart, span: UncertainSpan): number {
   }
   if (i < 0) return -1;
   const e = chart.events[i];
-  if (e.source !== 'auto' || isNoChord(e.chord) || !sameChordSymbol(e.chord, span.chord)) return -1;
+  if (e.source !== 'auto' || !sameChordSymbol(e.chord, span.chord)) return -1;
   return span.toSec <= eventEndSec(chart, i) + 1e-6 ? i : -1;
 }
 
@@ -98,7 +99,7 @@ const sameSpan = (a: UncertainSpan, b: UncertainSpan): boolean =>
 /**
  * "2순위로 바꾸기": a copy of the chart where the span's stretch of the event plays the span's
  * second choice. The event is split at the span bounds: the head before the span and the tail
- * after it keep the auto chord with its confidence; the span part becomes a manual event
+ * after it keep the auto chord (or no chord) with its confidence; the span part becomes a manual event
  * (confidence 1) with `span.alt`. Empty heads/tails are not created. The span is removed from
  * `uncertain`; the chart becomes 'edited' (a hand-made chart stays 'manual') like
  * correctChordEvent. A CorrectionConflict when the event or the span changed meanwhile.

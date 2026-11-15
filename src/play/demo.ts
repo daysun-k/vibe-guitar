@@ -54,6 +54,8 @@ const BEAT = 60 / 180; // 180 tracker beats per minute = 60 dotted quarters
 const BPB = 6;
 const LEAD_BEATS = 3; // the tracker's first beat sits mid-bar
 const T0 = 0.6;
+/** Beats of no chord after the last bar (the chart's last second: the end rings out). */
+const END_BEATS = 3;
 
 /** [chord, bars] per section; chords change on bar starts. */
 const FORM: { name: string; lyric: boolean; chords: [string, number][] }[] = [
@@ -72,16 +74,18 @@ const r3 = (x: number) => Math.round(x * 1000) / 1000;
 
 /**
  * Synthetic uncertain stretches (VGT-19) so the play view's marks have something to show: a whole
- * event (verse Fm, second choice the relative major; the only replace-tier stretch, whose "대안" in 코드 고치기 is a button), part of an event as if a change were missed
+ * event (verse Fm, second choice the relative major; replace tier, whose "대안" in 코드 고치기 is a button), part of an event as if a change were missed
  * (the second half of verse C♯), a low-confidence 7th that also carries the "Em도 돼요" hint at
- * 중급/상급, and one whose second choice reads differently as a capo shape (chorus C♯ → A♯m, shape
- * Am with capo 1, concert B♭m).
+ * 중급/상급, one whose second choice reads differently as a capo shape (chorus C♯ → A♯m, shape
+ * Am with capo 1, concert B♭m), and the ringing end heard as no chord (the "N" after the last bar,
+ * second choice G♯; replace tier).
  */
 export const DEMO_UNCERTAIN_BARS: { bar: number; fromBeat: number; toBeat: number; chord: string; alt: string; replace?: true }[] = [
   { bar: 5, fromBeat: 0, toBeat: BPB, chord: 'Fm', alt: 'G#', replace: true },
   { bar: 6, fromBeat: 3, toBeat: BPB, chord: 'C#', alt: 'D#' },
   { bar: 9, fromBeat: 0, toBeat: BPB, chord: 'Fm7', alt: 'G#' },
   { bar: 13, fromBeat: 0, toBeat: BPB, chord: 'C#', alt: 'A#m' },
+  { bar: totalBars, fromBeat: 0, toBeat: END_BEATS, chord: 'N', alt: 'G#', replace: true },
 ];
 
 function demoUncertain(): UncertainSpan[] {
@@ -107,7 +111,9 @@ export function demoChart(): Chart {
       n++;
     }
   }
-  const end = Math.round((barStart(totalBars) + 1) * 1000) / 1000;
+  // The last second is heard as no chord (the end rings out); one uncertain stretch covers it.
+  events.push({ startSec: r3(barStart(totalBars)), chord: 'N', confidence: 0.5, source: 'auto' });
+  const end = r3(barStart(totalBars) + END_BEATS * BEAT);
   return {
     schemaVersion: 1,
     recording: { ...DEMO_RECORDING },

@@ -43,7 +43,12 @@ export function uncertainText(alt: string): string {
  */
 export function laneSegmentHTML(m: PlayModel, s: { event: number; weight: number; flag: number }, repeat: boolean, showSounding: boolean): string {
   if (repeat) return `<span class="sg rep" style="flex:${s.weight} 1 0" title="앞 마디와 같아요">${REPEAT_SVG}</span>`;
-  if (s.event < 0) return `<span class="sg" style="flex:${s.weight} 1 0"><span class="cn muted">—</span></span>`;
+  if (s.event < 0) {
+    // A stretch heard as no chord (VGT-19 follow-up): the same small "?" after the empty mark.
+    const nu = s.flag >= 0 ? m.uncertain[s.flag] : undefined;
+    if (!nu) return `<span class="sg" style="flex:${s.weight} 1 0"><span class="cn muted">—</span></span>`;
+    return `<span class="sg" style="flex:${s.weight} 1 0" title="${escapeHtml(uncertainText(nu.alt))}"><span class="cn muted">—</span><i class="unc-q" aria-hidden="true">?</i></span>`;
+  }
   const lab = m.labels[s.event];
   const snd = lab.sounding !== lab.name ? `<small class="snd">${escapeHtml(lab.sounding)}</small>` : '';
   const alt = lab.hint ? `<small class="alt">${escapeHtml(lab.hint)}</small>` : '';
@@ -328,7 +333,7 @@ export class PlayScreen {
           const segs = b.segments.map((s) => laneSegmentHTML(m, s, b.repeat && col !== 0, this.showSounding)).join('');
           const aria = b.segments
             .map((s) => {
-              if (s.event < 0) return '코드 없음';
+              if (s.event < 0) return s.flag >= 0 ? `코드 없음, ${uncertainText(m.uncertain[s.flag].alt)}` : '코드 없음';
               const lab = m.labels[s.event];
               const unc = s.flag >= 0 ? `, ${uncertainText(m.uncertain[s.flag].alt)}` : '';
               return (lab.change ? `${lab.name}, ${changeLabel(lab.change)}${this.concert(lab.change) ? `. ${this.concert(lab.change)}` : ''}` : lab.name) + unc;

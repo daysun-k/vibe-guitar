@@ -255,6 +255,7 @@ describe('play model marks and the 불확실한 곳 표시 switch', () => {
       ['C#', 'D', 'E♭'],
       ['Fm7', 'G', 'A♭'],
       ['C#', 'Am', 'B♭m'],
+      ['N', 'G', 'A♭'],
     ]);
   });
 
@@ -426,13 +427,14 @@ describe('two tiers on the panel (Amendment 1)', () => {
     expect(after.uncertain).toEqual([span(20, 22, 'F', 'Dm')]);
   });
 
-  it('demo: only the verse Fm stretch (11.6–13.6 s) is in the replace tier', () => {
+  it('demo: the verse Fm stretch (11.6–13.6 s) and the ringing end (89.6–90.6 s, no chord) are in the replace tier', () => {
     const m = buildPlayModel(demoChart(), { level: 'beginner', capo: 'auto' }, null);
     expect(m.uncertain.map((u) => [u.fromSec, u.toSec, u.replace])).toEqual([
       [11.6, 13.6, true],
       [14.6, 15.6, false],
       [19.6, 21.6, false],
       [27.6, 29.6, false],
+      [89.6, 90.6, true],
     ]);
   });
 });
