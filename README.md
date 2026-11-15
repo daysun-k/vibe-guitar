@@ -90,6 +90,19 @@ Port of the approved mockup B ("진행표형", diagrams 3x):
   코드표" for bundled examples, nothing for manual charts; click it for a short explanation) and a level/capo chip
   that opens the **settings sheet** (난이도, 카포, 미리 알림, 카운트인 끔/1마디/2마디, 실제 음 이름 보기 (off),
   가사 가져오기 (on), 추천 반주, 데모 재생).
+- **Levels (난이도) and short chords**: each level has a minimum chord length (입문 2 beats, 초급 1, 중급
+  0.5, 상급 none); shorter chords are combined so changes never come faster than that. 초급/중급/상급 merge
+  each short chord into the chord before it. 입문 (VGT-23) first joins a short chord to a neighbour that is
+  the same 입문 chord (its 7th/6th, tensions and slash bass dropped: Am + Am/G is one Am, Fmaj7 + F6 one F),
+  then cuts a run of consecutive short chords into groups of at least two beats, each played as its longest
+  chord (the first on a tie), with a remainder joining the last group; only a run shorter than two beats in
+  all (a lone passing chord) still joins the chord before it (and an equal chord right after it). So a run of
+  short chords never disappears into the chord before it: Let It Be's "C G | Am Am/G Fmaj7 F6" is played
+  "C G | Am F" (it was "C G | G G": the practice chart went from 146 chords to 108 at 입문, now 127). Long
+  chords are never combined, lengths within 0.02 beat of the minimum count as long enough (chart times are
+  rounded to milliseconds), and nothing is combined across a rest or a coverage gap. The changed chord's
+  note says "짧게 지나가는 코드(…)를 앞 코드에 합쳤어요" (or "이 코드에" when the merged chord came first).
+  Rules: `src/arrange/arrange.ts` (`groupShortEvents`) and `docs/level-vocabulary.md`.
 - **Chord-shape strip**: exactly three slots with 120 px diagrams and finger numbers: the current shape,
   the next one and the one after it (not every shape of the song). Current shape: accent border; next
   shape: neutral border with the big-beat countdown.
@@ -542,15 +555,19 @@ evaluator's Harte mapping (X shown as no chord; a symbol naming other notes is l
 come from the annotation's beat file through the same map, or without one from the capture's tracked beats.
 Chord changes move to the nearest half beat of that grid when at most 0.15 s and a quarter beat away
 (annotated changes sit a few hundredths of a second off the annotated beats; left there, two-beat chords
-measure just under two beats and the 입문 level merges them into the previous chord).
+measure just under two beats and the 입문 level combines them with a neighbour).
 
 A song whose map is not `strong` (fitted to chord boundaries only, so it can be a whole beat off) is refused
 unless `--allow-weak`. Output goes outside the repository, to `~/vibe-guitar-audio/practice-charts`
-(`--out`): `<youtubeId>.json` (the chart; import it with "JSON 가져오기" in the 편집 tab while that exact
+(`--out`; a folder or output file inside the repository is refused before anything is written, with
+symlinks resolved and the repository recognized by device and inode, so letter case or Unicode spelling cannot hide it;
+each file is written to a temporary file and renamed into place, so an existing link is replaced, never written through): `<youtubeId>.json` (the chart; import it with "JSON 가져오기" in the 편집 tab while that exact
 video is playing) and `<youtubeId>.provenance.json` (sources and licence, time map, grid, `snap` counts,
 time-weighted agreement with the annotation, also away from its boundaries, label mapping, timing checks
-against the capture's and the fit chart's beats, how many chords the 입문 view merges, validator result).
-The chart's `provenance.note` repeats the sources and a timing-confidence sentence.
+against the capture's and the fit chart's beats, how many chords the 입문 view combines (`beginnerView.afterMerge`
+uses the 입문 short-chord rule), validator result).
+The chart's `provenance.note` repeats the sources and a timing-confidence sentence; both it and the sidecar's
+`timeMap.from` name the maps file actually used (`--maps`, repository-relative inside it, `~/…` under home).
 
 Charts are stored in `chrome.storage.local`, keyed by `chart:<source>:<recording id>`; use the JSON
 export/import buttons in the Edit tab to back them up.

@@ -21,8 +21,15 @@ export interface LevelConfig {
   substitutionWeight: number;
   /** Multiplier for static shape difficulty. */
   difficultyWeight: number;
-  /** Chords shorter than this many beats are merged into the previous chord. */
+  /** Chords shorter than this many beats are combined with a neighbour (see shortChords). */
   minChordBeats: number;
+  /**
+   * How short chords are combined: 'previous' merges each one into the chord before it;
+   * 'group' (입문) joins equal neighbours and cuts runs of short chords into groups of at
+   * least minChordBeats, so a run never disappears into the chord before it
+   * (arrange.ts groupShortEvents).
+   */
+  shortChords: 'previous' | 'group';
   /** Extra cost of a partial barre (one finger across some strings, e.g. F#m xx4222). */
   partialBarreCost: number;
   /** Extra cost of a shape from the 5th fret up (plus 0.5 per fret beyond the 5th). */
@@ -41,6 +48,7 @@ export const LEVEL_CONFIGS: Record<Level, LevelConfig> = {
     substitutionWeight: 1,
     difficultyWeight: 1.6,
     minChordBeats: 2,
+    shortChords: 'group',
     // Kept below one substitution unit (4): a partial barre alone must not turn a faithful F
     // into a flagged Fmaj7; it only steers shape and capo choice.
     partialBarreCost: 2,
@@ -57,6 +65,7 @@ export const LEVEL_CONFIGS: Record<Level, LevelConfig> = {
     substitutionWeight: 1.5,
     difficultyWeight: 1.3,
     minChordBeats: 1,
+    shortChords: 'previous',
     partialBarreCost: 0,
     highPositionCost: 0,
   },
@@ -71,6 +80,7 @@ export const LEVEL_CONFIGS: Record<Level, LevelConfig> = {
     substitutionWeight: 3,
     difficultyWeight: 1,
     minChordBeats: 0.5,
+    shortChords: 'previous',
     partialBarreCost: 0,
     highPositionCost: 0,
   },
@@ -85,6 +95,7 @@ export const LEVEL_CONFIGS: Record<Level, LevelConfig> = {
     substitutionWeight: 5,
     difficultyWeight: 0.6,
     minChordBeats: 0,
+    shortChords: 'previous',
     partialBarreCost: 0,
     highPositionCost: 0,
   },
