@@ -7,7 +7,8 @@
 // <out>/<youtubeId>.provenance.json (sources, time map, grid, timing check, agreement with the
 // annotation, label mapping). Chords come from the annotation only; the bar grid from the
 // annotation's beat file (beats with bar positions), or without one from the tracker beat grid
-// stored with the upload's capture. A song whose map is not "strong" (fitted to chord boundaries,
+// stored with the upload's capture; chord changes move to the nearest half beat of that grid when
+// close (snapEvents). A song whose map is not "strong" (fitted to chord boundaries,
 // so it can be a whole beat off) is refused unless --allow-weak. Local files only (no network).
 import * as esbuild from 'esbuild';
 import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
@@ -65,6 +66,9 @@ async function loadModules() {
         "export { parseLab, parseBeats } from './src/eval/annotations.ts';",
         "export { validateChart } from './src/chart/validate.ts';",
         "export { prepareChart } from './src/play/prepare.ts';",
+        "export { chartToInputEvents, mergeShortEvents } from './src/arrange/arrange.ts';",
+        "export { LEVEL_CONFIGS } from './src/arrange/levels.ts';",
+        "export { beatsBetween } from './src/chart/timing.ts';",
       ].join('\n'),
       resolveDir: root,
       loader: 'ts',
@@ -119,6 +123,20 @@ function latestCapture(capturesDir, youtubeId) {
 }
 
 const pct = (x) => `${(100 * x).toFixed(2)}%`;
+const untilde = (p) => (p.startsWith('~/') ? path.join(home, p.slice(2)) : p);
+
+/**
+ * The stored auto chart the frozen map was fitted on (the maps file names the charts folder of each
+ * song list's official result), or null when it is not on this Mac.
+ */
+function fitChart(maps, entry) {
+  const result = (maps.source?.results ?? []).find((r) => r.songList === entry.songList && typeof r.charts === 'string');
+  if (!result) return null;
+  const file = path.join(untilde(result.charts), `${entry.youtubeId}.json`);
+  if (!existsSync(file)) return null;
+  const t = readJson(file, '매핑 기준 코드표')?.timing;
+  return t && Array.isArray(t.beatTimes) && t.beatTimes.length >= 8 ? { file, beatTimes: t.beatTimes } : null;
+}
 
 function buildOne(m, args, maps, key) {
   const entry = maps.songs.find((s) => s.youtubeId === key || s.id === key);
@@ -152,13 +170,15 @@ function buildOne(m, args, maps, key) {
   }
 
   const check = capture ? m.gridCheck(grid.timing.beatTimes, capture.timing.beatTimes) : null;
+  const fit = fitChart(maps, entry);
+  const fitCheck = fit ? m.gridCheck(grid.timing.beatTimes, fit.beatTimes) : null;
   const gridText =
     gridSource.kind === 'annotation-beats'
       ? `Bars: annotated beats and downbeats (${song.beats}) through the same map${grid.irregularBars.length ? `; ${grid.irregularBars.length} bar(s) of another length spread evenly to the next downbeat` : ''}.`
       : 'Bars: beat grid the app tracked in this upload (stored capture); the bar phase may be off, the play view re-aligns it to chord changes.';
   const confidence =
     entry.alignStrength === 'strong'
-      ? `Timing confidence: high. Chord and beat times are the annotators'; the map was fitted to the beats tracked in this upload (beats alignment, tolerance 0.07 s)${check ? `; grid vs beats tracked in the newest stored capture: median ${check.medianAbsSec.toFixed(3)} s, ${pct(check.within70ms)} within 0.07 s (captures of one upload differ by a few hundredths of a second)` : ''}.`
+      ? `Timing confidence: high. Chord and beat times are the annotators'; the map was fitted to the beats tracked in this upload (beats alignment, tolerance 0.07 s)${check ? `; grid vs beats tracked in the newest stored capture: median ${check.medianAbsSec.toFixed(3)} s, ${pct(check.within70ms)} within 0.07 s (captures of one upload differ by a few hundredths of a second)` : ''}${fitCheck ? `; vs the beats of the stored auto chart the map was fitted on (${path.basename(path.dirname(fit.file))}): median ${fitCheck.medianAbsSec.toFixed(3)} s, ${pct(fitCheck.within70ms)} within 0.07 s` : ''}${check && fitCheck && Math.abs(check.medianSignedSec) > 0.05 && fitCheck.within70ms >= 0.9 ? `. The newest capture's beats are ${Math.abs(check.medianSignedSec).toFixed(3)} s ${check.medianSignedSec < 0 ? 'earlier' : 'later'} throughout while the fit capture agrees: a difference between captures of this upload, not in the grid` : ''}.`
       : 'Timing confidence: LOW. The map was fitted to chord boundaries only and can be a whole beat off.';
   const note = [
     `Practice chart (VGT-5) from a human annotation: ${dataset.name}, ${song.chords}.`,
@@ -168,12 +188,27 @@ function buildOne(m, args, maps, key) {
     'Chords as annotated (Harte labels mapped to chart symbols); X (unknown) shown as no chord.',
   ].join(' ');
   const recording = { source: 'youtube', id: entry.youtubeId, title: song.title, artist: song.artist };
-  const { chart, labels } = m.buildPracticeChart({ segs, map, mediaDurationSec: entry.mediaDurationSec, recording, timing: grid.timing, createdAt: new Date().toISOString(), tool: TOOL, note });
+  const { chart, labels, snap } = m.buildPracticeChart({ segs, map, mediaDurationSec: entry.mediaDurationSec, recording, timing: grid.timing, createdAt: new Date().toISOString(), tool: TOOL, note });
 
   const v = m.validateChart(JSON.parse(JSON.stringify(chart)));
   if (!v.ok) throw new Error(`${entry.id}: 형식 오류: ${v.errors.slice(0, 5).join('; ')}`);
   const prepared = m.prepareChart(chart);
   const agreement = m.practiceAgreement(chart, segs, map);
+  // The same check away from annotated boundaries (moves onto the grid are at most SNAP_MAX_SEC):
+  // 100% means the chords and their order are the annotation's.
+  const awayFromBoundaries = m.practiceAgreement(chart, segs, map, 0.005, m.SNAP_MAX_SEC);
+  // Beginner view: chords shorter than minChordBeats are merged into the previous one. A sounding
+  // chord just under that length is the sign of chord times off the grid.
+  const input = m.chartToInputEvents(chart);
+  const minBeats = m.LEVEL_CONFIGS.beginner.minChordBeats;
+  const lengths = input.filter((e) => e.chord !== 'N').map((e) => m.beatsBetween(chart.timing, e.startSec, e.endSec));
+  const beginnerView = {
+    minChordBeats: minBeats,
+    chords: input.length,
+    afterMerge: m.mergeShortEvents(input, chart.timing, minBeats).length,
+    shorterThanMin: lengths.filter((b) => b < minBeats - 1e-6).length,
+    justUnderMin: lengths.filter((b) => b >= minBeats - 0.15 && b < minBeats - 1e-6).length,
+  };
   const sidecar = {
     schema: 'vibe-guitar-practice-chart-provenance/1',
     song: { id: entry.id, artist: song.artist, title: song.title, release: song.release, youtubeId: entry.youtubeId },
@@ -181,9 +216,15 @@ function buildOne(m, args, maps, key) {
     timeMap: { offsetSec: map.offsetSec, rate: map.rate, alignMethod: entry.alignMethod, alignStrength: entry.alignStrength, mediaDurationSec: entry.mediaDurationSec, from: 'docs/recognition-dev-maps.json' },
     grid: { ...gridSource, beatsPerBar: grid.timing.beatsPerBar, bpm: grid.timing.bpm, beats: grid.timing.beatTimes.length, firstDownbeatSec: grid.timing.firstDownbeatSec, irregularBars: grid.irregularBars, droppedLeadBeats: grid.droppedLeadBeats },
     timingCheck: check ? { against: path.relative(home, capture.file), ...check } : null,
+    // The same check against the chart the map was fitted on; when this agrees and the newest
+    // capture does not, the difference is between captures of the upload, not in the grid.
+    timingCheckFitChart: fitCheck ? { against: path.relative(home, fit.file), ...fitCheck } : null,
+    snap,
+    beginnerView,
     playView: { barPhaseShifted: prepared.phaseShifted, phase: prepared.phase, key: prepared.key ? { tonic: prepared.key.tonic, mode: prepared.key.mode } : null },
     validator: { ok: v.ok, warnings: v.warnings },
     agreement,
+    agreementAwayFromBoundaries: { toleranceSec: m.SNAP_MAX_SEC, evaluatedSec: awayFromBoundaries.evaluatedSec, exact: awayFromBoundaries.exact, mismatches: awayFromBoundaries.mismatches },
     labels,
     events: chart.events.length,
     coverage: chart.coverage,
@@ -215,9 +256,12 @@ async function main() {
           return `${l.label}→${l.chord}${notes} ${l.sec.toFixed(1)}초`;
         });
       console.log(
-        `${file}: ${chart.events.length}개 코드, ${chart.timing.beatsPerBar}/4 ${chart.timing.bpm} bpm, 주석 일치 ${pct(a.exact)} (${a.evaluatedSec.toFixed(1)}초), ` +
-          `박자 대조 ${sidecar.timingCheck ? `중앙값 ${sidecar.timingCheck.medianAbsSec.toFixed(3)}초 · 0.07초 안 ${pct(sidecar.timingCheck.within70ms)}` : '없음'}, ` +
+        `${file}: ${chart.events.length}개 코드, ${chart.timing.beatsPerBar}/4 ${chart.timing.bpm} bpm, 주석 일치 ${pct(a.exact)} (${a.evaluatedSec.toFixed(1)}초, 경계 ±${sidecar.agreementAwayFromBoundaries.toleranceSec}초 밖 ${pct(sidecar.agreementAwayFromBoundaries.exact)}), ` +
+          `박자 대조 ${sidecar.timingCheck ? `중앙값 ${sidecar.timingCheck.medianAbsSec.toFixed(3)}초(부호 ${sidecar.timingCheck.medianSignedSec.toFixed(3)}) · 0.07초 안 ${pct(sidecar.timingCheck.within70ms)}` : '없음'}` +
+          `${sidecar.timingCheckFitChart ? ` / 매핑 기준 코드표 중앙값 ${sidecar.timingCheckFitChart.medianAbsSec.toFixed(3)}초 · 0.07초 안 ${pct(sidecar.timingCheckFitChart.within70ms)}` : ''}, ` +
           `마디 위상 이동 ${sidecar.playView.barPhaseShifted ? '있음' : '없음'}, 불규칙 마디 ${sidecar.grid.irregularBars.length}, ` +
+          `박 맞춤 ${sidecar.snap.moved}개 이동(최대 ${sidecar.snap.maxAbsShiftSec.toFixed(3)}초)·${sidecar.snap.kept}개 그대로, ` +
+          `입문 합치기 ${sidecar.beginnerView.chords}→${sidecar.beginnerView.afterMerge}개(2박 직전 ${sidecar.beginnerView.justUnderMin}개), ` +
           `단순화 ${simplified.length ? simplified.join(', ') : '없음'}`,
       );
     } catch (e) {

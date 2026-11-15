@@ -12,6 +12,7 @@
 import type { Chart, ChordEvent, CoverageRange, Recording, Timing } from '../chart/types';
 import { NO_CHORD } from '../chart/types';
 import { chordPitchClasses, parseChord } from '../arrange/chord';
+import { beatIndexAt, beatTimeAt } from '../chart/timing';
 import { harteNotes, harteToSymbol, type AnnotationBeat, type AnnotationSegment } from './annotations';
 import { median } from './metrics';
 
@@ -178,17 +179,94 @@ export interface PracticeChartInput {
   note: string;
 }
 
-export function buildPracticeChart(input: PracticeChartInput): { chart: Chart; labels: LabelUse[] } {
-  const { events, coverage, labels } = practiceEvents(input.segs, input.map, input.mediaDurationSec);
+/** Largest move of a chord change onto the grid: the smaller of these seconds and beats. */
+export const SNAP_MAX_SEC = 0.15;
+export const SNAP_MAX_BEATS = 0.25;
+
+export interface SnapStats {
+  /** Chord changes moved onto a half-beat grid point. */
+  moved: number;
+  /** Already on a grid point (within 1 ms). */
+  onGrid: number;
+  /** Left as annotated: farther than the limit, a coverage start, or a move that would reorder events. */
+  kept: number;
+  medianAbsShiftSec: number;
+  maxAbsShiftSec: number;
+  /** Mean of grid point minus annotated time over the moved ones (positive: annotation was early). */
+  meanShiftSec: number;
+}
+
+/**
+ * Chord changes → the nearest half-beat point of the chart's own grid when it is at most
+ * min(SNAP_MAX_SEC, SNAP_MAX_BEATS beats) away, the way the editor quantizes stamps. Annotated
+ * chord boundaries sit a few hundredths of a second off the annotated beats (mostly early); left
+ * as they are, a two-beat chord measures 1.9x beats and the beginner arrangement (chords shorter
+ * than two beats merged into the previous one) folds whole phrases into one chord. A change at a
+ * coverage start stays; a move must keep the events strictly increasing and inside coverage.
+ */
+export function snapEvents(events: ChordEvent[], timing: Timing, coverage: CoverageRange[]): { events: ChordEvent[]; stats: SnapStats } {
+  const out: ChordEvent[] = [];
+  const shifts: number[] = [];
+  let onGrid = 0;
+  let kept = 0;
+  events.forEach((e, i) => {
+    const prev = out[out.length - 1];
+    const next = events[i + 1];
+    const range = coverage.find((r) => r.fromSec <= e.startSec && e.startSec < r.toSec);
+    const k = beatIndexAt(timing, e.startSec);
+    const target = ms(beatTimeAt(timing, Math.round(k * 2) / 2));
+    const beat = beatTimeAt(timing, Math.floor(k) + 1) - beatTimeAt(timing, Math.floor(k));
+    const limit = Math.min(SNAP_MAX_SEC, SNAP_MAX_BEATS * beat);
+    const shift = target - e.startSec;
+    const allowed =
+      range !== undefined &&
+      e.startSec !== range.fromSec &&
+      Math.abs(shift) <= limit + 1e-9 &&
+      target >= range.fromSec &&
+      target < range.toSec &&
+      (!prev || target > prev.startSec) &&
+      (!next || target < next.startSec);
+    if (!allowed) {
+      kept++;
+      out.push(e);
+    } else if (Math.abs(shift) <= 0.001) {
+      onGrid++;
+      out.push(e);
+    } else {
+      shifts.push(shift);
+      out.push({ ...e, startSec: target });
+    }
+  });
+  const abs = shifts.map(Math.abs);
+  return {
+    events: out,
+    stats: {
+      moved: shifts.length,
+      onGrid,
+      kept,
+      medianAbsShiftSec: abs.length ? ms(median(abs)) : 0,
+      maxAbsShiftSec: abs.length ? ms(Math.max(...abs)) : 0,
+      meanShiftSec: shifts.length ? ms(shifts.reduce((a, b) => a + b, 0) / shifts.length) : 0,
+    },
+  };
+}
+
+export function buildPracticeChart(input: PracticeChartInput): { chart: Chart; labels: LabelUse[]; snap: SnapStats } {
+  const built = practiceEvents(input.segs, input.map, input.mediaDurationSec);
+  const { coverage, labels } = built;
+  const { events, stats } = snapEvents(built.events, input.timing, coverage);
+  const snapText =
+    `Chord changes moved to the nearest half beat of this grid when at most ${SNAP_MAX_SEC} s and ${SNAP_MAX_BEATS} beat away ` +
+    `(${stats.moved} moved, median ${stats.medianAbsShiftSec.toFixed(3)} s, max ${stats.maxAbsShiftSec.toFixed(3)} s; ${stats.onGrid} already on it; ${stats.kept} kept as annotated).`;
   const chart: Chart = {
     schemaVersion: 1,
     recording: input.recording,
     timing: input.timing,
     events,
     coverage,
-    provenance: { createdBy: 'manual', createdAt: input.createdAt, tool: input.tool, note: input.note },
+    provenance: { createdBy: 'manual', createdAt: input.createdAt, tool: input.tool, note: `${input.note} ${snapText}` },
   };
-  return { chart, labels };
+  return { chart, labels, snap: stats };
 }
 
 /** Chord sounding at media time t in a chart (the last event at or before t), or null before the first. */
@@ -221,8 +299,10 @@ export interface Agreement {
  * Time-weighted agreement of a chart with the annotation, checked independently of the event
  * construction: every `stepSec` of the coverage is mapped back to annotation time, the label there
  * is looked up and mapped (X counts as no chord) and compared with the chart's chord at that time.
+ * With `boundaryTolSec`, times that close to a mapped annotation boundary are skipped (the chord
+ * order check once changes were moved onto the grid).
  */
-export function practiceAgreement(chart: Chart, segs: AnnotationSegment[], map: TimeMap, stepSec = 0.005): Agreement {
+export function practiceAgreement(chart: Chart, segs: AnnotationSegment[], map: TimeMap, stepSec = 0.005, boundaryTolSec = 0): Agreement {
   let total = 0;
   let same = 0;
   let unknown = 0;
@@ -232,6 +312,7 @@ export function practiceAgreement(chart: Chart, segs: AnnotationSegment[], map: 
       const a = (t - map.offsetSec) / map.rate;
       const seg = segs.find((s) => s.startSec <= a && a < s.endSec);
       if (!seg) continue;
+      if (boundaryTolSec > 0 && Math.min(t - mapTime(map, seg.startSec), mapTime(map, seg.endSec) - t) < boundaryTolSec) continue;
       const want = practiceChord(seg.label);
       const got = chordAt(chart.events, t);
       total += stepSec;
@@ -257,6 +338,8 @@ export interface GridCheck {
   compared: number;
   /** Median absolute distance to the nearest tracker beat (s). */
   medianAbsSec: number;
+  /** Median of nearest tracker beat minus grid beat (s): a constant phase difference shows here. */
+  medianSignedSec: number;
   /** Share within ±0.07 s (the evaluator's beat tolerance). */
   within70ms: number;
 }
@@ -279,11 +362,13 @@ export function gridCheck(gridBeats: number[], trackerBeats: number[]): GridChec
       if (tb[mid] <= b) lo = mid;
       else hi = mid;
     }
-    return Math.min(Math.abs(b - tb[lo]), Math.abs(b - tb[hi]));
+    return Math.abs(tb[lo] - b) <= Math.abs(tb[hi] - b) ? tb[lo] - b : tb[hi] - b;
   });
+  const abs = res.map(Math.abs);
   return {
     compared: inside.length,
-    medianAbsSec: ms(median(res)),
-    within70ms: res.filter((x) => x <= 0.07 + 1e-9).length / res.length,
+    medianAbsSec: ms(median(abs)),
+    medianSignedSec: ms(median(res)),
+    within70ms: abs.filter((x) => x <= 0.07 + 1e-9).length / abs.length,
   };
 }
