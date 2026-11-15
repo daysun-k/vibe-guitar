@@ -156,9 +156,9 @@ export async function feedSession(session: ListeningSession, segments: CaptureSe
       session.append(block, startSec + pushed / CAPTURE_SAMPLE_RATE);
       if (pushed === block.length) {
         const seg = session.currentSegment!;
-        // max(0, end − duration) can differ from the stored start in the last bit; the live
-        // segment started exactly at startSec, so the replayed one does too.
-        (seg as { startSec: number }).startSec = startSec;
+        // The per-block estimates (end − duration) can differ from the stored start in the last
+        // bit; the live segment started exactly at startSec, so the replayed one does too.
+        seg.pinStart(startSec);
         fed.push(seg);
       }
       if (++blocks % REPLAY_BLOCKS_PER_TICK === 0) {

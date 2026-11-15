@@ -9,7 +9,7 @@
  */
 import { MODEL_SAMPLE_RATE } from '../../audio/features';
 import type { Recording, RecordingSource } from '../../chart/types';
-import { detectClicks } from '../../probe/latency';
+import { placedSegmentOf } from '../../probe/latency';
 import type { PlayerStateMessage } from '../messages';
 import { CAPTURE_LATENCY_SEC, type ListeningController } from '../offscreen/listen';
 import type { ProbeDumpReply, ProbePlayerStateMessage, ProbeReply, ProbeRequestMessage, ProbeStatus } from './messages';
@@ -56,13 +56,7 @@ export function installLatencyProbe(listener: ListeningController, capture: () =
         sendResponse({ ok: false, error: `no stored audio for ${want ?? '(no session id)'} (current: ${session?.key ?? 'none'})` } satisfies ProbeReply);
         return;
       }
-      const segments = session.segments
-        .filter((s) => s.durationSec > 0)
-        .map((s) => ({
-          startSec: s.startSec,
-          endSec: s.endSec,
-          onsetsSec: detectClicks(s.audio.view(), MODEL_SAMPLE_RATE).map((t) => s.startSec + t),
-        }));
+      const segments = session.segments.filter((s) => s.durationSec > 0).map((s) => placedSegmentOf(s, MODEL_SAMPLE_RATE));
       const data: ProbeDumpReply = { ...status(), sessionId: msg.sessionId!, latencyUsedSec: CAPTURE_LATENCY_SEC, segments };
       sendResponse({ ok: true, data } satisfies ProbeReply<ProbeDumpReply>);
     }
