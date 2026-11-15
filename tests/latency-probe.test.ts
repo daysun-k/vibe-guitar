@@ -15,6 +15,7 @@ import {
   matchClicks,
   median,
   percentile,
+  placedSegmentOf,
   probePlan,
   renderProbeTrack,
   slope,
@@ -278,9 +279,7 @@ function simulateSession(trueLatency: number, latencyUsed: number, opts: SimOpti
     placer.pushBlock(block, sr, f0 + BLOCK);
     placer.drain((f0 + BLOCK) / sr + 1, (k) => (k === key ? session : null));
   }
-  const segments = session.segments
-    .filter((g) => g.durationSec > 0)
-    .map((g) => ({ startSec: g.startSec, endSec: g.endSec, onsetsSec: detectClicks(g.audio.view(), MODEL_SAMPLE_RATE).map((t) => g.startSec + t) }));
+  const segments = session.segments.filter((g) => g.durationSec > 0).map((g) => placedSegmentOf(g, MODEL_SAMPLE_RATE));
   return { sessionId: `sim-${trueLatency}`, captureSampleRate: sr, latencyUsedSec: latencyUsed, segments, clicks: plan.clicks };
 }
 
@@ -299,11 +298,12 @@ describe('end to end through AudioPlacer (simulated capture)', () => {
     expect(r.suggestedLatencySec).toBeGreaterThan(0.079);
     expect(r.suggestedLatencySec).toBeLessThan(0.0815);
     expect(r.pass).toEqual({ complete: true, median: true, p95: true, drift: true, rateNotStored: true });
-    // Playback from 0 s: ListeningSession.append clamps the first segment's start to 0, so
-    // that segment lands late (separate from the constant); the rest is within 2 ms.
-    expect(r.startClampSec).toBeGreaterThan(0.02);
-    expect(r.validation.p95AbsExcludingStartSec).toBeLessThan(0.002);
-    expect(r.problems.join('\n')).toContain('0 s로 고정');
+    // Playback from 0 s (VGT-22 criterion 3): the first segment's start is no longer clamped to
+    // 0 s, so it lands like the rest (+37.5 ms with the clamp); everything is within 2 ms.
+    expect(r.sessions[0].segments[0].startSec).toBeLessThan(0);
+    expect(Math.abs(r.startClampSec)).toBeLessThanOrEqual(0.002);
+    expect(r.validation.p95AbsSec).toBeLessThan(0.002);
+    expect(r.problems.join('\n')).not.toContain('곡 처음(0 s)부터');
     if (process.env.VG_PRINT_PROBE) console.log(formatProbeReport(r));
   });
 
@@ -321,23 +321,85 @@ const STARTUPS: readonly (readonly number[])[] = [
   [0.04, 0.07, 0.015],
 ];
 
-/** Per session: max - min of the stored segments' median residuals (segments with clicks). */
-function segmentSpreads(r: ReturnType<typeof analyzeProbeDump>): number[] {
-  return r.sessions.map((s) => {
-    const m = s.segments.filter((g) => g.clicks > 0).map((g) => g.medianResidualSec);
-    return Math.max(...m) - Math.min(...m);
-  });
+const dumpOf = (sessions: ProbeSessionDump[]): ProbeDump => ({ tool: 'vibe-guitar latency probe', version: 1, createdAt: 'x', sessions });
+
+/**
+ * The placement before VGT-22 on the same simulated capture: each segment placed by its first
+ * player report alone (firstStartSec) and its start clamped to 0 s.
+ */
+function beforeFix(s: ProbeSessionDump): ProbeSessionDump {
+  return {
+    ...s,
+    segments: s.segments.map((g) => {
+      const start = Math.max(0, g.firstStartSec!);
+      const d = start - g.startSec;
+      return { startSec: start, endSec: g.endSec + d, onsetsSec: g.onsetsSec.map((t) => t + d) };
+    }),
+  };
 }
 
 describe('VGT-22: per-anchor offset (simulated startup)', () => {
-  // Reproduction with the placement before the VGT-22 fix (the 2026-11-13 real-run pattern:
-  // segment medians 17.0, 80.5 and 82.5 ms in one session, flat inside each segment, p95 53 ms).
+  const startup = () => STARTUPS.map((d) => simulateSession(0.08, 0.05, { startupSec: d }));
+
+  // Reproduction with the placement before the fix (the 2026-11-13 real-run pattern: segment
+  // medians 17.0, 80.5 and 82.5 ms in one session, flat inside each segment, p95 53 ms).
   it('reproduces a per-segment offset of tens of ms, flat inside each segment, from a startup delay', () => {
-    const sessions = STARTUPS.map((d) => simulateSession(0.08, 0.05, { startupSec: d }));
-    const r = analyzeProbeDump({ tool: 'vibe-guitar latency probe', version: 1, createdAt: 'x', sessions });
-    for (const spread of segmentSpreads(r)) expect(spread).toBeGreaterThan(0.04);
+    const r = analyzeProbeDump(dumpOf(startup().map(beforeFix)));
+    for (const s of r.sessions) expect(s.segmentSpreadSec).toBeGreaterThan(0.04);
     expect(Math.abs(r.driftSecPerMin)).toBeLessThan(0.001);
     expect(r.validation.p95AbsSec).toBeGreaterThan(0.05);
+    expect(r.firstAnchor).toBeNull(); // a dump from before VGT-22 has no firstStartSec
+    expect(r.startClampSec).toBeGreaterThan(0.02);
+    expect(r.problems.join('\n')).toContain('구간 시작을 0 s로 고정');
+  });
+
+  // Criterion 1: the same harness after the fix (median of the per-block start estimates).
+  it('places every segment by the median of its per-block estimates: spread <= 5 ms, p95 <= 10 ms', () => {
+    const r = analyzeProbeDump(dumpOf(startup()));
+    for (const s of r.sessions) expect(s.segmentSpreadSec).toBeLessThanOrEqual(0.005);
+    expect(r.validation.p95AbsSec).toBeLessThanOrEqual(0.01);
+    expect(Math.abs(r.validation.medianSec)).toBeLessThanOrEqual(0.002);
+    expect(Math.abs(r.driftSecPerMin)).toBeLessThan(0.001);
+    expect(r.pass).toEqual({ complete: true, median: true, p95: true, drift: true, rateNotStored: true });
+    // Criterion 3 with a startup delay at the first play too.
+    expect(Math.abs(r.startClampSec)).toBeLessThanOrEqual(0.002);
+    // Criterion 4: the dump carries the first report's start, and the report gives the old
+    // placement's numbers from the same run (no clamp there: firstStartSec is not clamped).
+    expect(r.firstAnchor).not.toBeNull();
+    expect(Math.max(...r.firstAnchor!.segmentSpreadSec)).toBeGreaterThan(0.04);
+    expect(r.firstAnchor!.validationP95AbsSec).toBeGreaterThan(0.03);
+    // The first report runs ahead by up to the startup delay, so the stored start moves earlier.
+    const shifts = r.sessions.flatMap((s) => s.segments.map((g) => g.firstAnchorShiftSec!));
+    expect(Math.min(...shifts)).toBeLessThan(-0.05);
+    for (const x of shifts) expect(x).toBeLessThanOrEqual(1e-4);
+    // After the startup the reports agree: the estimates inside a segment are tight.
+    for (const s of r.sessions) for (const g of s.segments) expect(g.startIqrSec!).toBeLessThan(0.001);
+    const text = formatProbeReport(r);
+    expect(text).toContain('첫 보고만으로 배치했다면');
+    expect(text).toContain('구간 잔차 중앙값의 폭');
+  });
+
+  // The post-seek segment of the first session shows no startup bias even before the fix: the
+  // block containing the seek is dropped, and a 250 ms report from after the startup arrives
+  // just before the first stored block ends, so that block was placed with a correct report.
+  it('explains the post-seek segment without bias: the first stored block already had a report from after the startup', () => {
+    const r = analyzeProbeDump(dumpOf(startup().map(beforeFix)));
+    const [first, resumed, seekSeg] = r.sessions[0].segments; // startups 15, 75 and 80 ms
+    expect(seekSeg.startSec).toBeGreaterThan(33);
+    // 80 ms true latency - 50 ms constant = 30 ms (+0.5 ms detector edge), no startup bias.
+    expect(seekSeg.medianResidualSec).toBeCloseTo(0.0305, 3);
+    expect(resumed.medianResidualSec - seekSeg.medianResidualSec).toBeCloseTo(0.075, 3);
+    expect(first.medianResidualSec).toBeGreaterThan(seekSeg.medianResidualSec);
+  });
+
+  // Criterion 2, negative control: an offset that every report of a start shares is not an
+  // anchor-pairing error, and the fix does not (and should not) remove it.
+  it('negative control: a per-start offset shared by all reports keeps its spread', () => {
+    const r = analyzeProbeDump(dumpOf(STARTUPS.map((d) => simulateSession(0.08, 0.05, { reportOffsetSec: d }))));
+    for (const s of r.sessions) expect(s.segmentSpreadSec).toBeGreaterThan(0.035);
+    // What tells the two causes apart in a real dump: the first report agrees with the rest.
+    for (const s of r.sessions) for (const g of s.segments) expect(Math.abs(g.firstAnchorShiftSec!)).toBeLessThan(0.001);
+    r.firstAnchor!.segmentSpreadSec.forEach((x, i) => expect(x).toBeCloseTo(r.sessions[i].segmentSpreadSec, 6));
   });
 });
 
@@ -374,3 +436,4 @@ describe('probe build wiring', () => {
     expect(bad.status).toBe(1);
   }, 30000);
 });
+

@@ -65,7 +65,9 @@ start to 0 s. When playback starts at 0 s, the first stored block's start comput
 is clamped, so the whole first segment (until the first pause or seek) lands later than the rest, by up to
 the latency constant. In the simulated test (true latency 80 ms, constant 50 ms) it is +37.5 ms. The report
 prints it as "0 s 시작 구간의 추가 지연" and the p95 without those segments. It is a placement bug at the
-start of a song, separate from the constant, and it grows when the constant grows.
+start of a song, separate from the constant, and it grows when the constant grows. Fixed in VGT-22 (see
+below): the start is no longer clamped, and the report now calls it "곡 처음부터 기록한 구간의 추가 지연"
+(segments that start at or before 0.25 s), which should stay within 10 ms.
 
 ## Measurement steps (Aside or another Chromium)
 
@@ -155,3 +157,53 @@ in a separate commit that cites that measurement.
    the real run: anchors inside a segment that disagree by tens of ms and a p95 within target confirm and fix
    the cause; anchors that agree while segment medians still spread mean the offset comes from the browser per
    start, which this change does not fix, and that is reported as such.
+
+## VGT-22: cause and fix (offline evidence)
+
+**Cause.** `ListeningSession.append` fixed a segment's start from the first stored block only: the
+position the latest player report gave at that block's end, minus the block length. Later blocks only checked
+continuity (0.35 s tolerance) and never moved the start. When the element reports "playing" (its play or
+seeked event and the next 250 ms ticks) before its clock and audio really start, the first reports of that
+start run ahead by the startup delay, so the whole segment lands late by it, flat until the next pause or
+seek. That is the 2026-11-13 shape: a different offset per anchor, no drift inside a segment.
+
+**Fix.** Every block now adds its own estimate of the segment start (its report's end position minus the
+segment's audio length after it), and `Segment.startSec` is the median of those estimates. The reports
+after the startup agree with each other, so they outvote the first few. `Segment.firstStartSec` keeps the
+first block's estimate (the old placement) and the replay path fixes a stored start with `pinStart`.
+The start is no longer clamped at 0 s: `ListeningSession.coverage()` and the auto chart's ownership clip
+ranges at 0 s instead, so a chart never gets a negative time.
+
+**Offline evidence** (`tests/latency-probe.test.ts`, "VGT-22", the simulated capture through `AudioPlacer`
+→ `ListeningSession` → click detector → `analyzeProbeDump`; true latency 80 ms, constant 50 ms; startup
+delays per start 15/75/80, 60/20/35 and 40/70/15 ms):
+
+| | Before (first report, 0 s clamp) | After (median) | Criterion |
+| --- | --- | --- | --- |
+| Segment-median spread per session | 75.0 / 77.5 / 77.5 ms | 0.0 / 0.0 / 0.0 ms | ≤ 5 ms |
+| Validation p95 \|residual\| | 52.5 ms | 0.0 ms | ≤ 10 ms |
+| Drift | 0.0 ms/min | 0.0 ms/min | |
+| Extra offset of the segment from 0 s, no startup delay | +37.5 ms | 0.0 ms | ≤ 2 ms |
+
+Negative control (every report of a start off by 15–80 ms, no startup delay): the spread stays (65 / 40 /
+55 ms) after the fix, and the first report's start equals the stored start in every segment. That is the
+signature of a per-start offset in the browser's own pipeline, which this change does not address.
+
+The post-seek segment that showed 30.5 ms instead of +80 ms in the earlier reproduction: the block that
+contains the seek is dropped ("재생 위치 이동 중"), and in that session a 250 ms report from after the
+80 ms startup arrived 2 ms before the first stored block ended, so that block was already placed with a correct
+report. 30.5 ms is the unbiased value (80 − 50 ms plus the detector's 0.5 ms edge). In a real run the tick and
+block phases are effectively random, so the old placement's error per start lies anywhere between 0 and the
+startup delay, which also matches the irregular segment medians measured on 2026-11-13.
+
+**Dump and report.** The probe dump now carries, per stored segment, `firstStartSec` (the first report's
+start) and `startIqrSec` (interquartile range of the per-block estimates). `latency-report` prints per
+segment the shift between the stored and the first-report start and the IQR, per session the spread of the
+segment medians, and one line with what the first-report placement would have given on the same run
+(validation median, p95, spreads). The first-report numbers do not include the old 0 s clamp: on the
+simulated startup run they are p95 40.0 ms and spreads 75.0 / 40.0 / 70.0 ms (the table's "before" column
+adds the clamp).
+
+**Reading the real run** (criteria above): shifts of tens of ms with a small IQR and the targets met confirm
+the cause and the fix. Shifts near 0 ms while the segment medians still spread by tens of ms mean a per-start
+offset in the browser (the negative control), which is reported as such and not fixed here.
