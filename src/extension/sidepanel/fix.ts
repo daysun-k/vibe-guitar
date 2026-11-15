@@ -8,7 +8,7 @@ import { isNoChord } from '../../arrange/chord';
 import type { AutoOrigin } from '../../chart/types';
 import { PICK_QUALITIES, firstHeard, pickBass, pickName, pickRoot, pickToConcert, sameChordSymbol, splitPick, type EventRef } from '../../editor/correct';
 import { prettyChord, respellChord, shapeName } from '../../music/key';
-import type { PlayModel } from '../../play/model';
+import { chartEventRange, type PlayModel } from '../../play/model';
 import { inJoinedGap, withRo, type UncertainMark } from '../../play/uncertain';
 import { slashChordHTML } from './chord-name';
 import { escapeHtml } from './diagram';
@@ -20,8 +20,8 @@ export interface FixHost {
   now(): number;
   seek(sec: number): void;
   showSounding(): boolean;
-  /** Highlights the bar of the chord being fixed (null clears). */
-  mark(sec: number | null): void;
+  /** Outlines the lane bars of chart event `event`, the chord being fixed (null clears). */
+  mark(event: number | null): void;
   /** Stores the fix; `from`/`to` are the shown names for the status line. */
   save(event: EventRef, concert: string, names: { from: string; to: string }): Promise<void>;
   /** Plays model.uncertain[index] as its second choice (replace tier only); rejects when not stored. */
@@ -42,6 +42,13 @@ export function eventIndexAt(events: readonly { startSec: number }[], t: number)
 /** Shown name of a stored chord: capo shape name, "코드 없음" for a rest. */
 export function shownName(chord: string, capo: number): string {
   return isNoChord(chord) ? '코드 없음' : shapeName(chord, capo);
+}
+
+/** Header time of the event being fixed: "0:06~0:13", one time when both ends show the same m:ss. */
+export function fixTimeText(startSec: number, endSec: number): string {
+  const a = formatTime(startSec);
+  const b = formatTime(endSec);
+  return a === b ? a : `${a}~${b}`;
 }
 
 /** Short origin note of an event for the picker header. */
@@ -210,7 +217,7 @@ export class ChordFixer {
       }
       this.bassPc = p?.bassPc ?? null;
     }
-    this.host.mark(shown.startSec);
+    this.host.mark(i);
     const capo = this.capo(m);
     const snd = this.host.showSounding() && capo && !isNoChord(shown.chord) ? ` <small class="snd">실제 ${escapeHtml(prettyChord(shown.chord))}</small>` : '';
     const k = fixAltIndex(m.uncertain, shown.startSec, at);
@@ -219,7 +226,8 @@ export class ChordFixer {
     const first = firstHeard(shown, shown.source === 'manual' && !shown.auto ? (this.host.storedAutoAt?.(shown.startSec) ?? null) : null);
     this.firstName = first ? shownName(respellChord(first.chord, m.key), capo) : null;
     const restore = this.firstName ? fixFirstHTML(this.firstName) : '';
-    $('fix-which').innerHTML = `<time>${formatTime(shown.startSec)}</time> <b>${slashChordHTML(shownName(shown.chord, capo))}</b>${snd}<small>${escapeHtml(originNote(shown))}</small>${alt}${restore}`;
+    const range = chartEventRange(m.chart, i);
+    $('fix-which').innerHTML = `<time>${fixTimeText(range.startSec, range.endSec)}</time> <b>${slashChordHTML(shownName(shown.chord, capo))}</b>${snd}<small>${escapeHtml(originNote(shown))}</small>${alt}${restore}`;
     ($('fix-prev') as HTMLButtonElement).disabled = i === 0;
     ($('fix-next') as HTMLButtonElement).disabled = i === m.chart.events.length - 1;
     this.renderPicker();

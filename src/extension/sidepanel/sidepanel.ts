@@ -1895,7 +1895,7 @@ async function main(): Promise<void> {
     now: () => positionNow(),
     seek: (sec) => void seekTo(sec),
     showSounding: () => settings.showSounding,
-    mark: (sec) => screen.markFix(sec),
+    mark: (event) => screen.markFix(event),
     save: saveFix,
     acceptAlt,
     restore: restoreFirst,

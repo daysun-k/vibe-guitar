@@ -267,7 +267,7 @@ describe('코드 고치기: "처음 들은 코드: X" and 처음 코드로 되�
     const d = demoChart();
     const replaced = acceptUncertainAlt(d, { startSec: 11.6, chord: 'Fm' }, d.uncertain![0], NOW);
     const { fixer, which, restore } = open(replaced, 12.4);
-    expect(which.innerHTML).toBe(`<time>0:11</time> <b>G</b><small>직접 고른 코드</small>${fixFirstHTML('Em')}`);
+    expect(which.innerHTML).toBe(`<time>0:11~0:13</time> <b>G</b><small>직접 고른 코드</small>${fixFirstHTML('Em')}`);
     expect(fixFirstHTML('Em')).toBe('<span class="fix-first">처음 들은 코드: Em <button class="fix-restore" data-restore="1">처음 코드로 되돌리기</button></span>');
     which.clickRestore();
     await flush();

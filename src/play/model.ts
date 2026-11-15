@@ -8,6 +8,8 @@ import { arrangeChart, suggestCapo, type Arrangement, type CapoSuggestion } from
 import type { Level, Profile } from '../arrange/levels';
 import { summarizeArrangement, type LevelSuitability } from '../arrange/suitability';
 import { prepareChart } from './prepare';
+import { coverageRangeAt, normalizeCoverage } from '../chart/coverage';
+import { barSeconds } from '../chart/timing';
 import type { Chart, Timing } from '../chart/types';
 import { findEventIndex } from '../extension/playview';
 import { estimateLyricOffset, nextLineAfter, pinnedLineAt, placeChords, shiftLyrics, type OffsetEstimate, type PlacedLine } from '../lyrics/align';
@@ -258,6 +260,41 @@ export function frameAt(m: PlayModel, t: number): Frame {
   const k = markAt(m.uncertain, t);
   const uncertain = k >= 0 && m.uncertain[k].noChord === event < 0 ? k : -1;
   return { event, next, bigLeft, bar, bigInBar, barFraction, section, line, nextLine, uncertain };
+}
+
+/**
+ * Time range of chart event i as 코드 고치기 shows it, the same end the arrangement gives it: the next
+ * event's start or the end of the heard range it starts in, whichever comes first (the last event of a
+ * range lasts to the range end). With no heard ranges the last event lasts one bar; an event starting
+ * outside every heard range ends at the next event (or at its own start).
+ */
+export function chartEventRange(chart: Pick<Chart, 'events' | 'coverage' | 'timing'>, i: number): { startSec: number; endSec: number } {
+  const e = chart.events[i];
+  const next = chart.events[i + 1];
+  const cov = normalizeCoverage(chart.coverage);
+  if (!cov.length) return { startSec: e.startSec, endSec: next ? next.startSec : e.startSec + barSeconds(chart.timing) };
+  const range = coverageRangeAt(cov, e.startSec);
+  if (!range) return { startSec: e.startSec, endSec: next ? Math.max(e.startSec, next.startSec) : e.startSec };
+  return { startSec: e.startSec, endSec: next ? Math.min(next.startSec, range.toSec) : range.toSec };
+}
+
+/**
+ * Lane bars (indexes into m.bars) that draw chart event i, for 코드 고치기's outline: a bar holding a
+ * segment that shows the event's arranged event (an empty segment for a rest) and overlaps the event's
+ * range. The lane's own cut rules decide, so a sliver the lane leaves out of a bar does not count, and a
+ * short chord merged into the previous one counts only where its own time is drawn. When the lane draws
+ * the event nowhere (a sliver at a bar's start), the bar holding its start stands in.
+ */
+export function barsForChartEvent(m: Pick<PlayModel, 'chart' | 'arrangement' | 'bars'>, i: number): number[] {
+  if (!m.chart.events[i]) return [];
+  const { startSec, endSec } = chartEventRange(m.chart, i);
+  const ev = m.arrangement.events;
+  const k = findEventIndex(ev, startSec + 1e-6);
+  const id = k >= 0 && startSec < ev[k].endSec && !ev[k].rest ? k : -1;
+  const out = m.bars.flatMap((b, n) => b.segments.some((s) => s.event === id && Math.min(s.endSec, endSec) - Math.max(s.startSec, startSec) > 1e-6) ? [n] : []);
+  if (out.length) return out;
+  const at = m.bars.findIndex((b) => startSec + 0.001 >= b.startSec && startSec + 0.001 < b.endSec);
+  return at >= 0 ? [at] : [];
 }
 
 /** Every bar occupied by this hard shape, including sustained events and repeat bars. */

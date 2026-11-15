@@ -127,7 +127,12 @@ Port of the approved mockup B ("진행표형", diagrams 3x):
   loop repeats only seek and never count in. A speed change during a count-in cancels it ("속도가 바뀌어서
   카운트인을 멈췄어요. 다시 눌러 주세요.").
 - **Fixing one chord (코드 고치기)**: the button opens a small panel at the chord under the playhead (‹ ›
-  step to the previous/next chord and seek there; the bar gets a dashed outline). Pick a root and a kind (or
+  step to the previous/next chord event and seek there). Every lane bar the selected event is drawn in gets a
+  dashed outline, so a chord held over several bars shows its whole range (the lane's own cuts decide: a
+  sliver under 0.1 s it leaves out of a bar is not outlined); when the outlined bars do not all fit in view, the
+  lane scrolls the first outlined row to the top, just under its section header. The header names the event's time range,
+  "0:06~0:13" (to the next event, or to the end of the heard range for the last one; one time when both ends
+  fall in the same second). A fix changes that whole range. Pick a root and a kind (or
   코드 없음) and press "이 코드로 고치기". A bass row (베이스 없음 or /C … /B) keeps a slash chord's bass
   by default (C/B → pick Am → Am/B) and lets you change or remove it; a bass equal to the root is no slash. Names follow the screen: with a capo the picker shows shape names
   (the sounding name only as a small extra when 실제 음 이름 보기 is on); the chart stores the sounding chord,
