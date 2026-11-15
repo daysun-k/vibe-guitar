@@ -62,6 +62,7 @@ import { LyricsAsker, lyricsOutcome, lyricsLookupReady } from './lyrics-asker';
 import { controlTabId, keepPlayerAfterDemo } from './player-target';
 import { playToggle, RATE_CANCELS_COUNTIN, type PlayToggleEnv, type TransportResult } from './play-toggle';
 import { ChordFixer } from './fix';
+import { loadPreviewChart, previewChartUrl, previewOption } from './preview';
 import { OVERVIEW_EMPTY, renderOverviewHtml } from './overview';
 import { capoReason, unplayableLine, PlayScreen, formatTime, type LoopMarks } from './play';
 import { PhoneLink, phoneStatusText, type PhoneStatus, type PlaybackSample } from './phone-link';
@@ -132,6 +133,12 @@ const lyricsAsker = new LyricsAsker();
 /** Demo playback: a simulated clock replaying a stored or synthetic chart. */
 /** `run` tells one demo playback from the next (a phone command never follows into another one). */
 let demo: { clock: DemoClock; chart: Chart; lyrics: Lyrics | null; key: string; run: number } | null = null;
+/**
+ * Dev-only hidden preview (preview.ts): the chart of `?demo=1&chart=…` on a page served over http, the
+ * demo's first choice; `previewError` says why it could not be opened (shown instead of the demo).
+ */
+let preview: { key: string; chart: Chart } | null = null;
+let previewError: string | null = null;
 let demoRuns = 0;
 /** Count-in in progress (cancelled by pressing play again or seeking). */
 let countInRun = 0;
@@ -548,7 +555,10 @@ function renderEmpty(): void {
   const r = shownRecording();
   $('empty-edit').hidden = !r;
   $('empty-listen').hidden = !r;
-  if (!player && !demo) {
+  if (previewError && !demo) {
+    setText('empty-title', '미리보기 코드표를 열지 못했어요');
+    setText('empty-text', previewError);
+  } else if (!player && !demo) {
     setText('empty-title', '재생 중인 곡이 없어요');
     setText('empty-text', hasChrome ? 'YouTube · YouTube Music · Apple Music 탭에서 곡을 재생하세요. 탭이 열려 있는데도 이 문구가 보이면 그 탭을 새로고침하세요.' : '확장 밖에서 열었어요. 데모 재생으로 화면을 확인할 수 있어요.');
   } else if (!r) {
@@ -1370,10 +1380,12 @@ async function demoOptions(): Promise<{ key: string; label: string; chart: Chart
     }
   }
   out.push({ key: recordingKey(DEMO_RECORDING), label: '합성 데모 곡 (가짜 데이터)', chart: demoChart() });
+  if (preview) out.unshift(previewOption(preview.chart, preview.key));
   return out;
 }
 
 async function demoLyricsFor(c: Chart): Promise<Lyrics | null> {
+  if (preview && c === preview.chart) return null; // the preview shows no lyrics
   if (c.recording.id === DEMO_RECORDING.id) return params.get('lyrics') === '0' ? null : demoLyrics();
   if (!hasChrome) return null;
   try {
@@ -1936,7 +1948,14 @@ async function main(): Promise<void> {
   }
   recompute();
   renderHeader();
-  if (params.get('demo') === '1') await startDemo(params.get('rec') ?? undefined);
+  const previewUrl = previewChartUrl(params, location.href);
+  if (previewUrl) {
+    const loaded = previewUrl.ok ? await loadPreviewChart(previewUrl.value) : previewUrl;
+    if (loaded.ok) preview = { key: `preview:${recordingKey(loaded.value.recording)}`, chart: loaded.value };
+    else previewError = loaded.error;
+  }
+  if (previewError) renderEmpty();
+  else if (params.get('demo') === '1') await startDemo(preview?.key ?? params.get('rec') ?? undefined);
   if (params.has('fix')) fixer.open(); // screenshots: open the chord fixing panel
   const lp = /^(\d+)-(\d+)$/.exec(params.get('loop') ?? ''); // screenshots: mark bars a–b (1-based) as the loop
   if (demo && lp && model) setLoop(makeLoop(shownKey(), model.bars, Number(lp[1]) - 1, Number(lp[2]) - 1, model.durationSec));

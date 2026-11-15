@@ -387,6 +387,21 @@ only: it does nothing while a real player is followed); then `document.getElemen
 (verse C♯, info only) the text "대안: D", at 90.0 s (코드 없음) the "대안: G" button. After tapping a 대안 (or
 saving a fix), opening 코드 고치기 again at that chord shows "처음 들은 코드: Em" with "처음 코드로 되돌리기".
 
+**Hidden preview of a real chart (testing without the user's browser windows).** Serve the built `dist` and a
+chart JSON from one plain http server and open
+`http://<host>:<port>/sidepanel.html?demo=1&chart=<chart URL>&t=<seconds>`, for example
+`http://127.0.0.1:8765/sidepanel.html?demo=1&chart=charts/Q4W8RY3fxdI.json&t=14.2` (`chart`: relative to the
+page or absolute, URL-encoded when it has its own query; it must be on the same server). Automation such as
+`aside repl` opens plain http pages in its invisible context, so nothing appears in the user's windows. The
+page fetches only that URL (`credentials: same-origin`, no redirect), checks it with the chart validator and
+plays it as the demo's first choice ("… (미리보기)"): paused at `t`, no lyrics, 코드 고치기 working on the
+in-memory chart (never saved; no extension or web storage), the same `window.vibeGuitar` hooks as the demo,
+and the other demo parameters as above. A chart that does not load or validate shows "미리보기 코드표를 열지
+못했어요" with the reason (the import's "형식 오류: …" for an invalid chart) instead of the demo. Only a page
+served over http(s) takes `chart` (inside the extension it shows that error); without `chart` the demo is
+unchanged. Example: `python3 -m http.server 8765 --bind 127.0.0.1` in a scratch folder holding links to the
+`dist` files and a `charts` folder of chart JSONs (keep recordings' charts out of the repository).
+
 Opened outside the extension (file://) the page runs the synthetic demo with default settings, which is
 how `node scripts/screens.mjs` (after `npm run build`) writes `docs/screens/*.png` at 400 and 600 px, light
 and dark. It uses `$CHROME` or Playwright's cached Chromium, blocks every http(s) request and needs no
