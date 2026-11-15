@@ -376,4 +376,3 @@ textarea{width:100%;resize:vertical}
 
 /* ---------- uncertain stretches (VGT-19) ---------- */
 .sg .unc-q{font-style:normal;font-weight:700;font-size:12px;line-height:1;color:var(--unc);align-self:flex-start;margin-left:-2px}
-.sg.rep .unc-q{align-self:center;margin-left:0}

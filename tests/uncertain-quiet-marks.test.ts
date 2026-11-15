@@ -1,7 +1,7 @@
 /**
  * VGT-19 quiet marks: the lane shows only a "?" (no outline, no line under the strip), the second
- * choice moves into 코드 고치기 as "대안: X" (a button on the replace tier), undo clears the status
- * line, and the temporary lane variant lv=2 keeps the lane cut only at chords.
+ * choice moves into 코드 고치기 as "대안: X" (a button on the replace tier) and undo clears the status
+ * line.
  */
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -9,7 +9,7 @@ import type { Chart, ChordEvent, UncertainSpan } from '../src/chart/types';
 import { ChordFixer, fixAltHTML, fixAltIndex, type FixHost } from '../src/extension/sidepanel/fix';
 import { laneSegmentHTML } from '../src/extension/sidepanel/play';
 import { demoChart } from '../src/play/demo';
-import { buildPlayModel, type PlayModel, type PlayOptions } from '../src/play/model';
+import { buildPlayModel, type PlayOptions } from '../src/play/model';
 
 const read = (p: string) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 const span = (fromSec: number, toSec: number, chord: string, alt: string, replace?: true): UncertainSpan => (replace ? { fromSec, toSec, chord, alt, replace } : { fromSec, toSec, chord, alt });
@@ -27,8 +27,6 @@ function chart(events: [number, string][], cover: number, uncertain: UncertainSp
 }
 
 const demo = (o: Partial<PlayOptions> = {}) => buildPlayModel(demoChart(), { level: 'beginner', capo: 'auto', ...o }, null);
-const flagged = (m: PlayModel) => m.bars.flatMap((b, k) => b.segments.filter((s) => s.flag >= 0).map((s) => [k, m.labels[s.event].name, s.flag]));
-const noFlag = (m: PlayModel) => m.bars.map((b) => ({ ...b, segments: b.segments.map(({ flag: _f, ...s }) => s) }));
 
 describe('lane: only a "?" marks an uncertain stretch', () => {
   it('a flagged segment renders the chord with "?" and no outline class; plain segments are unchanged', () => {
@@ -149,53 +147,5 @@ describe('undo', () => {
     expect(src).not.toContain('되돌렸어요');
     expect(src).toMatch(/lastFix = null;\n\s*fixNote = null;/);
     expect(src).toContain('`바꿨어요: ${shown} → ${u.alt}`');
-  });
-});
-
-describe('lane variant 2 (temporary lv=2): marks on whole chords', () => {
-  it('bars equal the lane without stretches; each demo stretch puts one "?" on its chord', () => {
-    const v2 = demo({ laneVariant: 2 });
-    const off = demo({ showUncertain: false });
-    expect(noFlag(v2)).toEqual(noFlag(off));
-    expect(v2.uncertain).toEqual(demo().uncertain);
-    expect(flagged(v2)).toEqual([
-      [6, 'Em', 0], // capo 1: Fm is played as the Em shape
-      [7, 'C', 1],
-      [10, 'Em', 2],
-      [14, 'C', 3],
-    ]);
-    // lv=1 cuts the C♯ bar at the stretch (two segments); lv=2 keeps one segment for the bar
-    expect(demo().bars[7].segments).toHaveLength(2);
-    expect(v2.bars[7].segments).toHaveLength(1);
-  });
-
-  it('a stretch spanning bars flags each bar\'s chord; a sliver under 0.1 s past a bar line flags nothing', () => {
-    // G 0–8: stretch 1–2.05 → bar 1 only (bar 2 keeps its repeat sign without "?"); stretch 5–7 → bars 3 and 4.
-    const c = chart([[0, 'G']], 8, [span(1, 2.05, 'G', 'Em'), span(5, 7, 'G', 'Am', true)]);
-    const m = buildPlayModel(c, { level: 'novice', capo: 0, laneVariant: 2 }, null);
-    expect(m.bars.map((b) => [b.repeat, b.segments.map((s) => s.flag)])).toEqual([
-      [false, [0]],
-      [true, [-1]],
-      [true, [1]],
-      [true, [1]],
-    ]);
-    // a repeat sign covering a stretch carries the "?"
-    expect(laneSegmentHTML(m, m.bars[2].segments[0], true, false)).toContain('<i class="unc-q" aria-hidden="true">?</i>');
-    expect(laneSegmentHTML(m, m.bars[1].segments[0], true, false)).not.toContain('unc-q');
-  });
-
-  it('another chord overlapping the stretch is not flagged', () => {
-    // C 0–1, G 1–8 with a stretch on G 1–3: bar 1's C segment is not marked, its G segment is.
-    const m = buildPlayModel(chart([[0, 'C'], [1, 'G']], 8, [span(1, 3, 'G', 'Em')]), { level: 'novice', capo: 0, laneVariant: 2 }, null);
-    expect(m.bars[0].segments.map((s) => [m.labels[s.event].name, s.flag])).toEqual([
-      ['C', -1],
-      ['G', 0],
-    ]);
-    expect(m.bars[1].segments.map((s) => s.flag)).toEqual([0]);
-  });
-
-  it('the switch off and the default variant are unchanged', () => {
-    expect(demo({ laneVariant: 2, showUncertain: false }).bars).toEqual(demo({ showUncertain: false }).bars);
-    expect(demo({ laneVariant: 1 }).bars).toEqual(demo().bars);
   });
 });

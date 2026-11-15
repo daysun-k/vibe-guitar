@@ -88,8 +88,6 @@ const setHtml = (el: HTMLElement, html: string): void => {
 const DEMO_BLOCK = '데모 재생 중에는 코드표를 저장하거나 바꾸지 않아요. 데모를 끝낸 뒤 다시 해 주세요.';
 const LEVEL_LABEL: Record<Level, string> = { beginner: '입문', novice: '초급', intermediate: '중급', advanced: '상급' };
 const params = new URLSearchParams(location.search);
-/** Temporary (VGT-19 quiet marks): `lv=2` draws uncertain marks on whole lane chords instead of at the stretch's beats. */
-const LANE_VARIANT: 1 | 2 = params.get('lv') === '2' ? 2 : 1;
 /** False when the page is opened outside the extension (file:// preview, screenshots). */
 const hasChrome = typeof chrome !== 'undefined' && !!chrome.storage?.local && !!chrome.runtime?.id;
 
@@ -375,7 +373,6 @@ function recompute(): void {
     profile: settings.profile,
     allowRootChange: settings.allowRootChange,
     showUncertain: settings.showUncertain,
-    laneVariant: LANE_VARIANT,
     durationSec: demo ? demo.clock.durationSec : player?.duration,
   };
   let next: PlayModel | null;

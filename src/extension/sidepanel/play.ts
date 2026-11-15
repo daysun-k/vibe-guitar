@@ -38,18 +38,18 @@ export function uncertainText(alt: string): string {
 }
 
 /**
- * One lane segment. An uncertain stretch (VGT-19) adds only a small "?" after the chord name (and to a
- * repeat sign that covers one, lane variant 2); the second choice is offered in 코드 고치기.
+ * One lane segment. An uncertain stretch (VGT-19) adds only a small "?" after the chord name (a bar
+ * holding one is never drawn as a repeat); the second choice is offered in 코드 고치기.
  */
 export function laneSegmentHTML(m: PlayModel, s: { event: number; weight: number; flag: number }, repeat: boolean, showSounding: boolean): string {
-  const u = s.flag >= 0 ? m.uncertain[s.flag] : undefined;
-  const q = u ? '<i class="unc-q" aria-hidden="true">?</i>' : '';
-  if (repeat) return `<span class="sg rep" style="flex:${s.weight} 1 0" title="${escapeHtml(['앞 마디와 같아요', u ? uncertainText(u.alt) : ''].filter(Boolean).join(' · '))}">${REPEAT_SVG}${q}</span>`;
+  if (repeat) return `<span class="sg rep" style="flex:${s.weight} 1 0" title="앞 마디와 같아요">${REPEAT_SVG}</span>`;
   if (s.event < 0) return `<span class="sg" style="flex:${s.weight} 1 0"><span class="cn muted">—</span></span>`;
   const lab = m.labels[s.event];
   const snd = lab.sounding !== lab.name ? `<small class="snd">${escapeHtml(lab.sounding)}</small>` : '';
   const alt = lab.hint ? `<small class="alt">${escapeHtml(lab.hint)}</small>` : '';
   const ch = lab.change;
+  const u = s.flag >= 0 ? m.uncertain[s.flag] : undefined;
+  const q = u ? '<i class="unc-q" aria-hidden="true">?</i>' : '';
   const mark = ch ? `<i class="chg${ch.root ? ' root' : ''}" aria-hidden="true">${ch.root ? '◆' : '●'}</i>` : '';
   const concert = ch ? changeConcertLabel(ch, showSounding, true) : '';
   const tipText = [ch ? `${ch.badge} · ${ch.text}${concert ? ` · ${concert}` : ''}` : '', u ? uncertainText(u.alt) : ''].filter(Boolean).join(' · ');

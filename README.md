@@ -158,11 +158,8 @@ Port of the approved mockup B ("진행표형", diagrams 3x):
   status line simply clears. **불확실한 곳 표시** in the settings sheet (on by default) hides every mark.
   Re-analyses merge stretches like chords: the newer chart's stretches, plus the older chart's stretches lying
   wholly in ranges only it heard.
-  Two lane variants, temporary until one is chosen from screenshots (`sidepanel.html?lv=1|2`, default 1):
-  **lv=1** draws a stretch at its own beats (a stretch covering only part of a bar or a chord is its own segment
-  with the "?"); **lv=2** keeps the lane cut only at chords, exactly as without stretches, and puts one "?" on each
-  chord segment (or repeat sign) overlapping a stretch of that chord. Display only: the data, the second choice
-  and the replacement are the same in both.
+  In the lane a stretch is drawn at its own beats: a stretch covering only part of a bar or a chord is its own
+  segment with the "?", and a bar holding one is never drawn as a repeat sign.
 
 Music fixes applied before drawing (pure functions in `src/music/`, tests in `tests/music.test.ts`):
 
@@ -336,7 +333,7 @@ placeholder lyrics 0.4 s early) that exercises the spelling, phase and offset fi
 cached lyrics only (no request in demo mode). Query parameters: `t=<sec>`, `play`, `rate=0.5|0.75`,
 `loop=<a>-<b>` (mark bars a–b, 1-based, as the loop),
 `theme=light|dark`, `level=beginner|novice|intermediate|advanced`, `capo=auto|0..7`, `snd` (sounding
-names), `unc=0` (불확실한 곳 표시 off), `lv=2` (uncertain-mark lane variant 2, temporary), `fix` (open 코드 고치기), `sheet=1`, `lyrics=0`, `mute` (no count-in click), `phonectl` (휴대폰에서 조작 허용 on), `phone` (휴대폰 악보대 switch on; connects to
+names), `unc=0` (불확실한 곳 표시 off), `fix` (open 코드 고치기), `sheet=1`, `lyrics=0`, `mute` (no count-in click), `phonectl` (휴대폰에서 조작 허용 on), `phone` (휴대폰 악보대 switch on; connects to
 `127.0.0.1` only).
 
 The synthetic song carries four uncertain stretches (whole verse Fm at 11.6–13.6 s, the second half of verse
