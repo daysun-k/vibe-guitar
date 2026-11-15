@@ -13,7 +13,6 @@ import { demoChart } from '../src/play/demo';
 import { flagsInBar } from '../src/play/lane';
 import { buildPlayModel, frameAt } from '../src/play/model';
 import { altNames, markAt, visibleSpans, withRo } from '../src/play/uncertain';
-import { uncertainRowHTML } from '../src/extension/sidepanel/play';
 
 const rec: Recording = { source: 'youtube', id: 'uncflag0001', title: 'T', artist: 'A' };
 const MAIN = chartStorageKey('youtube', rec.id);
@@ -240,7 +239,7 @@ describe('names on the play screen', () => {
     expect(altNames('G7', null, timing, at, { level: 'advanced', capo: 0 }).name).toBe('G7');
   });
 
-  it('the particle before 바꾸기 follows the spoken name', () => {
+  it('the particle before 바꾸기 follows the spoken name (the 대안 button label)', () => {
     expect(['Am', 'G', 'C7', 'B♭', 'F♯m', 'Cmaj7', 'Bdim', 'A6', 'D/F♯', 'Em/B'].map(withRo)).toEqual(['Am으로', 'G로', 'C7로', 'B♭으로', 'F♯m으로', 'Cmaj7로', 'Bdim으로', 'A6으로', 'D/F♯으로', 'Em/B로']);
   });
 });
@@ -425,12 +424,6 @@ describe('two tiers on the panel (Amendment 1)', () => {
     const after = acceptUncertainAlt(c, m.uncertain[0].ref, m.uncertain[0].span, NOW);
     expect(after.events[1]).toEqual({ startSec: 4, chord: 'Em', confidence: 1, source: 'manual' });
     expect(after.uncertain).toEqual([span(20, 22, 'F', 'Dm')]);
-  });
-
-  it('row text: "G일 가능성이 더 커요" with the button on the replace tier, "다른 후보 G" without it otherwise', () => {
-    expect(uncertainRowHTML({ alt: 'G', altSounding: 'A♭', replace: true }, 0, false)).toBe('<span class="unc-line">확실하지 않아요 · <b>G</b>일 가능성이 더 커요</span><button class="unc-btn" data-u="0">G로 바꾸기</button>');
-    expect(uncertainRowHTML({ alt: 'D', altSounding: 'E♭', replace: false }, 1, false)).toBe('<span class="unc-line">확실하지 않아요 · 다른 후보 <b>D</b></span>');
-    expect(uncertainRowHTML({ alt: 'Am', altSounding: 'B♭m', replace: false }, 3, true)).toBe('<span class="unc-line">확실하지 않아요 · 다른 후보 <b>Am</b> <small class="snd">실제 B♭m</small></span>');
   });
 
   it('demo: only the verse Fm stretch (11.6–13.6 s) is in the replace tier', () => {

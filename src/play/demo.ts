@@ -72,7 +72,7 @@ const r3 = (x: number) => Math.round(x * 1000) / 1000;
 
 /**
  * Synthetic uncertain stretches (VGT-19) so the play view's marks have something to show: a whole
- * event (verse Fm, second choice the relative major; the only replace-tier stretch, with the button), part of an event as if a change were missed
+ * event (verse Fm, second choice the relative major; the only replace-tier stretch, whose "대안" in 코드 고치기 is a button), part of an event as if a change were missed
  * (the second half of verse C♯), a low-confidence 7th that also carries the "Em도 돼요" hint at
  * 중급/상급, and one whose second choice reads differently as a capo shape (chorus C♯ → A♯m, shape
  * Am with capo 1, concert B♭m).

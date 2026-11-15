@@ -333,6 +333,10 @@ textarea{width:100%;resize:vertical}
 .fix-which time{font-size:12px;color:var(--ink-3);font-variant-numeric:tabular-nums}
 .fix-which b{font:700 18px/1.1 var(--f-chord)}
 .fix-which small{font-size:11px;color:var(--ink-3)}
+.fix-which .fix-alt{font-size:12px;color:var(--ink-2)}
+.fix-which button.fix-alt{height:24px;padding:0 9px;border-radius:99px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-weight:600;cursor:pointer}
+.fix-which button.fix-alt:hover{border-color:var(--unc)}
+.fix-which button.fix-alt:disabled{opacity:.5;cursor:default}
 .fix-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:3px}
 .fix-grid.kinds{display:flex;overflow-x:auto;scrollbar-width:none}
 .fix-grid.kinds button{flex:none;padding:5px 9px}
@@ -372,11 +376,4 @@ textarea{width:100%;resize:vertical}
 
 /* ---------- uncertain stretches (VGT-19) ---------- */
 .sg .unc-q{font-style:normal;font-weight:700;font-size:12px;line-height:1;color:var(--unc);align-self:flex-start;margin-left:-2px}
-.sg.unc{position:relative;outline:1.5px dashed var(--unc);outline-offset:-3px;border-radius:8px}
-.sg.unc+.sg,.sg+.sg.unc{border-left-color:transparent}
-.unc-row{display:flex;align-items:center;gap:8px;min-height:32px;margin:-4px 8px 6px;padding:0 4px 0 10px;border-left:3px solid transparent;font-size:12.5px;color:var(--ink-2)}
-.unc-row:not(:empty){border-left-color:var(--unc);background:var(--unc-soft);border-radius:0 10px 10px 0}
-.unc-row .unc-line{flex:1;min-width:0}
-.unc-row b{color:var(--ink);font-size:14px}
-.unc-btn{flex:none;height:26px;padding:0 10px;border-radius:99px;border:1px solid var(--unc);background:var(--surface);color:var(--ink);font-size:12.5px;font-weight:600;cursor:pointer}
-.unc-btn:hover{background:var(--unc);color:var(--surface)}
+.sg.rep .unc-q{align-self:center;margin-left:0}

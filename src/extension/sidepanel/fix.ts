@@ -8,6 +8,7 @@ import { isNoChord } from '../../arrange/chord';
 import { PICK_QUALITIES, pickBass, pickName, pickRoot, pickToConcert, sameChordSymbol, splitPick, type EventRef } from '../../editor/correct';
 import { prettyChord, shapeName } from '../../music/key';
 import type { PlayModel } from '../../play/model';
+import { withRo, type UncertainMark } from '../../play/uncertain';
 import { slashChordHTML } from './chord-name';
 import { escapeHtml } from './diagram';
 import { formatTime } from './play';
@@ -22,6 +23,8 @@ export interface FixHost {
   mark(sec: number | null): void;
   /** Stores the fix; `from`/`to` are the shown names for the status line. */
   save(event: EventRef, concert: string, names: { from: string; to: string }): Promise<void>;
+  /** Plays model.uncertain[index] as its second choice (replace tier only); rejects when not stored. */
+  acceptAlt(index: number): Promise<void>;
 }
 
 /** Index of the chart event sounding at `t` (the first event before the song's first chord). */
@@ -40,6 +43,32 @@ export function shownName(chord: string, capo: number): string {
 export function originNote(e: { source: string; confidence: number }): string {
   if (e.source === 'manual') return '직접 고른 코드';
   return e.confidence < 0.6 ? '자동으로 들은 코드 · 확실하지 않음' : '자동으로 들은 코드';
+}
+
+/**
+ * 대안 of the event being fixed (VGT-19): index into `marks` of the visible stretch inside the stored
+ * event starting at `eventStartSec`, the one under the playhead `t` when there is one, else the first;
+ * -1 when the event has none.
+ */
+export function fixAltIndex(marks: readonly Pick<UncertainMark, 'fromSec' | 'toSec' | 'ref'>[], eventStartSec: number, t: number): number {
+  let first = -1;
+  for (let i = 0; i < marks.length; i++) {
+    if (marks[i].ref.startSec !== eventStartSec) continue;
+    if (t >= marks[i].fromSec && t < marks[i].toSec) return i;
+    if (first < 0) first = i;
+  }
+  return first;
+}
+
+/**
+ * "대안: X" right of the origin note: a small button on a replace-tier stretch (one tap plays that
+ * stretch as X), plain text otherwise. The concert name follows only when 실제 음 이름 보기 is on.
+ */
+export function fixAltHTML(u: Pick<UncertainMark, 'alt' | 'altSounding' | 'replace'>, i: number, showSounding: boolean): string {
+  const snd = showSounding && u.altSounding !== u.alt ? ` <small class="snd">실제 ${escapeHtml(u.altSounding)}</small>` : '';
+  return u.replace
+    ? `<button class="fix-alt" data-u="${i}" aria-label="대안 ${escapeHtml(withRo(u.alt))} 바꾸기">대안: ${slashChordHTML(u.alt)}${snd}</button>`
+    : `<small class="fix-alt">대안: ${slashChordHTML(u.alt)}${snd}</small>`;
 }
 
 const $ = (id: string): HTMLElement => {
@@ -87,6 +116,10 @@ export class ChordFixer {
       this.renderPicker();
     });
     $('fix-save').addEventListener('click', () => void this.save());
+    $('fix-which').addEventListener('click', (e) => {
+      const b = (e.target as HTMLElement).closest<HTMLElement>('[data-u]');
+      if (b) void this.acceptAlt(Number(b.dataset.u));
+    });
     this.panel.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') this.close();
     });
@@ -134,12 +167,16 @@ export class ChordFixer {
     if (!m) return;
     const i = Math.max(0, Math.min(m.chart.events.length - 1, this.index + d));
     if (i === this.index) return;
-    this.select(i);
-    this.host.seek(m.chart.events[i].startSec + 0.01);
+    const at = m.chart.events[i].startSec + 0.01;
+    this.select(i, true, at);
+    this.host.seek(at);
   }
 
-  /** Selects chart event i; the picker starts at its current chord unless `resetPick` is false. */
-  private select(i: number, resetPick = true): void {
+  /**
+   * Selects chart event i; the picker starts at its current chord unless `resetPick` is false. `at` is
+   * the playhead used to choose the event's 대안 (default: now).
+   */
+  private select(i: number, resetPick = true, at = this.host.now()): void {
     const m = this.host.model()!;
     const shown = m.chart.events[i];
     // The stored event: same index and start as the shown (key-respelled) chart.
@@ -157,7 +194,9 @@ export class ChordFixer {
     this.host.mark(shown.startSec);
     const capo = this.capo(m);
     const snd = this.host.showSounding() && capo && !isNoChord(shown.chord) ? ` <small class="snd">실제 ${escapeHtml(prettyChord(shown.chord))}</small>` : '';
-    $('fix-which').innerHTML = `<time>${formatTime(shown.startSec)}</time> <b>${slashChordHTML(shownName(shown.chord, capo))}</b>${snd}<small>${escapeHtml(originNote(shown))}</small>`;
+    const k = fixAltIndex(m.uncertain, shown.startSec, at);
+    const alt = k >= 0 ? fixAltHTML(m.uncertain[k], k, this.host.showSounding()) : '';
+    $('fix-which').innerHTML = `<time>${formatTime(shown.startSec)}</time> <b>${slashChordHTML(shownName(shown.chord, capo))}</b>${snd}<small>${escapeHtml(originNote(shown))}</small>${alt}`;
     ($('fix-prev') as HTMLButtonElement).disabled = i === 0;
     ($('fix-next') as HTMLButtonElement).disabled = i === m.chart.events.length - 1;
     this.renderPicker();
@@ -192,6 +231,23 @@ export class ChordFixer {
     const snd = this.host.showSounding() && capo && !this.none ? ` <small class="snd">실제 ${escapeHtml(prettyChord(concert))}</small>` : '';
     $('fix-preview').innerHTML = same ? '지금과 같은 코드예요' : `${slashChordHTML(shownName(from, capo))} → <b>${slashChordHTML(to)}</b>${snd}`;
     ($('fix-save') as HTMLButtonElement).disabled = same || this.busy;
+  }
+
+  /** "대안: X" tapped: replace-tier stretch k becomes X (stored like a fix), then the panel closes. */
+  private async acceptAlt(k: number): Promise<void> {
+    const u = this.host.model()?.uncertain[k];
+    if (!u?.replace || this.busy) return;
+    this.busy = true;
+    this.renderPicker();
+    try {
+      await this.host.acceptAlt(k);
+      this.close();
+    } catch {
+      // the status line under the panel already says why
+    } finally {
+      this.busy = false;
+      if (this.isOpen) this.renderPicker();
+    }
   }
 
   private async save(): Promise<void> {
