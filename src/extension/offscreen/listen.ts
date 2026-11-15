@@ -19,11 +19,13 @@ import { analyzeClosedSegments, ListeningSession, type Segment } from '../../rec
 import type { ListenStateMessage, ModelState, PlayerStateMessage } from '../messages';
 
 /**
- * Delay from the media element's currentTime to the captured sample. Measured 2026-11-13 in Aside
- * with the latency probe (3 sessions, 66 clicks): 0.050 + median fit residual 0.0778 = 0.128 s;
- * see docs/latency-probe.md "Measurements". Placement only: speaker and Bluetooth delay are not in it.
+ * Delay from the media element's currentTime to the captured sample. Measured 2026-11-15 in Aside
+ * with the latency probe on main e815c21 (VGT-22 median segment start; 3 sessions, 66 clicks):
+ * 0.128 + median fit residual -0.0590 = 0.069 s. The earlier 0.128 s (2026-11-13) also absorbed the
+ * first-report startup delay that VGT-22 removed; see docs/latency-probe.md "Measurements".
+ * Placement only: speaker and Bluetooth delay are not in it.
  */
-export const CAPTURE_LATENCY_SEC = 0.128;
+export const CAPTURE_LATENCY_SEC = 0.069;
 /** Auto chart after this fraction of the song was heard and playback reached the end. */
 export const AUTO_CHART_FRACTION = 0.9;
 const TICK_MS = 250;

@@ -117,6 +117,32 @@ in one session; 68.0, 30.0 and 41.8 ms in another): every new anchor after a pla
 lands with its own offset. Reducing that per-anchor jitter is a separate follow-up.
 
 
+### 2026-11-15, Aside on the Mac mini (main e815c21, VGT-22 median segment start, constant 0.128 s)
+
+Three sessions of the full plan (pause, seek back, 1.5x stretch), one toolbar click by the user; the
+agent started the run with a click on the page's 3회 측정 button.
+
+| | Result | Target |
+| --- | --- | --- |
+| Complete runs | 3 of 3, no missing click, 0 clicks stored from the 1.5x stretch | all |
+| Fit (even clicks, 33) | median residual -59.0 ms | |
+| Validation (odd clicks, 33) | median -59.0 ms before, -0.0 ms after correction | within 10 ms |
+| Validation \|residual\| p95 | 2.3 ms (max 2.3 ms) | 50 ms |
+| Drift inside continuous segments | 0.1 ms/min | within 10 ms/min |
+| 0 s start segment extra delay | 0.2 ms | |
+| Spread of segment medians per session | 0.7 / 0.3 / 0.3 ms | |
+| Same run placed by the first report only (before VGT-22) | median 8.7 ms after correction, p95 55.8 ms, spread 11.9 / 61.3 / 48.4 ms | |
+
+Per-segment shift from the first-report start: -0.7 to -83.4 ms, with an IQR of the block estimates of
+1.9 to 3.1 ms. Read as the VGT-22 criteria define it, this confirms the startup-delay cause and the fix,
+and every target is met. The median before correction (-59.0 ms) is outside 10 ms, so the report's suggested
+constant is adopted as the criteria pre-registered: `CAPTURE_LATENCY_SEC = 0.128 + (-0.0590) = 0.069 s`.
+The 2026-11-13 constant had also absorbed the first-report startup delay that VGT-22 removed.
+
+A confirmation run with a 0.069 s probe build was prepared the same day but did not start (no capture
+within 25 minutes); it is optional. Raw dump and report outside the repository:
+`~/vibe-guitar-audio/latency-probe/probe-2026-11-15-e815c21.json`, `report-2026-11-15.txt`.
+
 ## VGT-22: per-anchor offset (success criteria, written before the change)
 
 Written on 2026-11-15 before any code change for VGT-22; the targets below are not moved afterwards.
