@@ -9,7 +9,7 @@ import type { AutoOrigin } from '../../chart/types';
 import { PICK_QUALITIES, firstHeard, pickBass, pickName, pickRoot, pickToConcert, sameChordSymbol, splitPick, type EventRef } from '../../editor/correct';
 import { prettyChord, respellChord, shapeName } from '../../music/key';
 import type { PlayModel } from '../../play/model';
-import { withRo, type UncertainMark } from '../../play/uncertain';
+import { inJoinedGap, withRo, type UncertainMark } from '../../play/uncertain';
 import { slashChordHTML } from './chord-name';
 import { escapeHtml } from './diagram';
 import { formatTime } from './play';
@@ -53,9 +53,11 @@ export function originNote(e: { source: string; confidence: number }): string {
 /**
  * 대안 of the event being fixed (VGT-19): index into `marks` of the visible stretch inside the stored
  * event starting at `eventStartSec`, the one under the playhead `t` when there is one, else the first;
- * -1 when the event has none.
+ * -1 when the event has none, and -1 when `t` lies in a gap the lane draws joined (Amendment 2: no
+ * stretch is under the playhead there).
  */
-export function fixAltIndex(marks: readonly Pick<UncertainMark, 'fromSec' | 'toSec' | 'ref'>[], eventStartSec: number, t: number): number {
+export function fixAltIndex(marks: readonly Pick<UncertainMark, 'fromSec' | 'toSec' | 'ref' | 'span' | 'noChord'>[], eventStartSec: number, t: number): number {
+  if (inJoinedGap(marks.filter((m) => m.ref.startSec === eventStartSec), t)) return -1;
   let first = -1;
   for (let i = 0; i < marks.length; i++) {
     if (marks[i].ref.startSec !== eventStartSec) continue;

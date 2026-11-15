@@ -355,8 +355,10 @@ describe('lane: segment content by overlap (review vgt19-flags-ui-r2)', () => {
   it('F2: a short later stretch is not hidden behind an earlier one mapped to the bar end', () => {
     const c = chart([[0, 'G']], [[0, 8]], [span(0.5, 1.95, 'G', 'Em'), span(1.95, 2, 'G', 'Am')]);
     const { m, bars } = lane(c, 2);
-    // Em keeps 0.5–1.95; Am, 0.05 s long, is drawn as its own short segment at the bar end.
-    expect(bars[0]).toEqual([[0, 0.5, -1, 0], [0.5, 1.95, 0, 0], [1.95, 2, 1, 0]]);
+    // Same event, same chord, no gap: since Amendment 2 the lane draws Em and Am as one stretch
+    // 0.5–2 (named by its first mark); the playhead still finds Am on its own. Without the join the
+    // two stay apart at the bar end (flagsInBar, next test).
+    expect(bars[0]).toEqual([[0, 0.5, -1, 0], [0.5, 2, 0, 0]]);
     expect(m.uncertain.map((u) => u.alt)).toEqual(['Em', 'Am']);
     expect(frameAt(m, 1.97).uncertain).toBe(1);
   });
