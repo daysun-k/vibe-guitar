@@ -436,4 +436,3 @@ describe('probe build wiring', () => {
     expect(bad.status).toBe(1);
   }, 30000);
 });
-
