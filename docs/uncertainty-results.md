@@ -148,3 +148,23 @@ the browser (so timings are noisy). Limits from `docs/recognition-improvement-pr
 | Live "인식 중" latency | unchanged path | the per-unit statistics run only in segment analysis, not in the live readout | +100 ms | unchanged |
 
 A5 was not raised.
+
+## Amendment 2: lane join (DEV and TEST-3)
+
+Display-only rule of Amendment 2 (user decision 2026-11-15, frozen 03:54Z before any TEST-3 song was selected):
+uncertain marks in the same chord event with the same chord and a gap of at most 0.5 s are drawn as one stretch.
+Marks are counted as the analysis counts them (`chart.uncertain`, one mark per stretch part per bar, `flagsInBar`),
+per minute of chart coverage; the app joins the marks it draws, so its count can differ slightly.
+
+| Set | Songs | R1 | Minutes | "?" per minute, shipped | "?" per minute, joined | Drop |
+|---|---|---|---|---|---|---|
+| DEV (re-captured 2026-11-15) | 23 | 23/23 | 85.34 | 17.74 | 13.37 | 24.6% |
+| TEST-3 (pool ranks 95-127, first 20 qualifying uploads) | 20 | 20/20 | 76.24 | 18.81 | 14.59 | 22.5% (pass line 15%: PASS) |
+
+On DEV the joined drawing kept what the marks catch (all errors 50.4% -> 50.8% of error time, missed changes
+74.2% -> 74.3%, different chords 42.8% -> 43.5%; precision 43.8% -> 43.4%). Hiding short marks instead would have
+lost catches: under 0.5 s hidden, missed changes 74.2% -> 60.3%; under 1 s hidden, 74.2% -> 11.9%. TEST-3 has no
+time-mapped references, so only the mark counts were read there; joining only adds drawn time, so it cannot lower
+the catch. Raw results stay outside the repository (`~/vgt19-capture/shortmarks/result.json`,
+`~/vgt19-capture/test3/result.json`).
+
