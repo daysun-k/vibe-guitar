@@ -93,35 +93,9 @@ export function harteToSymbol(label: string): MappedLabel {
   const text = label.trim();
   if (text === 'N') return { kind: 'N' };
   if (text === 'X') return { kind: 'X' };
-  const m = HARTE_RE.exec(text);
-  if (!m) return { kind: 'unmapped', reason: `not Harte syntax: ${text}` };
-  const root = rootPc(m[1]);
-  if (root === null) return { kind: 'unmapped', reason: `bad root: ${m[1]}` };
-  const shorthand = m[2];
-  const list = m[3];
-  let tokens: string[];
-  if (shorthand) {
-    const base = SHORTHAND[shorthand];
-    if (!base) return { kind: 'unmapped', reason: `unknown shorthand: ${shorthand}` };
-    tokens = [...base];
-  } else tokens = list === undefined ? [...SHORTHAND.maj] : [];
-  const semis = new Set<number>();
-  for (const t of tokens) semis.add(mod12(degreeSemitones(t)!));
-  for (const raw of (list ?? '').split(',').map((s) => s.trim()).filter(Boolean)) {
-    const remove = raw.startsWith('*');
-    const d = degreeSemitones(remove ? raw.slice(1) : raw);
-    if (d === null) return { kind: 'unmapped', reason: `bad degree: ${raw}` };
-    if (remove) semis.delete(mod12(d));
-    else semis.add(mod12(d));
-  }
-  semis.delete(0);
-  let bass: number | null = null;
-  if (m[4]) {
-    const d = degreeSemitones(m[4]);
-    if (d === null) return { kind: 'unmapped', reason: `bad bass: ${m[4]}` };
-    bass = mod12(root + d);
-  }
-  const symbol = buildSymbol(root, semis, bass);
+  const notes = harteNotes(text);
+  if ('reason' in notes) return { kind: 'unmapped', reason: notes.reason };
+  const symbol = buildSymbol(notes.root, notes.semis, notes.bass);
   if (symbol === null) return { kind: 'unmapped', reason: `no chart symbol for ${text}` };
   try {
     parseChord(symbol);
@@ -129,6 +103,43 @@ export function harteToSymbol(label: string): MappedLabel {
     return { kind: 'unmapped', reason: `chart symbol does not parse: ${symbol}` };
   }
   return { kind: 'chord', symbol };
+}
+
+/**
+ * The notes a Harte chord label (not N or X) names: root pitch class, the other pitch classes as
+ * semitones above it (root removed), and the bass pitch class when the label has one.
+ */
+export function harteNotes(label: string): { root: number; semis: Set<number>; bass: number | null } | { reason: string } {
+  const text = label.trim();
+  const m = HARTE_RE.exec(text);
+  if (!m) return { reason: `not Harte syntax: ${text}` };
+  const root = rootPc(m[1]);
+  if (root === null) return { reason: `bad root: ${m[1]}` };
+  const shorthand = m[2];
+  const list = m[3];
+  let tokens: string[];
+  if (shorthand) {
+    const base = SHORTHAND[shorthand];
+    if (!base) return { reason: `unknown shorthand: ${shorthand}` };
+    tokens = [...base];
+  } else tokens = list === undefined ? [...SHORTHAND.maj] : [];
+  const semis = new Set<number>();
+  for (const t of tokens) semis.add(mod12(degreeSemitones(t)!));
+  for (const raw of (list ?? '').split(',').map((s) => s.trim()).filter(Boolean)) {
+    const remove = raw.startsWith('*');
+    const d = degreeSemitones(remove ? raw.slice(1) : raw);
+    if (d === null) return { reason: `bad degree: ${raw}` };
+    if (remove) semis.delete(mod12(d));
+    else semis.add(mod12(d));
+  }
+  semis.delete(0);
+  let bass: number | null = null;
+  if (m[4]) {
+    const d = degreeSemitones(m[4]);
+    if (d === null) return { reason: `bad bass: ${m[4]}` };
+    bass = mod12(root + d);
+  }
+  return { root, semis, bass };
 }
 
 function buildSymbol(root: number, s: Set<number>, bass: number | null): string | null {

@@ -526,6 +526,32 @@ count for root only, N must match N and X is excluded. Chord-change residuals (a
 nearest within ±1 s) are listed per change and are descriptive only. Isophonics songs were likely in
 BTC's training data, so the report keeps them apart from the held-out Billboard songs.
 
+### Practice charts from public annotations (VGT-5)
+
+```sh
+npm run practice-charts -- [--out <dir>] [--allow-weak] <youtubeId|songId> ...
+```
+
+Builds a ready-to-play chart for one exact YouTube upload from a public human chord annotation, so neither
+the chords nor their times depend on anyone's ear. Inputs (local only, no network): the song's entry in
+`docs/recognition-dev-maps.json` (frozen time map, media = `offsetSec` + `rate` × annotation time), the
+annotation files under `~/vibe-guitar-audio/annotations/data` (`--annotations`), and for the timing check the
+newest stored capture in `~/vibe-guitar-audio/captures/<youtubeId>` (`--captures`) and the stored auto chart the
+map was fitted on (the charts folder the maps file names). Chords are the annotation's labels mapped with the
+evaluator's Harte mapping (X shown as no chord; a symbol naming other notes is listed as simplified). Bars
+come from the annotation's beat file through the same map, or without one from the capture's tracked beats.
+Chord changes move to the nearest half beat of that grid when at most 0.15 s and a quarter beat away
+(annotated changes sit a few hundredths of a second off the annotated beats; left there, two-beat chords
+measure just under two beats and the 입문 level merges them into the previous chord).
+
+A song whose map is not `strong` (fitted to chord boundaries only, so it can be a whole beat off) is refused
+unless `--allow-weak`. Output goes outside the repository, to `~/vibe-guitar-audio/practice-charts`
+(`--out`): `<youtubeId>.json` (the chart; import it with "JSON 가져오기" in the 편집 tab while that exact
+video is playing) and `<youtubeId>.provenance.json` (sources and licence, time map, grid, `snap` counts,
+time-weighted agreement with the annotation, also away from its boundaries, label mapping, timing checks
+against the capture's and the fit chart's beats, how many chords the 입문 view merges, validator result).
+The chart's `provenance.note` repeats the sources and a timing-confidence sentence.
+
 Charts are stored in `chrome.storage.local`, keyed by `chart:<source>:<recording id>`; use the JSON
 export/import buttons in the Edit tab to back them up.
 
