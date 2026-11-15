@@ -559,12 +559,14 @@ measure just under two beats and the 입문 level combines them with a neighbour
 
 A song whose map is not `strong` (fitted to chord boundaries only, so it can be a whole beat off) is refused
 unless `--allow-weak`. Output goes outside the repository, to `~/vibe-guitar-audio/practice-charts`
-(`--out`): `<youtubeId>.json` (the chart; import it with "JSON 가져오기" in the 편집 tab while that exact
+(`--out`; a folder or output file inside the repository is refused before anything is written, with
+symlinks resolved): `<youtubeId>.json` (the chart; import it with "JSON 가져오기" in the 편집 tab while that exact
 video is playing) and `<youtubeId>.provenance.json` (sources and licence, time map, grid, `snap` counts,
 time-weighted agreement with the annotation, also away from its boundaries, label mapping, timing checks
 against the capture's and the fit chart's beats, how many chords the 입문 view combines (`beginnerView.afterMerge`
 uses the 입문 short-chord rule), validator result).
-The chart's `provenance.note` repeats the sources and a timing-confidence sentence.
+The chart's `provenance.note` repeats the sources and a timing-confidence sentence; both it and the sidecar's
+`timeMap.from` name the maps file actually used (`--maps`, repository-relative inside it, `~/…` under home).
 
 Charts are stored in `chrome.storage.local`, keyed by `chart:<source>:<recording id>`; use the JSON
 export/import buttons in the Edit tab to back them up.

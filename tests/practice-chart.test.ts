@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { arrangeChart, chartToInputEvents, levelEvents } from '../src/arrange/arrange';
@@ -229,8 +229,12 @@ describe('scripts/practice-charts.mjs', () => {
       // The auto chart the map was fitted on: beats 0.01 s after the annotated ones.
       mkdirSync(path.join(dir, 'fit'));
       writeFileSync(path.join(dir, 'fit/abcdefghijk.json'), JSON.stringify({ timing: { beatTimes: Array.from({ length: 24 }, (_, i) => 1.11 + 0.5 * i) } }));
-      const run = (...ids: string[]) =>
-        spawnSync(process.execPath, ['scripts/practice-charts.mjs', '--out', path.join(dir, 'out'), '--annotations', path.join(dir, 'ann'), '--captures', path.join(dir, 'none'), '--maps', path.join(dir, 'maps.json'), ...ids], { encoding: 'utf8' });
+      const runTo = (out: string, ...ids: string[]) =>
+        spawnSync(process.execPath, ['scripts/practice-charts.mjs', '--out', out, '--annotations', path.join(dir, 'ann'), '--captures', path.join(dir, 'none'), '--maps', path.join(dir, 'maps.json'), ...ids], { encoding: 'utf8' });
+      const run = (...ids: string[]) => runTo(path.join(dir, 'out'), ...ids);
+      // The --maps file given is the one named in the note and the sidecar (not the default maps file).
+      const mapsFile = path.join(dir, 'maps.json');
+      const mapsName = mapsFile.startsWith(homedir() + path.sep) ? `~/${path.relative(homedir(), mapsFile)}` : mapsFile;
       const ok = run('abcdefghijk');
       expect(ok.status, ok.stderr).toBe(0);
       expect(ok.stdout).toContain('주석 일치 100.00%');
@@ -238,8 +242,10 @@ describe('scripts/practice-charts.mjs', () => {
       expect(validateChart(chart).errors).toEqual([]);
       expect(chart.recording).toEqual(recording);
       expect(chart.timing.beatTimes[0]).toBe(1.1);
-      expect(chart.provenance.note).toContain('media = 0.1000 + 1.000000 x annotation time');
+      expect(chart.provenance.note).toContain(`media = 0.1000 + 1.000000 x annotation time (${mapsName}, beats alignment, strong).`);
+      expect(chart.provenance.note).not.toContain('recognition-dev-maps');
       const side = JSON.parse(readFileSync(path.join(dir, 'out/abcdefghijk.provenance.json'), 'utf8'));
+      expect(side.timeMap.from).toBe(mapsName);
       expect(side.grid).toMatchObject({ kind: 'annotation-beats', beatsPerBar: 4, bpm: 120, droppedLeadBeats: 1 });
       expect(side.agreement.exact).toBe(1);
       expect(side.timingCheck).toBeNull();
@@ -253,6 +259,46 @@ describe('scripts/practice-charts.mjs', () => {
       expect(weak.stderr).toContain("'weak'(chord-boundaries)");
     } finally {
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses an output folder or file inside the repository, symlinks resolved, before writing', () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'practice-charts-'));
+    const repo = process.cwd();
+    const tag = `.practice-out-test-${process.pid}-${Date.now()}`;
+    const targets = [path.join(repo, `${tag}-dir`), path.join(repo, `${tag}-link`), path.join(repo, `${tag}.json`)];
+    try {
+      const run = (out: string) =>
+        spawnSync(process.execPath, ['scripts/practice-charts.mjs', '--out', out, '--maps', path.join(dir, 'missing.json'), 'abcdefghijk'], { encoding: 'utf8' });
+      // Directly inside, through a symlink to an existing folder, and through a dangling symlink.
+      symlinkSync(path.join(repo, 'docs'), path.join(dir, 'to-docs'));
+      symlinkSync(targets[1], path.join(dir, 'dangling'));
+      for (const out of [targets[0], path.join(dir, 'to-docs'), path.join(dir, 'to-docs', 'sub'), path.join(dir, 'dangling')]) {
+        const r = run(out);
+        expect(r.status, out).toBe(1);
+        expect(r.stderr).toContain('저장소 안에는 쓰지 않아요');
+      }
+      expect(existsSync(targets[0])).toBe(false);
+      expect(existsSync(targets[1])).toBe(false);
+      expect(existsSync(path.join(repo, 'docs', 'sub'))).toBe(false);
+      // An output file that is a symlink into the repository is refused too.
+      const out = path.join(dir, 'out');
+      mkdirSync(out);
+      symlinkSync(targets[2], path.join(out, 'abcdefghijk.json'));
+      const ann = path.join(dir, 'ann/ds');
+      mkdirSync(ann, { recursive: true });
+      writeFileSync(path.join(ann, 'song.lab'), LAB);
+      writeFileSync(path.join(ann, 'song.txt'), beatFile(6));
+      writeFileSync(path.join(dir, 'songs.json'), JSON.stringify({ datasets: { ds: { name: 'S', folder: 'ds', page: 'p', attribution: 'a', licence: 'l' } }, songs: [{ id: 's1', title: 'Song', artist: 'Band', release: 'r', dataset: 'ds', chords: 'song.lab', beats: 'song.txt' }] }));
+      writeFileSync(path.join(dir, 'maps.json'), JSON.stringify({ songs: [{ id: 's1', youtubeId: 'abcdefghijk', songList: path.join(dir, 'songs.json'), offsetSec: 0.1, rate: 1, mediaDurationSec: 30, alignMethod: 'beats', alignStrength: 'strong' }] }));
+      const r = spawnSync(process.execPath, ['scripts/practice-charts.mjs', '--out', out, '--annotations', path.join(dir, 'ann'), '--captures', path.join(dir, 'none'), '--maps', path.join(dir, 'maps.json'), 'abcdefghijk'], { encoding: 'utf8' });
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain('저장소 안에는 쓰지 않아요');
+      expect(existsSync(targets[2])).toBe(false);
+      expect(existsSync(path.join(out, 'abcdefghijk.provenance.json'))).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+      for (const t of targets) rmSync(t, { recursive: true, force: true });
     }
   });
 });

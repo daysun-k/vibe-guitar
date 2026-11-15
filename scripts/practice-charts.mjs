@@ -1,7 +1,8 @@
 // Builds ready-to-play practice charts for exact YouTube uploads from public human chord annotations
 // and the frozen time maps in docs/recognition-dev-maps.json (media = offsetSec + rate x annotation time).
 //   npm run practice-charts -- [--out <dir>] [--annotations <dir>] [--captures <dir>] [--maps <file>] [--allow-weak] <youtubeId|songId> ...
-// Defaults: --out ~/vibe-guitar-audio/practice-charts, --annotations ~/vibe-guitar-audio/annotations/data,
+// Defaults: --out ~/vibe-guitar-audio/practice-charts (an --out inside the repository is refused,
+// symlinks resolved), --annotations ~/vibe-guitar-audio/annotations/data,
 // --captures ~/vibe-guitar-audio/captures, --maps docs/recognition-dev-maps.json.
 // Per song it writes <out>/<youtubeId>.json (the chart, importable in the side panel) and
 // <out>/<youtubeId>.provenance.json (sources, time map, grid, timing check, agreement with the
@@ -11,7 +12,7 @@
 // close (snapEvents). A song whose map is not "strong" (fitted to chord boundaries,
 // so it can be a whole beat off) is refused unless --allow-weak. Local files only (no network).
 import * as esbuild from 'esbuild';
-import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, realpathSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -122,6 +123,51 @@ function latestCapture(capturesDir, youtubeId) {
   return null;
 }
 
+/**
+ * The real path p refers to: symlinks resolved in every existing component, including a dangling
+ * symlink (resolved through its target), and the components that do not exist yet appended.
+ */
+export function realTarget(p, depth = 0) {
+  const abs = path.resolve(p);
+  let cur = abs;
+  const rest = [];
+  for (;;) {
+    let st = null;
+    try {
+      st = lstatSync(cur);
+    } catch {
+      st = null;
+    }
+    if (st?.isSymbolicLink()) {
+      if (depth > 40) throw new Error(`${p}: 심볼릭 링크가 너무 많이 이어져요.`);
+      return realTarget(path.join(path.resolve(path.dirname(cur), readlinkSync(cur)), ...rest), depth + 1);
+    }
+    if (st) return path.join(realpathSync(cur), ...rest);
+    const parent = path.dirname(cur);
+    if (parent === cur) return abs;
+    rest.unshift(path.basename(cur));
+    cur = parent;
+  }
+}
+
+/** Throws when p (after resolving symlinks) is the repository or inside it: outputs never go there. */
+export function assertOutsideRepo(p, repo = root) {
+  const repoReal = realTarget(repo);
+  for (const target of new Set([path.resolve(p), realTarget(p)])) {
+    if (target === repoReal || target.startsWith(repoReal + path.sep) || target === path.resolve(repo) || target.startsWith(path.resolve(repo) + path.sep)) {
+      throw new Error(`${p}: 저장소 안에는 쓰지 않아요 (${target}). 저장소 밖의 폴더를 --out으로 지정해 주세요.`);
+    }
+  }
+}
+
+/** How the provenance names a file: relative to the repository inside it, ~/... under home, else absolute. */
+export function displayPath(p) {
+  const abs = path.resolve(p);
+  if (abs.startsWith(root + path.sep)) return path.relative(root, abs);
+  if (abs.startsWith(home + path.sep)) return `~/${path.relative(home, abs)}`;
+  return abs;
+}
+
 const pct = (x) => `${(100 * x).toFixed(2)}%`;
 const untilde = (p) => (p.startsWith('~/') ? path.join(home, p.slice(2)) : p);
 
@@ -182,7 +228,7 @@ function buildOne(m, args, maps, key) {
       : 'Timing confidence: LOW. The map was fitted to chord boundaries only and can be a whole beat off.';
   const note = [
     `Practice chart (VGT-5) from a human annotation: ${dataset.name}, ${song.chords}.`,
-    `Times: media = ${map.offsetSec.toFixed(4)} + ${map.rate.toFixed(6)} x annotation time (docs/recognition-dev-maps.json, ${entry.alignMethod} alignment, ${entry.alignStrength}).`,
+    `Times: media = ${map.offsetSec.toFixed(4)} + ${map.rate.toFixed(6)} x annotation time (${displayPath(args.maps)}, ${entry.alignMethod} alignment, ${entry.alignStrength}).`,
     gridText,
     confidence,
     'Chords as annotated (Harte labels mapped to chart symbols); X (unknown) shown as no chord.',
@@ -215,7 +261,7 @@ function buildOne(m, args, maps, key) {
     schema: 'vibe-guitar-practice-chart-provenance/1',
     song: { id: entry.id, artist: song.artist, title: song.title, release: song.release, youtubeId: entry.youtubeId },
     chords: { dataset: dataset.name, file: `${dataset.folder}/${song.chords}`, page: dataset.page, attribution: dataset.attribution, licence: dataset.licence },
-    timeMap: { offsetSec: map.offsetSec, rate: map.rate, alignMethod: entry.alignMethod, alignStrength: entry.alignStrength, mediaDurationSec: entry.mediaDurationSec, from: 'docs/recognition-dev-maps.json' },
+    timeMap: { offsetSec: map.offsetSec, rate: map.rate, alignMethod: entry.alignMethod, alignStrength: entry.alignStrength, mediaDurationSec: entry.mediaDurationSec, from: displayPath(args.maps) },
     grid: { ...gridSource, beatsPerBar: grid.timing.beatsPerBar, bpm: grid.timing.bpm, beats: grid.timing.beatTimes.length, firstDownbeatSec: grid.timing.firstDownbeatSec, irregularBars: grid.irregularBars, droppedLeadBeats: grid.droppedLeadBeats },
     timingCheck: check ? { against: path.relative(home, capture.file), ...check } : null,
     // The same check against the chart the map was fitted on; when this agrees and the newest
@@ -240,6 +286,8 @@ async function main() {
     console.log(USAGE);
     return 0;
   }
+  // Before anything is read or written: outputs never go into the repository (symlinks resolved).
+  assertOutsideRepo(args.out);
   const m = await loadModules();
   const maps = readJson(args.maps, '시간 매핑');
   mkdirSync(args.out, { recursive: true });
@@ -248,8 +296,12 @@ async function main() {
     try {
       const { entry, chart, sidecar } = buildOne(m, args, maps, key);
       const file = path.join(args.out, `${entry.youtubeId}.json`);
+      const sideFile = path.join(args.out, `${entry.youtubeId}.provenance.json`);
+      // An existing file may be a symlink into the repository.
+      assertOutsideRepo(file);
+      assertOutsideRepo(sideFile);
       await writeFile(file, `${JSON.stringify(chart, null, 2)}\n`, 'utf8');
-      await writeFile(path.join(args.out, `${entry.youtubeId}.provenance.json`), `${JSON.stringify(sidecar, null, 2)}\n`, 'utf8');
+      await writeFile(sideFile, `${JSON.stringify(sidecar, null, 2)}\n`, 'utf8');
       const a = sidecar.agreement;
       const simplified = sidecar.labels
         .filter((l) => l.kind !== 'exact')
