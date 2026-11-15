@@ -1,10 +1,13 @@
 # Phase 0 evidence record (VGT-6, VGT-5 preparation)
 
-State on 2026-11-15 (audit), main 2288f5a. One row per item of [phase0-test-checklist.md](phase0-test-checklist.md)
-(IDs follow the order of the bullets in each checklist section) and per feature added since 2026-11-12.
-109 rows: 15 verified, 51 partial, 43 unverified. The audit compared every row with its checklist bullet:
-22 rows went from verified to partial (a required observation missing or a target missed) and D2 from partial
-to unverified; no row was upgraded.
+State on 2026-11-15 (audit + quiet checks), main b648864. One row per item of
+[phase0-test-checklist.md](phase0-test-checklist.md) (IDs follow the order of the bullets in each checklist
+section) and per feature added since 2026-11-12.
+109 rows: 18 verified, 65 partial, 26 unverified. The audit (main 2288f5a) compared every row with its checklist
+bullet: 22 rows went from verified to partial (a required observation missing or a target missed) and D2 from
+partial to unverified; no row was upgraded. The quiet first-session checks later that day (QC1-1115, QC2-1115)
+moved C10, F3 and N10 to verified and C2, C5, C6, C7, E2, E4, F5, F10, G1, G6, G7, GC1, GC4, GC12 and S11 from
+unverified to partial; F8 and N7 gained receipts and stay partial; no row went down.
 
 Status words:
 
@@ -29,6 +32,8 @@ Scope rules used for every row:
   and in-memory behaviour only. It does not verify storage, persistence across a reload or live lyric requests.
 - Simulator results show layout only. They do not verify real-phone readability, Wi-Fi recovery or real-device
   timing.
+- Storage checks through the service worker's messages (the ones the panel sends, without the panel UI) verify
+  the stored result only. They do not verify the panel's buttons, texts or downloads.
 - Unit tests and reviews alone stay unverified (see the status words).
 
 ## Sources
@@ -44,6 +49,8 @@ Scope rules used for every row:
 | VGT18-TEST | Shipped recognizer one-shot TEST, 2026-11-14 | docs/recognition-candidates.md:253-279, PR #37 |
 | VGT19-BROWSER | Uncertain-stretch browser check, 2026-11-15, dump build of e2c89ce in Aside | docs/uncertainty-results.md:125-135, PR #46 |
 | BACKLOG-1115 | Backlog briefing that lists ads, page navigation, YouTube Music recording identity and Apple Music as having no record | briefing `2026-11-15-vibe-guitar-backlog-bundle.html` |
+| QC1-1115 | First quiet first-session check agent, 2026-11-15. Storage through the service worker of the extension installed in the user's Aside (the build of main 2288f5a, not replaced during the checks), on disposable `zzvgtest-` recordings (keys 358 → 364 → 358, none left; real songs read only), and the hidden http preview of the stored practice charts and test charts. It found F10 there and fixed it at b0ec80b; the kept "?" spans after the fix were checked offline on that commit (PR #60, main b648864, independent review PASS). | `~/vgt-reprio-b/checks/` (`shots/`, `g1-*.json`, `g2-results.json`, `scripts/`), PR #60 |
+| QC2-1115 | Second quiet check agent, 2026-11-15, main 4402c9a. Hidden http preview, a booted iPhone 17 simulator fed by a scripted publisher through the relay, and offline arrangement runs. Nothing was written to the extension's storage; the frontmost app stayed Aside except about 1 s of Xcode's DeviceHub when the safaridriver session started. | `~/vgt-reprio-b/checks2/` (`shots/`, `logs/`, `scripts/`) |
 
 Where B5-AUTO's one-line summary and BACKLOG-1115 disagree (in-page navigation, YouTube Music), the row is
 **partial**: the summary says it worked but does not record the sub-steps the checklist asks for.
@@ -81,20 +88,21 @@ service worker's chart-write save); both read back equal by value to the practic
 charts were kept. Let It Be (`QDYfEBY9NM4`) already held the same practice chart (same events, timing and
 coverage). Drive My Car (`kfSQkZuIx84`) was not replaced because it holds an edited auto chart (last edit
 2026-11-15T01:14Z, origin unknown); its practice chart is imported by hand only if the user wants it. This does
-not verify C2: nothing was exported or re-imported through the panel's UI, so C2 stays unverified.
+not verify C2: nothing was exported or re-imported through the panel's UI, so C2 stayed unverified (it became
+partial later that day through QC1-1115, still without the panel's UI).
 
 | ID | Item | Status | Build, date | Site | Result | Evidence |
 | --- | --- | --- | --- | --- | --- | --- |
 | C1 | Editor: paste, tap tempo, stamp, save (optional) | unverified | – | – | Unit tests only. | – |
-| C2 | Export and re-import JSON | unverified | – | – | Unit tests only. Importing a prepared chart is the first live use. | – |
+| C2 | Export and re-import JSON | partial | 2288f5a + b0ec80b, 2026-11-15 | Aside extension storage, offline | Before 2026-11-15: unit tests only; importing a prepared chart is the first live use. QC1-1115 (disposable `zzvgtest-` recording): Let It Be's stored chart was exported to JSON with the app's export function, imported again with its import function and saved through the service worker; read back, chords, beats and heard ranges equal the original (only title, artist and provenance differ, set by attaching it to the current song). Missing: 편집 → JSON 내보내기 / 가져오기 in the panel (the download and the file picker) and the imported chart playing in time on its song. | QC1-1115 |
 | C3 | Next chord visible in time; 미리 알림 ½ / 1 / 2 | unverified | – | – | Strip rendered in headless screenshots (PR #6) and in the Aside demo (PR #45); comfort while playing not recorded. | PR #6, #45 |
 | C4 | Capo: 자동 choice; sounding names | partial | ec7aedd, 2026-11-13 | www.youtube.com | Flat spelling and sounding names displayed (Perfect Duet: A♭, no G#/D#); capo hint shown in headless Chrome (PR #10). Whether the user likes the 자동 capo is not recorded. | B5-AUTO "화면 표시", PR #10 |
-| C5 | Levels: shapes playable | unverified | – | – | Difficulty compared by scores only (briefing `2026-11-10-vibe-guitar-easier-beginner-done.html`). | – |
-| C6 | Slash bass and sus kept at 입문 | unverified | – | – | Unit tests only. | – |
-| C7 | "잡을 수 있음" shapes preferred | unverified | – | – | Unit tests only. | – |
+| C5 | Levels: shapes playable | partial | 2288f5a + b0ec80b, 2026-11-15 | http preview | Difficulty compared by scores only (briefing `2026-11-10-vibe-guitar-easier-beginner-done.html`). QC1-1115, three practice charts at two levels each: 입문 turned F into Fmaj7, merged short chords and dropped slash bass; 중급 with 카포 1 showed barre shapes at the 4th and 11th fret. Missing: whether the shapes are playable for the user (step 1 of "Still needs the user"), the 입문 change mark (●) with its tooltip and no superscript 7, and "…도 돼요" only on low-confidence 7ths at 중급/상급. | QC1-1115 |
+| C6 | Slash bass and sus by level (finger-pressed bass and sus at 초급; 입문 simplifies them, keeps open-string bass) | partial | 2288f5a + b0ec80b / 4402c9a, 2026-11-15 | http preview | Before 2026-11-15: unit tests only. The checklist bullet was rewritten on 2026-11-15 to match docs/level-vocabulary.md (it used to ask for both kept at 입문). QC1-1115 and QC2-1115, test chart C, C/B, Am, Am/G, Dsus4, D, Gsus4, G: 입문 plays C/B → C, Am/G → Am, Dsus4 → D and Gsus4 → G, each with a note ("베이스음 지정(/)을 빼고 …", "sus 음을 3음으로 바꾼 …"); 초급 keeps all four. Missing: a slash chord with an open-string bass (C/E, D/A, Am/E) staying at 입문 (the test chart had none). | QC1-1115, QC2-1115 |
+| C7 | "잡을 수 있음" shapes preferred | partial | 4402c9a, 2026-11-15 | offline | Before 2026-11-15: unit tests only. QC2-1115, offline arrangement (`buildPlayModel`) of 4 real charts at 초급 and 중급, 카포 0 and 자동: marking every default shape left the arrangement unchanged (16/16); marking alternative shapes instead moved 27 of 149 chords to them (e.g. G 320003 → 320033), and easy open shapes such as C x32010 stay even when not marked, because an unmarked shape only gets a +3 penalty. Missing: marking shapes in 설정 → 이 곡에 나오는 코드 in the panel, and a decision whether this weak preference (it acts only between shapes of similar difficulty) is the intended strength. | QC2-1115 |
 | C8 | Strumming suggestion | unverified | – | – | – | – |
 | C9 | Count-in 1 / 2 bars, 끔, cancel | partial | ec7aedd, 2026-11-13 | www.youtube.com | Count-in worked with the loop and from the phone's ▶. 2 bars, 끔 and cancel during the count not recorded. | B5-AUTO "속도·구간 반복", "휴대폰 조작" |
-| C10 | Coverage gaps "—" | unverified | – | – | Unit tests only. (The "—?" seen in PR #48 is a no-chord span, not a coverage gap.) | – |
+| C10 | Coverage gaps "—" | verified | 2288f5a + b0ec80b, 2026-11-15 | http preview | Before 2026-11-15: unit tests only. (The "—?" seen in PR #48 is a no-chord span, not a coverage gap.) QC1-1115: a test chart with no coverage from 30 to 60 s showed "—" in the bars of the gap, and no next shape was highlighted just before it. | QC1-1115 |
 | C11 | Drafts per song | unverified | – | – | Unit tests only. | – |
 | C12 | Play along without stopping; top 3 annoyances | unverified | – | – | Needs the user. | – |
 
@@ -121,14 +129,14 @@ not verify C2: nothing was exported or re-imported through the panel's UI, so C2
 | --- | --- | --- | --- | --- | --- | --- |
 | F1 | Panel opens at the playhead; outline; header; ‹ › | partial | a372dbd / c510d2f, 2026-11-15 | www.youtube.com (And She Was), http preview | Header "0:06~0:13 E 자동으로 들은 코드 대안: C♯m", four bars outlined, next chord's bar not outlined (PR #51). Arrows stepped event starts and "?" stretches (PR #52, N7). The user also used it on And She Was and reported the old one-bar outline (PR #51 report). Missing: the player jumping to each stop in a real tab (the "?" stops were seen in the hidden preview, which has no player) and a bar click that only seeks. | PR #51, #52 |
 | F2 | Pick root and kind, preview, "이 코드로 고치기" | partial | ec7aedd, 2026-11-13 | www.youtube.com | Fix applied and shown. Status text not recorded. Missing: the preview "G → Am" and the status line "고쳤어요: …" with "되돌리기". | B5-AUTO "코드 고치기" |
-| F3 | Slash bass row preselect | unverified | – | – | Unit tests only (PR #14). | – |
+| F3 | Slash bass row preselect | verified | 2288f5a + b0ec80b / 4402c9a, 2026-11-15 | http preview | Before 2026-11-15: unit tests only (PR #14). QC1-1115: a C/B preselected "/B", Am/G with 카포 1 preselected the shape name "/F♯", a plain Dm preselected "베이스 없음". QC2-1115: picking Am on C/B previewed "C/B → Am/B", 베이스 없음 gave "C/B → Am", and with 카포 1 "B/B♭ → G♯m/B♭". The item asks for the picker only; storing the fix is F4. | PR #14, QC1-1115, QC2-1115 |
 | F4 | Only that chord changed | verified | ec7aedd, 2026-11-13 | www.youtube.com | Stored chart: only the fixed chord changed. | B5-AUTO |
-| F5 | Badge "1곳 고침" | unverified | – | – | Not recorded. | – |
+| F5 | Badge "1곳 고침" | partial | 2288f5a + b0ec80b, 2026-11-15 | Aside extension storage, http preview | QC1-1115: after one fix saved through the service worker the stored chart held exactly one fixed chord; the hidden preview of that chart showed the badge "자동 코드표 · 1곳 고침 · 나머지는 미확인" and, 300 px wide, "자동 · 일부 고침". Missing: the badge's explanation (how many chords were fixed and that the rest are unchecked). | QC1-1115 |
 | F6 | Capo: stores the sounding chord | partial | ec7aedd, 2026-11-13 | www.youtube.com | Stored as the sounding chord with the capo applied. Missing: the picker showing shape names only, the grid showing the shape (Em), and the "실제 …" name in the picker header and preview. | B5-AUTO |
 | F7 | 되돌리기 | partial | ec7aedd, 2026-11-13 | www.youtube.com | Undo restored the chord. Missing: the badge returning to "자동 코드표 · 사람이 확인하지 않음". | B5-AUTO |
-| F8 | Survives new analysis and reload | partial | ec7aedd, 2026-11-13 | www.youtube.com | Fix kept after reload. Keeping the fix across a new analysis not recorded. | B5-AUTO |
+| F8 | Survives new analysis and reload | partial | ec7aedd, 2026-11-13; 2288f5a + b0ec80b, 2026-11-15 | www.youtube.com; Aside extension storage | Fix kept after reload; keeping the fix across a new analysis was not recorded then. QC1-1115 (service worker, disposable recording): after a fix a new auto chart arrived and the fixed chart stayed in use; read again from a new page it was unchanged; "자동 코드표로 바꾸기" (adopt) kept the fixed chart as the backup (`chartbackup`). Missing: the play tab notice that a new auto chart is ready, and reloading the panel and the YouTube tab after a new analysis. | B5-AUTO, QC1-1115 |
 | F9 | No false "준비됐어요" notice | unverified | – | – | Unit tests only. | – |
-| F10 | Editor load / save keeps auto data | unverified | – | – | Unit tests only. | – |
+| F10 | Editor load / save keeps auto data | partial | 2288f5a + b0ec80b, 2026-11-15 | Aside extension storage, offline | Before 2026-11-15: unit tests only. QC1-1115 found a defect: 저장된 코드표를 편집기로 불러오기 → 이 곡에 저장 without changes dropped every "?" stretch and its alternatives (a copy of Drive My Car in the real extension: 44 → 0 spans) although the status said the auto data was kept. Fixed in PR #60 (b0ec80b, main b648864): unchanged event times keep the spans, re-stamped times drop them; its regression test failed before the fix (1 failed, 19 passed) and passes after (20 passed). The fixed save, run offline on the same copy and written back through the service worker, kept all 44 spans. Missing: a panel click on the rebuilt extension (the user's installed build does not have the fix yet), the status text, "바꾼 코드 1개만 …" after one changed chord and the re-stamp message. | QC1-1115, PR #60 |
 | F11 | Demo: fix not saved | partial | 9ef5398 / c510d2f, 2026-11-15 | demo, http preview | Fixes in demo and the hidden preview change only the in-memory chart. Missing: the text "(데모라서 저장하지는 않아요)" and a look at the real song's stored chart after 끝내기. "In-memory only" is the design (README.md:413-414); demo and preview evidence does not verify storage. | PR #48, #52 |
 
 ### D3 (checklist section). Practice speed and A/B loop
@@ -145,16 +153,16 @@ not verify C2: nothing was exported or re-imported through the panel's UI, so C2
 | S8 | Count-in with the loop; speed change cancels | partial | ec7aedd, 2026-11-13 | www.youtube.com | Count-in worked; cancel on speed change not recorded. | B5-AUTO |
 | S9 | Ads with the loop on | unverified | – | – | – | BACKLOG-1115 |
 | S10 | Clearing (반복 해제, video/tab/demo change) | partial | ec7aedd, 2026-11-13 | www.youtube.com | 반복 해제 worked; clearing on video, tab and demo changes not recorded. | B5-AUTO |
-| S11 | 400 px with 카포 1 fits one row | unverified | – | – | – | – |
+| S11 | 400 px with 카포 1 fits one row | partial | 2288f5a + b0ec80b, 2026-11-15 | http preview | QC1-1115, 400 px CSS width with 카포 1: the speed buttons and "구간 반복" fit on one row and the bars showed shape names only. Missing: the note "N–M마디 반복 중" on that row with the loop on. | QC1-1115 |
 
 ## E. Play view, lyrics and fixes
 
 | ID | Item | Status | Build, date | Site | Result | Evidence |
 | --- | --- | --- | --- | --- | --- | --- |
 | E1 | Demo without a player | partial | 2026-11-10 / 2026-11-15 | Aside | Demo rendered at 560 px (PR #4) and 400 px (PR #45); hidden http preview (PR #52). Picking a stored recording in the demo bar not recorded. Missing: 0.5× in the demo, "끝내기" returning to the live player, and a stored recording replayed from the demo bar with cached lyrics only. | PR #4, #45, #52 |
-| E2 | Shape strip: three slots, 120 px, light/dark | unverified | – | – | Headless screenshots only (PR #6, settings grid measured at 120 px). The Aside demo at 400 px (PR #45) did not record the strip, narrow widths or the dark theme. | PR #6 |
+| E2 | Shape strip: three slots, 120 px, light/dark | partial | 2288f5a + b0ec80b / 4402c9a, 2026-11-15 | http preview | Earlier: headless screenshots only (PR #6, settings grid measured at 120 px); the Aside demo at 400 px (PR #45) did not record the strip, narrow widths or the dark theme. QC1-1115: three slots; diagram width 119 px at 400 px, 92 px at 320 px, 76 px at 272 px; light and dark both readable. QC2-1115, 12 s of playback sampled every 100 ms (110 samples): the lane stayed at one position, always three slots, 119 px at 400 px and 99 px at 340 px; 설정 → 이 곡에 나오는 코드 showed all 12 shapes at 120 px but printed the names in ASCII ("F#", "G#m/F#", "B/Bb") while the strip uses ♯/♭, fixed in PR #61. Missing: the accent border and the countdown badge's slot, the coming chord in the first slot between chords, whether the sampled stretch had a four-fret shape replacing a five-fret one, and the settings list after PR #61. | PR #6, QC1-1115, QC2-1115 |
 | E3 | Key spelling in a flat key | partial | ec7aedd, 2026-11-13 | www.youtube.com | Perfect Duet: A♭, flats only (no G#/D#). 분석 정보 key line not recorded. Missing: the estimated key in 설정 → 분석 정보. | B5-AUTO "화면 표시" |
-| E4 | Bar phase | unverified | – | – | Unit tests only. | – |
+| E4 | Bar phase | partial | 2288f5a + b0ec80b, 2026-11-15 | http preview | Before 2026-11-15: unit tests only. QC1-1115: 분석 정보 of three charts read "마디 시작: 그대로" with 55/136, 21/28 and 133/141 changes on bar starts. Missing: a chart whose downbeat was moved ("마디 시작 보정 …"); none of the three had one. | QC1-1115 |
 | E5 | 6/8 ticks, countdown, count-in | partial | ec7aedd, 2026-11-13 | www.youtube.com | 6/8 drawn with 2 ticks per bar. Countdown and count-in in 6/8 not recorded. | B5-AUTO |
 | E6 | Lyrics on: words, sections | partial | 2026-11-10 / ec7aedd 2026-11-13 | Aside | LRCLIB returned 31 lines / 291 words for Perfect and cached them; chords over sung words in demo replay (PR #4). Lyric line and section names normal (B5-AUTO). Missing: the underlined sung word, "다음 · …", "♪ 연주만 나와요" between sung parts, and the lyric source and offset in 분석 정보 on a live song (the checklist notes about +0.45 s seen on 2026-11-10, build not named). Chords over words in a demo replay do not verify live lyric requests. | PR #4, B5-AUTO |
 | E7 | Song without lyrics | unverified | – | – | – | – |
@@ -166,13 +174,13 @@ not verify C2: nothing was exported or re-imported through the panel's UI, so C2
 
 | ID | Item | Status | Build, date | Site | Result | Evidence |
 | --- | --- | --- | --- | --- | --- | --- |
-| G1 | Off by default; no connection when off | unverified | – | – | `npm run phone-check` and unit tests only. | – |
+| G1 | Off by default; no connection when off | partial | 4402c9a, 2026-11-15 | http preview, scripted relay | Before 2026-11-15: `npm run phone-check` and unit tests only. QC2-1115: the sheet's 휴대폰 악보대 switch was off by default and showed 연결 안 됨; while off (about 9 s) the relay log had no connection attempt; with `phone` on, attempts appeared and the relay refused them as designed for an http origin (`publisher rejected (origin http://127.0.0.1:8792)`). Missing: the real extension on a fresh profile with the service worker's and panel's DevTools Network panels, and the quiet retry slowing to every 15 s. | QC2-1115 |
 | G2 | Finder double-click starts the relay | partial | PR #18 head / ec7aedd | Mac | Launcher run from a shell with a short PATH (PR #18). Real Finder double-click not recorded. | PR #18, B5-AUTO |
 | G3 | Firewall prompt; QR scan; 휴대폰 1대; 403 on a bad token | partial | 2026-11-12 | real phone | The user connected a real phone and reported it works (PR #16). 403 page: tests only. | PR #16 |
 | G4 | No auto-lock notice | verified | 2026-11-12 | real iPhone 16 Pro | Notice removed (PR #20); page checked on a real iPhone. | PR #20 |
 | G5 | Same shapes as the panel; bar card; portrait and landscape | partial | ec7aedd, 2026-11-13; PR #20, 2026-11-12 | real iPhone | Chord names matched the panel (B5-AUTO); no overflow in portrait (B5-AUTO) and landscape 874 px (PR #20). Reading at arm's length while playing not recorded. Missing: the bar card (playhead moving with the panel's, one segment per big beat) and reading at arm's length while playing. | B5-AUTO, PR #20 |
-| G6 | Capo shape names; 실제 names | unverified | – | – | – | – |
-| G7 | Follows level, capo, fix, demo within a second | unverified | – | – | – | – |
+| G6 | Capo shape names; 실제 names | partial | 4402c9a, 2026-11-15 | iPhone 17 simulator, scripted publisher | QC2-1115, Let It Be 중급 카포 1: the phone showed "B/B♭" with "실제 C/B" and next "G♯m" with "실제 Am"; no "카포" text; with 카포 0 no "실제" line. Missing: the real panel publishing (a script stood in), and turning 실제 음 이름 보기 off with the line gone within a second. | QC2-1115 |
+| G7 | Follows level, capo, fix, demo within a second | partial | 4402c9a, 2026-11-15 | iPhone 17 simulator, scripted publisher | QC2-1115: four changes of 난이도 and 카포 sent by the scripted publisher; each time the new names were already on the phone at the first check (141–151 ms). Missing: the panel republishing a change, a chord fix (코드 고치기), 데모 재생 and leaving it, and real-device timing. | QC2-1115 |
 | G8 | Pause, seek, slow speed, loop on the phone | partial | ec7aedd, 2026-11-13 | real iPhone | Change timing measured (G10) and controls inside the loop worked; frozen pause, slow countdown and loop wrap on the phone not recorded. | B5-AUTO |
 | G9 | Ad on the phone | unverified | – | – | – | – |
 | G10 | Change timing phone vs panel | partial | ec7aedd, 2026-11-13 | real iPhone | 40 changes: median 4 ms, 90% within 20 ms, max 111 ms (target 100 ms; one outlier above). Below target: max 111 ms against the 100 ms target. | B5-AUTO "휴대폰 악보대" |
@@ -181,10 +189,10 @@ not verify C2: nothing was exported or re-imported through the panel's UI, so C2
 | G13 | Second start refused | partial | ec7aedd, 2026-11-13 | Mac | Second start refused. Missing: the new window's "already running" message and the first window still working; B5-AUTO says only "두 번 실행하면 거절". | B5-AUTO "중계 실행 파일" |
 | G14 | Idle auto-stop after 10 min | partial | PR #18 head | Mac | Idle stop after 1 minute (`--idle-minutes 1`) run by hand; 10-minute default not recorded. | PR #18 |
 | G15 | Stop: Ctrl+C, closing the window, ports closed | partial | ec7aedd, 2026-11-13 | Mac | Ctrl+C printed "중계기가 꺼졌습니다" and the ports closed. Closing the Terminal window not recorded. | B5-AUTO |
-| GC1 | Phone control off by default | unverified | – | – | Unit tests only. | – |
+| GC1 | Phone control off by default | partial | 4402c9a, 2026-11-15 | http preview, iPhone 17 simulator | Before 2026-11-15: unit tests only. QC2-1115: with 휴대폰 악보대 off the 휴대폰에서 조작 허용 switch was hidden; on, it was shown and off; while control was off the phone showed no code and no buttons. Missing: the real extension (a default on a fresh profile comes from storage, which the preview does not verify). | QC2-1115 |
 | GC2 | Pairing codes, approve one phone | partial | ec7aedd, 2026-11-13 | real iPhone | Code matched and approval worked. A second phone getting a different code not recorded. | B5-AUTO "휴대폰 조작" |
 | GC3 | Play / pause; count-in | partial | ec7aedd, 2026-11-13 | real iPhone | ▶ played after the count-in; ❚❚ followed in 40-230 ms. Cancel during the count-in not recorded. Missing: a second tap during the count-in cancelling it with nothing played. | B5-AUTO |
-| GC4 | 처음부터 (↻) | unverified | – | – | Not in the summary. | – |
+| GC4 | 처음부터 (↻) | partial | 4402c9a, 2026-11-15 | iPhone 17 simulator, scripted publisher | QC2-1115: after approval the button is named "처음부터" (74×64); pressing it logged `phone command restart forwarded` at the relay and the position went to 0 s. Missing: the case with an A/B loop (back to the loop's first bar), playing or paused staying as it was, a real finger tap (WebDriver touch did not press it; a script `click()` did) and the real panel's response. | QC2-1115 |
 | GC5 | 이전 / 다음 마디 | partial | ec7aedd, 2026-11-13 | real iPhone | Followed in 40-230 ms, stayed inside the loop, "마지막 마디예요" shown. Missing: 이전 마디 in bar 1 and right after a bar start, "구간 반복의 마지막 마디예요" at B, and the phone's bar card restarting at the new bar. | B5-AUTO |
 | GC6 | Layout with long names, portrait and landscape | verified | 2026-11-12 | real iPhone 16 Pro, iPhone 17 simulator | Bm7, C#m7b5/G#, F#7sus4: nothing outside the screen; buttons 56 px. | PR #20, briefing `2026-11-12-vibe-guitar-bundle4-done.html` |
 | GC7 | Autoplay blocked message | partial | 2026-11-12 | real iPhone | The longest attention texts fit on a real iPhone (layout). The blocked-autoplay flow itself not recorded. | PR #20 |
@@ -192,7 +200,7 @@ not verify C2: nothing was exported or re-imported through the panel's UI, so C2
 | GC9 | Rapid taps refused | verified | ec7aedd, 2026-11-13 | real iPhone | Fast repeated taps ignored. | B5-AUTO |
 | GC10 | Revoke; re-pair after reload | partial | ec7aedd, 2026-11-13 | real iPhone | 승인 해제 worked. Reload re-pairing and switch-off cases not recorded. | B5-AUTO |
 | GC11 | Revoke mid-command | unverified | – | – | Review and unit tests only (PR #19). | – |
-| GC12 | Refused phone keeps showing chords | unverified | – | – | – | – |
+| GC12 | Refused phone keeps showing chords | partial | 4402c9a, 2026-11-15 | iPhone 17 simulator, scripted publisher | QC2-1115: after a refusal the phone showed "Mac 패널에서 이 휴대폰의 조작을 거절했어요…" with no buttons and kept following a 카포 0 → 1 change (C/B → B/B♭). Missing: 거절 pressed in the real panel (the scripted publisher sent it) and a real phone. | QC2-1115 |
 
 ## N. Features added since 2026-11-12
 
@@ -204,10 +212,10 @@ not verify C2: nothing was exported or re-imported through the panel's UI, so C2
 | N4 | "?" in the lane, 대안 in 코드 고치기, one-tap replace (two tiers) | partial | e2c89ce, 2026-11-15; 9ef5398 and a372dbd, 2026-11-15 | www.youtube.com, demo | One-tap replace ("바꿨어요: Am -> D"), undo, an info-only stretch and the switch off were seen on the pre-PR #47 design. The quiet design (PR #47): demo panel "대안: G" (PR #48) and a real chart's header "대안: C♯m" (PR #51). Whether the marks help or distract the user is not recorded. Missing: a one-tap replace in a stored chart on the current design (seen only in the demo and on the pre-PR #47 design), 불확실한 곳 표시 off on the phone, and whether the marks help or distract (checklist C, last bullet; needs the user). | VGT19-BROWSER, PR #45, #47, #48, #51 |
 | N5 | "?" on no-chord spans | partial | 9ef5398, 2026-11-15 | demo | Demo at 90.0 s: "코드 없음 · 대안: G" and "—?" in the lane. Not seen on a real song. | PR #48 |
 | N6 | "?" on the phone stand | partial | 9ef5398, 2026-11-15 | phone page in Aside | The phone page rendered in a browser showed "Em?" and "C?". Not seen on a real phone through the relay (it appears after the relay is restarted with the new build). | PR #48, briefing `2026-11-15-vibe-guitar-uncertain-followups-done.html` |
-| N7 | 처음 코드로 되돌리기 | partial | 9ef5398, 2026-11-15; c510d2f | demo, offline | Demo: 대안 tap → "처음 들은 코드: Em · 처음 코드로 되돌리기" → restore → "대안: G" again. Offline: fix-then-restore at all 923 "?" stops of 23 DEV charts returned identical events and spans. A restore on a stored chart in the real panel not recorded. | PR #48, #52 |
+| N7 | 처음 코드로 되돌리기 | partial | 9ef5398, 2026-11-15; c510d2f; 2288f5a + b0ec80b, 2026-11-15 | demo, offline, Aside extension storage | Demo: 대안 tap → "처음 들은 코드: Em · 처음 코드로 되돌리기" → restore → "대안: G" again. Offline: fix-then-restore at all 923 "?" stops of 23 DEV charts returned identical events and spans. QC1-1115 (service worker, disposable recording): a restore after a 대안 tap and one after a "?" stretch fix both returned the chord and the "?" spans equal to the original; a fix made in the older format (Em at 30.7 s, before events carried their auto chord) went back to E from the stored auto chart. Missing: the restore pressed in the real panel ("처음 들은 코드: X" and "처음 코드로 되돌리기" on a real song). | PR #48, #52, QC1-1115 |
 | N8 | Fix panel: every bar outlined, time range | verified | a372dbd, 2026-11-15 | www.youtube.com (And She Was) | See F1. | PR #51 |
 | N9 | Arrows stop at "?" stretches | verified | c510d2f, 2026-11-15 | http preview | And She Was at 14.2 s: E 0:14~0:23 (5 bars) → 0:14~0:15 (1) → 0:17~0:19 (2, 대안: A button) → 0:20~0:23 (2) → A♯ 0:23~0:24 (1). | PR #52 |
-| N10 | Stretch-only fix stored in a real chart | partial | c510d2f | offline | Exact restore offline (N7). The stored path (`stretchIsCurrent` conflict check) has unit tests only; no live fix on a stored chart. | PR #52 |
+| N10 | Stretch-only fix stored in a real chart | verified | c510d2f; 2288f5a + b0ec80b, 2026-11-15 | offline, Aside extension storage | Exact restore offline (N7). Before 2026-11-15 the stored path (`stretchIsCurrent` conflict check) had unit tests only. QC1-1115: a fix at a "?" stop, saved through the service worker on a disposable copy of a stored chart, changed only the stretch [26.12, 27.9) s (two joined pieces); the parts of the chord before and after it stayed as they were. This row covers the stored result; the panel's stops and texts are F1 and N9. | PR #52, QC1-1115 |
 | N11 | Hidden http preview `sidepanel.html?demo=1&chart=…&t=…` | verified | c510d2f, 2026-11-15 | aside repl http page | Loaded a chart, paused at t, no lyrics; frontmost app unchanged. The invalid-chart message: unit tests only. | PR #52, README.md:395-406 |
 | N12 | Lane joins small same-chord gaps | verified | 20268b9 / 74695df, 2026-11-15 | offline | TEST-3, 20 new songs: lane "?" per minute 18.81 → 14.59 (−22.5%, pass line 15%). Drawing: unit tests. | docs/uncertainty-results.md:152-170, PR #49, #50 |
 | N13 | Real-song accuracy (VGT-7, VGT-21) | verified | 2026-11-13 / 2026-11-14 | www.youtube.com captures | Held-out Billboard, 18 scored of 46: song-mean majmin 83.1% (95% 77.3-88.7). K-pop chord-order evaluation, 12 songs: recommendation "not now" for fine-tuning. | HELDOUT-V2, docs/kpop-eval-results.md:7-18 |
@@ -220,25 +228,22 @@ preview's parameters are in README.md "Demo playback and screenshots".
 
 | ID | What is left | Method |
 | --- | --- | --- |
-| C6 | Slash bass and sus kept at 입문 | hidden preview of a chart with C – C/B – Am and Dsus4 → D, `level=beginner` |
-| C7 | "잡을 수 있음" shapes preferred | offline: arrange real charts with and without a 잡을 수 있음 set |
+| C6 | A slash chord with an open-string bass (C/E, D/A, Am/E) staying at 입문 | hidden preview of a chart with C/E, D/A and Am/E, `level=beginner` |
 | C8 | Strumming suggestion matches the meter and level | hidden preview, `sheet=1`, a 4/4 and a 6/8 chart at each level |
-| C10 | "—" in a coverage gap, no highlight before it | hidden preview of a partly heard auto chart |
 | E1 | 0.5× in the demo (the rest needs a live tab) | hidden preview, `rate=0.5` |
-| E2 | Three slots, 120 px, narrow widths, light and dark | hidden preview at 400 px and narrower, `theme=dark` |
-| E4 | Bar phase line in 분석 정보 | hidden preview of a chart whose downbeat was moved |
+| E2 | Accent border and countdown badge, the coming chord between chords, a four-fret shape replacing a five-fret one, the settings list after PR #61 | hidden preview at 400 px and narrower, `theme=dark` |
+| E4 | Bar phase line in 분석 정보 for a moved downbeat | hidden preview of a chart whose downbeat was moved |
 | E5 | Countdown and count-in in 6/8 | hidden preview of a 6/8 chart with `mute` (no click sound) |
 | E7 | Sections "1–8마디" without lyrics (the live lookup stays open) | hidden preview (it never requests lyrics) |
 | E9 | "현재 위치로" after scrolling the grid | hidden preview |
 | E10 | Fix panel in the dark theme | hidden preview, `theme=dark&fix`, 400 px |
-| F2, F3, F5, F7, F11 | Preview and status texts, "/B" preselect, badge after a fix and after 되돌리기, demo notice | hidden preview, `fix` on a C/B chord and a plain chord (texts only; storage stays open) |
-| S11 | 400 px with 카포 1 fits one row | hidden preview, `capo=1`, 400 px |
-| G6 | Capo shape names and "실제 …" on the phone | simulator: phone page fed by a scripted publisher, as `npm run phone-check` does |
+| F2, F5, F7, F11 | Preview and status texts, the badge's explanation after a fix and the badge after 되돌리기, demo notice | hidden preview, `fix` on a C/B chord and a plain chord (texts only; storage stays open) |
+| S11 | The note "N–M마디 반복 중" on the row with the loop on | hidden preview, `capo=1`, 400 px |
 | D9 | `npm run accuracy-report` on a real export | offline, after D8 |
 | D7, D8 | 정확도 모아 보기 and 결과 내보내기 on stored charts | extension page in a background tab, after the user's session has stored a comparable song (D6) |
 
 Rows that need the panel on a real tab but no judgment (an agent can do them only in a session the user opens
-for it): A3 (the new id's chart), C1, C2, C11, E8, F9, F10, S2, G1, G7, G12, GC1, GC4, GC11, GC12.
+for it): A3 (the new id's chart), C1, C2, C7, C11, E8, F9, F10, N7, S2, G1, G6, G7, G12, GC1, GC4, GC11, GC12.
 
 ## Still needs the user
 
@@ -292,7 +297,7 @@ agent can talk you through them; you only click.
 - **D5 (half a song).** After about half a song press "들은 구간으로 자동 코드표 만들기".
 - **F8 (new analysis).** Fix any chord, press "들은 구간으로 자동 코드표 만들기", then reload the panel and the tab:
   the fix stays.
-- **N5, N7, N10 (real song).** On a song with an auto chart, look for a "?" on a "—" span; tap a 대안 or fix a "?"
+- **N5, N7 (real song).** On a song with an auto chart, look for a "?" on a "—" span; tap a 대안 or fix a "?"
   stretch, then 처음 코드로 되돌리기.
 - **D6 (optional).** On a practice song, let a full listen build an auto chart: the practice chart stays in use
   and the card shows the match percentage; "자동 코드표로 바꾸기" → cancel keeps it.

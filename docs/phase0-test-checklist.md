@@ -3,8 +3,8 @@
 Things only a person with Chrome, a guitar and the real services can check. Record the result
 (date, Chrome version, OK / not OK, notes) next to each item. Build and load first: see README "Load and test".
 
-The current status of every item lives in [phase0-evidence.md](phase0-evidence.md) (audit 2026-11-15, main
-2288f5a). It records, per item, what was
+The current status of every item lives in [phase0-evidence.md](phase0-evidence.md) (audit and quiet checks 2026-11-15,
+main b648864). It records, per item, what was
 already checked, on which build and where the evidence is; its last section is the short list that still needs
 you. Items marked `[x]` are verified there: they were checked by an agent in Aside (and a real iPhone) on the date given; repeat them only
 if something looks wrong. No step here asks you to tell a right chord from a wrong one by ear: accuracy is
@@ -69,14 +69,16 @@ For each song:
 - [ ] Levels 입문 / 초급 / 중급 / 상급: are the shapes playable for you? 입문 shows reduced 7ths with the change
       mark (●) and its tooltip only, with no superscript 7 next to the name; 중급/상급 show "…도 돼요" only on
       low-confidence 7th chords.
-- [ ] Slash bass and sus: in a song with a walking bass (C – C/B – Am – Am/G) or a sus resolution
-      (Dsus4 → D), are they kept at 입문?
+- [ ] Slash bass and sus by level (docs/level-vocabulary.md): in a song with a walking bass (C – C/B – Am –
+      Am/G) or a sus resolution (Dsus4 → D), 초급 keeps C/B, Am/G and Dsus4 (a finger-pressed bass and sus belong
+      to 초급); 입문 plays them as C, Am and D with a note on the changed bar. Slash chords with an open-string bass
+      (C/E, D/A, Am/E) stay at 입문. (This item used to ask for both kept at 입문.)
 - [ ] Mark a few shapes as "잡을 수 있음" in 설정 tab → "이 곡에 나오는 코드": does the arrangement prefer them?
 - [ ] Strumming suggestion (settings sheet → 추천 반주): is the pattern sensible for the meter and level?
 - [ ] Play button with 카운트인 1마디 / 2마디: pauses, jumps to the bar start, counts the big beats (6/8: 2 per
       bar; click sound), then plays. 끔 plays at once. Pressing again during the count cancels it.
-- [ ] Coverage gaps: in a chart whose coverage skips a section, the grid shows "—" in the gap and no next
-      shape is highlighted just before the gap.
+- [x] Coverage gaps: in a chart whose coverage skips a section, the grid shows "—" in the gap and no next
+      shape is highlighted just before the gap. (Agent, 2026-11-15, hidden preview: gap from 30 to 60 s.)
 - [ ] Drafts: start a chart on song A, skip to song B: the editor is empty for B, saving cannot write A's
       stamps under B, and returning to A restores the draft.
 - [ ] Overall: could you play along without stopping? Write the top 3 annoyances.
@@ -133,8 +135,9 @@ pick any chord (a "?" stretch is a handy target) and check that the fix mechanic
       Do this on a real song, not the demo (the demo was checked 2026-11-15).
 - [ ] With 카포 0, pick a root and a kind, check the preview "G → Am", press "이 코드로 고치기". The status line
       says "고쳤어요: G → Am" with "되돌리기"; the grid and strip show the new chord at once.
-- [ ] Slash bass: open a "C/B" (walking bass); the bass row preselects "/B" (a plain chord preselects
+- [x] Slash bass: open a "C/B" (walking bass); the bass row preselects "/B" (a plain chord preselects
       "베이스 없음"). Pick Am → preview "C/B → Am/B"; "베이스 없음" gives "Am"; with 카포 1 the bass is a shape name too.
+      (Agent, 2026-11-15, hidden preview: "/B", "베이스 없음", "C/B → Am/B", "C/B → Am", 카포 1 "/F♯".)
 - [x] Only that chord changed: the other chords, their bars and the "—" gaps look exactly as before.
 - [ ] The badge now reads "자동 코드표 · 1곳 고침 · 나머지는 미확인" (narrow panel: "자동 · 일부 고침"); its
       explanation says how many chords you fixed and that the rest are unchecked.
