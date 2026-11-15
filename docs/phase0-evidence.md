@@ -86,8 +86,9 @@ annotations. The set on 2026-11-15 is Let It Be, Come Together, Drive My Car and
 My Guitar Gently Weeps (`bI8P6ZSHSvE`) in the user's Aside extension through the panel's own save path (the
 service worker's chart-write save); both read back equal by value to the practice-chart files, and the auto
 charts were kept. Let It Be (`QDYfEBY9NM4`) already held the same practice chart (same events, timing and
-coverage). Drive My Car (`kfSQkZuIx84`) was not replaced because it holds an edited auto chart (last edit
-2026-11-15T01:14Z, origin unknown); its practice chart is imported by hand only if the user wants it. This does
+coverage). Drive My Car (`kfSQkZuIx84`) was first left alone because it held an edited auto chart (last edit
+2026-11-15T01:14Z, origin unknown); after the user asked for it the same evening, the parent backed that chart up
+outside the repository and stored the practice chart the same way (read back equal by value, auto chart kept). This does
 not verify C2: nothing was exported or re-imported through the panel's UI, so C2 stayed unverified (it became
 partial later that day through QC1-1115, still without the panel's UI).
 
@@ -251,10 +252,9 @@ Ordered so a sitting can start with one song and stop after any step. No step as
 
 ### 1. Required, about 5 minutes: one practice song (C12, C3, C5, A8, D12)
 
-In Aside open ONE of the three practice songs on www.youtube.com: Let It Be (`QDYfEBY9NM4`), Come Together
-(`oolpPmuK2I8`) or While My Guitar Gently Weeps (`bI8P6ZSHSvE`). Their practice charts are already stored in your
-extension, so there is no import step. (Drive My Car, `kfSQkZuIx84`, keeps the edited auto chart it already has;
-import its practice chart with 편집 → JSON 가져오기 only if you want it.) Click the toolbar icon, choose a level,
+In Aside open ONE of the four practice songs on www.youtube.com: Let It Be (`QDYfEBY9NM4`), Come Together
+(`oolpPmuK2I8`), Drive My Car (`kfSQkZuIx84`) or While My Guitar Gently Weeps (`bI8P6ZSHSvE`). Their practice
+charts are already stored in your extension, so there is no import step. Click the toolbar icon, choose a level,
 and play along once with the guitar.
 
 Answer one question: **where did you stop or struggle?** An approximate minute is enough ("about 1:30"), or
