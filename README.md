@@ -135,8 +135,11 @@ Port of the approved mockup B ("진행표형", diagrams 3x):
   only the bars the stretch is drawn in are outlined, and "이 코드로 고치기" changes only that stretch: the chord
   is split at the stretch bounds like a 대안 replacement (the parts before and after keep the auto chord; the
   stretch becomes a manual chord whose `auto.split` records its own `fromSec`/`toSec`, no span is consumed),
-  sent as `correct-event` with `stretch` (`ChartStore.correctEvent` → `correctChordStretch`, a conflict when
-  the chord, its "?" spans or the stretch changed meanwhile). The "?" spans inside it stay stored, hidden while
+  sent as `correct-event` with `stretch` and the stored spans it was drawn from (`ChartStore.correctEvent` →
+  `correctChordStretch`). At save time `stretchIsCurrent` checks the stored chart with the lane's own join rule
+  (`laneJoins`): each of those spans still shown on that chord, chained left to right over gaps of at most
+  0.5 s, exactly from the stretch start to its end; otherwise (a span gone, so the drawing split, or the chord
+  changed) it is a conflict like any stale fix and nothing is stored. The "?" spans inside it stay stored, hidden while
   it is fixed. At a chord event's own stop everything below is as before. Every lane bar the selected event is drawn in gets a
   dashed outline, so a chord held over several bars shows its whole range (the lane's own cuts decide: a
   sliver under 0.1 s it leaves out of a bar is not outlined); when the outlined bars do not all fit in view, the

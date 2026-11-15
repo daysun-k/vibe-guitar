@@ -81,7 +81,7 @@ export function fixStops(m: Pick<PlayModel, 'chart' | 'uncertain'>): FixStop[] {
   for (const s of laneStretches(m.uncertain)) {
     const start = m.uncertain[s.parts[0]].ref.startSec;
     const list = byEvent.get(start) ?? [];
-    list.push({ fromSec: s.fromSec, toSec: s.toSec, mark: s.parts[0] });
+    list.push({ fromSec: s.fromSec, toSec: s.toSec, mark: s.parts[0], parts: s.parts.map((k) => ({ fromSec: m.uncertain[k].fromSec, toSec: m.uncertain[k].toSec })) });
     byEvent.set(start, list);
   }
   const out: FixStop[] = [];
@@ -378,7 +378,7 @@ export class ChordFixer {
     const capo = this.capo(m);
     const concert = pickToConcert(this.pick(), capo, m.key);
     if (sameChordSymbol(concert, this.ref.chord)) return;
-    const stretch = this.stretch ? { fromSec: this.stretch.fromSec, toSec: this.stretch.toSec } : undefined;
+    const stretch = this.stretch ? { fromSec: this.stretch.fromSec, toSec: this.stretch.toSec, parts: this.stretch.parts.map((p) => ({ ...p })) } : undefined;
     this.busy = true;
     this.renderPicker();
     // A "?" stretch fix makes the stretch its own event (starting at the stretch, or at the event's

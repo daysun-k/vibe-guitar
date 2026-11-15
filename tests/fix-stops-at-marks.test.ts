@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import schema from '../src/chart/chart.schema.json';
 import { chartStorageKey, type Chart, type ChordEvent, type UncertainSpan } from '../src/chart/types';
 import { validateChart } from '../src/chart/validate';
-import { CorrectionConflict, correctChordEvent, correctChordStretch, restoreAutoChord } from '../src/editor/correct';
+import { CorrectionConflict, correctChordEvent, correctChordStretch, restoreAutoChord, stretchIsCurrent, type FixStretch } from '../src/editor/correct';
 import { ChartStore, handleChartWrite, type StorageArea } from '../src/extension/storage';
 import { ChordFixer, fixStops, type FixHost } from '../src/extension/sidepanel/fix';
 import { PlayScreen } from '../src/extension/sidepanel/play';
@@ -40,6 +40,10 @@ const model = (c: Chart, showUncertain = true) => buildPlayModel(c, { level: 'no
 const SPANS = [span(2, 2.5, 'G', 'Em'), span(3, 3.5, 'G', 'Em'), span(5, 6, 'G', 'Em'), span(8, 12, 'C', 'Am')];
 const gc = () => chart([[0, 'G'], [8, 'C']], SPANS);
 const stops = (m: PlayModel) => fixStops(m).map((s) => (s.stretch ? [s.event, s.stretch.fromSec, s.stretch.toSec] : [s.event]));
+/** A "?" stretch as the panel sends it: its bounds and the stored spans it was drawn from. */
+const st = (fromSec: number, toSec: number, parts: [number, number][] = [[fromSec, toSec]]): FixStretch => ({ fromSec, toSec, parts: parts.map(([a, b]) => ({ fromSec: a, toSec: b })) });
+/** The joined stretch 2–3.5 of gc(). */
+const J23 = st(2, 3.5, [[2, 2.5], [3, 3.5]]);
 const sameContent = (a: Chart, b: Chart) => {
   expect(a.events).toEqual(b.events);
   expect(a.uncertain).toEqual(b.uncertain);
@@ -91,7 +95,7 @@ describe('the outline at a "?" stop', () => {
 describe('correctChordStretch: a fix at a "?" stop changes only the stretch', () => {
   it('splits the event at the stretch bounds; the head and tail keep the auto chord', () => {
     const before = gc();
-    const after = correctChordStretch(before, { startSec: 0, chord: 'G' }, { fromSec: 2, toSec: 3.5 }, 'D', NOW);
+    const after = correctChordStretch(before, { startSec: 0, chord: 'G' }, J23, 'D', NOW);
     expect(after.events).toEqual([
       { startSec: 0, chord: 'G', confidence: 0.7, source: 'auto' },
       { startSec: 2, chord: 'D', confidence: 1, source: 'manual', auto: { chord: 'G', confidence: 0.7, split: { startSec: 0, head: true, tail: true, fromSec: 2, toSec: 3.5 } } },
@@ -107,41 +111,69 @@ describe('correctChordStretch: a fix at a "?" stop changes only the stretch', ()
   });
   it('처음 코드로 되돌리기 returns the exact chart before the fix (spans included)', () => {
     const before = gc();
-    const after = correctChordStretch(before, { startSec: 0, chord: 'G' }, { fromSec: 5, toSec: 6 }, 'Am', NOW);
+    const after = correctChordStretch(before, { startSec: 0, chord: 'G' }, st(5, 6), 'Am', NOW);
     const back = restoreAutoChord(after, { startSec: 5, chord: 'Am' }, null, NOW);
     sameContent(back, before);
     expect(stops(model(back))).toEqual(stops(model(before)));
   });
   it('no head when the stretch starts at the event start, no tail when it ends at the event end; both restore exactly', () => {
     const before = chart([[0, 'G'], [8, 'C']], [span(0, 1, 'G', 'Em'), span(6, 8, 'G', 'Em')]);
-    const noHead = correctChordStretch(before, { startSec: 0, chord: 'G' }, { fromSec: 0, toSec: 1 }, 'D', NOW);
+    const noHead = correctChordStretch(before, { startSec: 0, chord: 'G' }, st(0, 1), 'D', NOW);
     expect(noHead.events.map((e) => [e.startSec, e.chord, e.source])).toEqual([[0, 'D', 'manual'], [1, 'G', 'auto'], [8, 'C', 'auto']]);
     sameContent(restoreAutoChord(noHead, { startSec: 0, chord: 'D' }, null, NOW), before);
-    const noTail = correctChordStretch(before, { startSec: 0, chord: 'G' }, { fromSec: 6, toSec: 8 }, 'D', NOW);
+    const noTail = correctChordStretch(before, { startSec: 0, chord: 'G' }, st(6, 8), 'D', NOW);
     expect(noTail.events.map((e) => [e.startSec, e.chord, e.source])).toEqual([[0, 'G', 'auto'], [6, 'D', 'manual'], [8, 'C', 'auto']]);
     sameContent(restoreAutoChord(noTail, { startSec: 6, chord: 'D' }, null, NOW), before);
   });
   it('fixing the stretch again keeps the first record, so restore still merges back', () => {
     const before = gc();
-    const once = correctChordStretch(before, { startSec: 0, chord: 'G' }, { fromSec: 2, toSec: 3.5 }, 'D', NOW);
+    const once = correctChordStretch(before, { startSec: 0, chord: 'G' }, J23, 'D', NOW);
     const twice = correctChordEvent(once, { startSec: 2, chord: 'D' }, 'Em', NOW);
     sameContent(restoreAutoChord(twice, { startSec: 2, chord: 'Em' }, null, NOW), before);
   });
   it('a changed head fragment: only the chord comes back (no merge)', () => {
-    const once = correctChordStretch(gc(), { startSec: 0, chord: 'G' }, { fromSec: 2, toSec: 3.5 }, 'D', NOW);
+    const once = correctChordStretch(gc(), { startSec: 0, chord: 'G' }, J23, 'D', NOW);
     const headFixed = correctChordEvent(once, { startSec: 0, chord: 'G' }, 'Bm', NOW);
     const back = restoreAutoChord(headFixed, { startSec: 2, chord: 'D' }, null, NOW);
     expect(back.events.map((e) => [e.startSec, e.chord, e.source])).toEqual([[0, 'Bm', 'manual'], [2, 'G', 'auto'], [3.5, 'G', 'auto'], [8, 'C', 'auto']]);
   });
   it('stale charts are refused', () => {
     const c = gc();
-    const fix = (ch: Chart, ref = { startSec: 0, chord: 'G' }, st = { fromSec: 2, toSec: 3.5 }) => () => correctChordStretch(ch, ref, st, 'D', NOW);
+    const fix = (ch: Chart, ref = { startSec: 0, chord: 'G' }, st = J23) => () => correctChordStretch(ch, ref, st, 'D', NOW);
     expect(fix(c, { startSec: 0, chord: 'Em' })).toThrow(CorrectionConflict); // another chord
     expect(fix(c, { startSec: 1, chord: 'G' })).toThrow(CorrectionConflict); // no event there
     expect(fix(correctChordEvent(c, { startSec: 0, chord: 'G' }, 'G', NOW))).toThrow(CorrectionConflict); // fixed by hand meanwhile
     expect(fix({ ...c, uncertain: [span(5, 6, 'G', 'Em')] })).toThrow(CorrectionConflict); // the spans changed
-    expect(fix(c, undefined, { fromSec: 2, toSec: 2.5 })).not.toThrow(); // a single mark of the joined stretch still exists
-    expect(fix(c, undefined, { fromSec: 2, toSec: 9 })).toThrow(CorrectionConflict); // past the event
+    expect(fix(c, undefined, st(2, 2.5))).not.toThrow(); // a stretch drawn from that one span (e.g. when its neighbour is no mark at this level) is still current
+    expect(fix(c, undefined, st(2, 9))).toThrow(CorrectionConflict); // past the event
+  });
+  it('stale: a joined stretch whose middle span disappeared before the save is refused (review r1 F1)', () => {
+    // 2–2.5, 3–3.5, 4–4.5 were drawn as one stretch 2–4.5; then 3–3.5 went away: now 2–2.5 and 4–4.5 apart.
+    const three = chart([[0, 'G'], [8, 'C']], [span(2, 2.5, 'G', 'Em'), span(3, 3.5, 'G', 'Em'), span(4, 4.5, 'G', 'Em')]);
+    const seen = fixStops(model(three)).find((s) => s.stretch)!.stretch!;
+    expect([seen.fromSec, seen.toSec, seen.parts.length]).toEqual([2, 4.5, 3]);
+    const now = { ...three, uncertain: [span(2, 2.5, 'G', 'Em'), span(4, 4.5, 'G', 'Em')] };
+    expect(stops(model(now))).toEqual([[0], [0, 2, 2.5], [0, 4, 4.5], [1]]);
+    expect(stretchIsCurrent(now, { startSec: 0, chord: 'G' }, seen)).toBe(false);
+    expect(() => correctChordStretch(now, { startSec: 0, chord: 'G' }, seen, 'D', NOW)).toThrow(CorrectionConflict);
+    // claiming only the ends does not help: the chain 2–2.5 → 4–4.5 has a 1.5 s gap
+    expect(stretchIsCurrent(now, { startSec: 0, chord: 'G' }, st(2, 4.5, [[2, 2.5], [4, 4.5]]))).toBe(false);
+    // still valid: accepted
+    expect(stretchIsCurrent(three, { startSec: 0, chord: 'G' }, seen)).toBe(true);
+    expect(correctChordStretch(three, { startSec: 0, chord: 'G' }, seen, 'D', NOW).events.map((e) => [e.startSec, e.chord])).toEqual([[0, 'G'], [2, 'D'], [4.5, 'G'], [8, 'C']]);
+  });
+  it('stale: the event changed chord meanwhile (a new analysis) is refused', () => {
+    const now = { ...gc(), events: gc().events.map((e) => (e.startSec === 0 ? { ...e, chord: 'Em' } : e)), uncertain: [span(2, 2.5, 'Em', 'G'), span(3, 3.5, 'Em', 'G')] };
+    expect(stretchIsCurrent(now, { startSec: 0, chord: 'G' }, J23)).toBe(false);
+    expect(() => correctChordStretch(now, { startSec: 0, chord: 'G' }, J23, 'D', NOW)).toThrow(CorrectionConflict);
+  });
+  it('stale: parts out of order, a moved part or bounds that do not match the parts are refused', () => {
+    const ref = { startSec: 0, chord: 'G' };
+    expect(stretchIsCurrent(gc(), ref, st(2, 3.5, [[3, 3.5], [2, 2.5]]))).toBe(false);
+    expect(stretchIsCurrent(gc(), ref, st(2, 3.5, [[2, 2.5], [3, 3.6]]))).toBe(false);
+    expect(stretchIsCurrent(gc(), ref, st(2, 3.6, [[2, 2.5], [3, 3.5]]))).toBe(false);
+    expect(stretchIsCurrent(gc(), ref, st(2, 3.5, []))).toBe(false);
+    expect(stretchIsCurrent(gc(), ref, J23)).toBe(true);
   });
   it('a fix at an event stop is unchanged: the whole event', () => {
     const after = correctChordEvent(gc(), { startSec: 0, chord: 'G' }, 'D', NOW);
@@ -151,7 +183,7 @@ describe('correctChordStretch: a fix at a "?" stop changes only the stretch', ()
 });
 
 describe('chart format: a "?" stretch split record', () => {
-  const fixed = () => correctChordStretch(gc(), { startSec: 0, chord: 'G' }, { fromSec: 2, toSec: 3.5 }, 'D', NOW);
+  const fixed = () => correctChordStretch(gc(), { startSec: 0, chord: 'G' }, J23, 'D', NOW);
   const withAuto = (auto: unknown): Chart => {
     const c = fixed();
     return { ...c, events: c.events.map((e, i) => (i === 1 ? ({ ...e, auto } as ChordEvent) : e)) };
@@ -190,18 +222,29 @@ describe('the serialized store path', () => {
     const area = new MemArea();
     area.data[MAIN] = gc();
     const store = new ChartStore(area);
-    const r = await handleChartWrite(store, { ...base, op: 'correct-event', event: { startSec: 0, chord: 'G' }, chord: 'D', stretch: { fromSec: 2, toSec: 3.5 } });
+    const r = await handleChartWrite(store, { ...base, op: 'correct-event', event: { startSec: 0, chord: 'G' }, chord: 'D', stretch: J23 });
     expect(r.ok).toBe(true);
     expect((area.data[MAIN] as Chart).events.map((e) => [e.startSec, e.chord])).toEqual([[0, 'G'], [2, 'D'], [3.5, 'G'], [8, 'C']]);
     const back = await handleChartWrite(store, { ...base, op: 'restore-auto', event: { startSec: 2, chord: 'D' } });
     expect(back.ok).toBe(true);
     sameContent(area.data[MAIN] as Chart, gc());
   });
+  it('the reviewer\'s counterexample through the store: the middle span went away before the save, nothing is stored', async () => {
+    const three = chart([[0, 'G'], [8, 'C']], [span(2, 2.5, 'G', 'Em'), span(3, 3.5, 'G', 'Em'), span(4, 4.5, 'G', 'Em')]);
+    const seen = fixStops(model(three)).find((s) => s.stretch)!.stretch!;
+    const stored = { ...three, uncertain: [span(2, 2.5, 'G', 'Em'), span(4, 4.5, 'G', 'Em')] };
+    const area = new MemArea();
+    area.data[MAIN] = stored;
+    const store = new ChartStore(area);
+    const r = await handleChartWrite(store, { ...base, op: 'correct-event', event: { startSec: 0, chord: 'G' }, chord: 'D', stretch: { fromSec: seen.fromSec, toSec: seen.toSec, parts: seen.parts } });
+    expect(r).toMatchObject({ ok: false, error: '코드표가 그 사이에 바뀌었어요. 다시 골라 주세요.' });
+    expect(area.data[MAIN]).toEqual(stored);
+  });
   it('a stale stretch is refused and the stored chart stays', async () => {
     const area = new MemArea();
     area.data[MAIN] = gc();
     const store = new ChartStore(area);
-    const r = await handleChartWrite(store, { ...base, op: 'correct-event', event: { startSec: 0, chord: 'G' }, chord: 'D', stretch: { fromSec: 2.2, toSec: 3.5 } });
+    const r = await handleChartWrite(store, { ...base, op: 'correct-event', event: { startSec: 0, chord: 'G' }, chord: 'D', stretch: st(2.2, 3.5, [[2.2, 2.5], [3, 3.5]]) });
     expect(r).toMatchObject({ ok: false });
     expect(area.data[MAIN]).toEqual(gc());
   });
@@ -300,7 +343,7 @@ describe('코드 고치기 panel at "?" stops (fake DOM)', () => {
     pickD();
     els['fix-save'].click();
     await Promise.resolve();
-    expect(save).toHaveBeenLastCalledWith({ startSec: 0, chord: 'G' }, 'D', { from: 'G', to: 'D' }, { fromSec: 2, toSec: 3.5 });
+    expect(save).toHaveBeenLastCalledWith({ startSec: 0, chord: 'G' }, 'D', { from: 'G', to: 'D' }, J23);
     const e = open(gc(), 1);
     pickD();
     els['fix-save'].click();
@@ -313,7 +356,7 @@ describe('코드 고치기 panel at "?" stops (fake DOM)', () => {
     els['fix-next'].click();
     els['fix-next'].click(); // 5–6
     pickD();
-    h.save.mockImplementation(async () => h.rebuild(correctChordStretch(gc(), { startSec: 0, chord: 'G' }, { fromSec: 5, toSec: 6 }, 'D', NOW)));
+    h.save.mockImplementation(async () => h.rebuild(correctChordStretch(gc(), { startSec: 0, chord: 'G' }, st(5, 6), 'D', NOW)));
     els['fix-save'].click();
     await new Promise((r) => setTimeout(r, 0));
     // the rebuilt model selected event 1 (D 5–6) as an event stop, then close cleared the outline

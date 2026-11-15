@@ -348,7 +348,7 @@ export async function adoptAutoChart(source: RecordingSource, id: string): Promi
 
 /** Side panel: fixes one chord (or, with `stretch`, one "?" stretch of it) of the chart in use through the serialized ChartStore. */
 export async function correctChartEvent(source: RecordingSource, id: string, event: EventRef, chord: string, stretch?: FixStretch): Promise<{ before: Chart; after: Chart }> {
-  const r = await requestWrite({ type: 'chart-write', op: 'correct-event', source, id, event, chord, at: new Date().toISOString(), ...(stretch ? { stretch: { fromSec: stretch.fromSec, toSec: stretch.toSec } } : {}) });
+  const r = await requestWrite({ type: 'chart-write', op: 'correct-event', source, id, event, chord, at: new Date().toISOString(), ...(stretch ? { stretch: { fromSec: stretch.fromSec, toSec: stretch.toSec, parts: stretch.parts.map((p) => ({ fromSec: p.fromSec, toSec: p.toSec })) } } : {}) });
   if (!r.chart || !r.before) throw new Error('서비스 워커가 고친 코드표를 돌려주지 않았어요');
   return { before: r.before, after: r.chart };
 }
