@@ -100,7 +100,39 @@ those spans. Share of span time (whole charts) whose shown chord is N: DEV 2.5% 
 marks are therefore slightly fewer than the measured flags (review vgt19-flags-ui-r4 F5, follow-up).
 
 ## K-pop (12 songs, chord order, reference only)
-(pending)
+The 12 eval songs of VGT-21 were captured in the same sitting (12/12, coverage at least 90%) and replayed only
+after the freeze, on main e2c89ce; R1 12/12. Charts with flags at each frozen threshold were compared with the
+frozen VGT-21 chord-order references (`npm run uncertainty-sequence`, `--whole-chart`). Result files
+`kpop-flag.json`/`.txt` and `kpop-replace.json`/`.txt` (same folder as DEV). Nothing was tuned on them.
+
+| K-pop | Flag tier (S4 < 0.394164403405739) | Replace tier only (S4 < -0.3143507889471948) |
+| --- | --- | --- |
+| Chart tokens flagged (at least half their time) | 176 of 1040 | 13 of 1040 |
+| Mismatch (substituted or inserted), flagged tokens | 26.1% (song mean 27.1%) | 15.4% (song mean 11.9%) |
+| Mismatch, unflagged tokens | 7.5% (song mean 6.9%) | 10.6% (song mean 10.1%) |
+| Song-mean recall if every span took its second choice | 80.2 -> 83.4 (+3.27 pp) | 80.2 -> 85.8 (+5.60 pp) |
+| Song-mean precision | 89.8 -> 82.6 (-7.16 pp) | 89.8 -> 88.0 (-1.76 pp) |
+| Song-mean F | 84.6 -> 82.9 (-1.65 pp) | 84.6 -> 86.9 (+2.29 pp) |
+| Deletions / insertions (all songs) | 128 -> 64 / 11 -> 81 | 128 -> 62 / 11 -> 32 |
+
+- Flagged tokens mismatch the sheets about 3.5 times as often as unflagged ones (26.1% vs 7.5%), so the marks
+  point at doubtful chords in the user's songs too.
+- Taking the second choice on the replace tier only roughly halves the deletions (missed chord changes in
+  chord-order terms) and raises song-mean F by 2.3 pp; taking it on every flagged span also halves deletions but
+  adds more insertions than it removes deletions, so F falls. This agrees with the two-tier design. Realignment
+  can relabel operations, so these are net changes, not localized captures of missed changes.
 
 ## Resources (A5)
-(pending)
+Measured on this Mac by replaying the 23 DEV captures with the shipped config, twice per arm in alternation,
+before VGT-19 (fd4203d) and with the wired feature (475dddb / 743bb25, the same recognizer code as 8c7686e), while the K-pop capture was running in
+the browser (so timings are noisy). Limits from `docs/recognition-improvement-protocol.md`.
+
+| | Before VGT-19 | With VGT-19 | Limit | Result |
+| --- | --- | --- | --- | --- |
+| Peak resident memory of the replay | 2.137 / 2.186 GB | 2.199 / 2.178 GB | +20% | max +1.4%, within |
+| 4-minute song (17t7SEsoKfE) total replay | 6.91 / 5.97 s | 5.93 / 6.68 s | +50% and at least +1 s | within noise |
+| Its end-of-song analysis | 1.29 / 1.39 s | 1.12 / 1.68 s | same | at most +0.28 s, within |
+| Packaged bytes (excl. maps) | 42,635,724 (VGT-18 baseline) | 42,675,193 | +10% | +0.09%, within |
+| Live "인식 중" latency | unchanged path | the per-unit statistics run only in segment analysis, not in the live readout | +100 ms | unchanged |
+
+A5 was not raised.
