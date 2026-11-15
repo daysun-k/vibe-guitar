@@ -6,7 +6,7 @@
 import type { Arrangement } from '../../arrange/arrange';
 import { prettyChord, shapeName } from '../../music/key';
 import { bigBeatSeconds } from '../../music/meter';
-import { barsForHardChord, changeConcertLabel, frameAt, upcomingShapes, type PlayModel } from '../../play/model';
+import { barsForChartEvent, barsForHardChord, changeConcertLabel, frameAt, upcomingShapes, type PlayModel } from '../../play/model';
 import { bassHTML, slashChordHTML, splitSlashBass } from './chord-name';
 import { escapeHtml, renderShapeDiagram, shapeDiagramHeight } from './diagram';
 import { ScrubState } from './scrub';
@@ -219,14 +219,17 @@ export class PlayScreen {
     first?.focus({ preventScroll: true });
   }
 
-  /** Dashed outline on the bar holding `sec` (the chord being fixed); null clears it. */
-  markFix(sec: number | null): void {
-    const k = sec === null || !this.m ? -1 : this.m.bars.findIndex((b) => sec + 0.001 >= b.startSec && sec + 0.001 < b.endSec);
-    this.barEls.forEach((b, i) => b.classList.toggle('fix-at', i === k));
-    if (sec === null) this.fol.reset();
-    else if (k >= 0) {
+  /**
+   * Dashed outline on every lane bar drawing chart event `event` (the chord being fixed, see
+   * barsForChartEvent); the first outlined bar is scrolled into view. null clears it.
+   */
+  markFix(event: number | null): void {
+    const on = new Set(event === null || !this.m ? [] : barsForChartEvent(this.m, event));
+    this.barEls.forEach((b, i) => b.classList.toggle('fix-at', on.has(i)));
+    if (event === null) this.fol.reset();
+    else if (on.size) {
       this.fol.release();
-      this.barEls[k].scrollIntoView({ block: 'nearest', behavior: 'instant' });
+      this.barEls[Math.min(...on)]?.scrollIntoView({ block: 'nearest', behavior: 'instant' });
     }
   }
 

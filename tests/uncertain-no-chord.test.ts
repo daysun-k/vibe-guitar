@@ -132,7 +132,7 @@ describe('코드 고치기 on a no-chord event (fake DOM)', () => {
   };
 
   it('replace tier: "대안: Am" is a button; info tier: plain text', () => {
-    expect(whichAt(chart([span(5, 7, 'N', 'Am', true)]), 5.5)).toBe('<time>0:04</time> <b>코드 없음</b><small>자동으로 들은 코드</small><button class="fix-alt" data-u="0" aria-label="대안 Am으로 바꾸기">대안: Am</button>');
+    expect(whichAt(chart([span(5, 7, 'N', 'Am', true)]), 5.5)).toBe('<time>0:04~0:08</time> <b>코드 없음</b><small>자동으로 들은 코드</small><button class="fix-alt" data-u="0" aria-label="대안 Am으로 바꾸기">대안: Am</button>');
     expect(whichAt(chart([span(5, 7, 'N', 'Am')]), 5.5)).toContain('<small class="fix-alt">대안: Am</small>');
   });
 });

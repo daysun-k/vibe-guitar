@@ -109,7 +109,7 @@ describe('코드 고치기 panel: tapping 대안 (fake DOM)', () => {
 
   it('demo verse Fm (replace tier): one tap accepts that stretch and closes the panel like a fix', async () => {
     const { m, fixer, which, u, acceptAlt } = open(12.4);
-    expect(which.innerHTML).toBe('<time>0:11</time> <b>Em</b><small>자동으로 들은 코드 · 확실하지 않음</small><button class="fix-alt" data-u="0" aria-label="대안 G로 바꾸기">대안: G</button>');
+    expect(which.innerHTML).toBe('<time>0:11~0:13</time> <b>Em</b><small>자동으로 들은 코드 · 확실하지 않음</small><button class="fix-alt" data-u="0" aria-label="대안 G로 바꾸기">대안: G</button>');
     expect(m.uncertain[0]).toMatchObject({ fromSec: 11.6, toSec: 13.6, alt: 'G', replace: true });
     which.click(u);
     await flush();
