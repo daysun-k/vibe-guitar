@@ -88,6 +88,47 @@ export function uncertainMarks(chart: Chart, arrangement: Arrangement, key: KeyE
   return out;
 }
 
+/** Largest gap (s) between two marks of one chord event drawn as one lane stretch (VGT-19 Amendment 2). */
+export const LANE_JOIN_GAP_SEC = 0.5;
+
+/** A stretch the lane draws: one mark, or marks joined over small gaps. */
+export interface LaneStretch {
+  fromSec: number;
+  toSec: number;
+  noChord: boolean;
+  /** Indices into the marks of its parts, in time order (the first one names the stretch). */
+  parts: number[];
+}
+
+/**
+ * Lane drawing only (VGT-19 Amendment 2): marks of the same stored chord event naming the same chord
+ * whose gap is at most LANE_JOIN_GAP_SEC are drawn as one stretch covering the gap; joining runs left
+ * to right, so a chain of small gaps becomes one stretch. The marks themselves are unchanged (코드
+ * 고치기 still reads the part under the playhead).
+ */
+export function laneStretches(marks: readonly Pick<UncertainMark, 'fromSec' | 'toSec' | 'ref' | 'span' | 'noChord'>[]): LaneStretch[] {
+  const order = marks.map((_, i) => i).sort((a, b) => marks[a].fromSec - marks[b].fromSec);
+  const out: LaneStretch[] = [];
+  let cur: LaneStretch | null = null;
+  for (const i of order) {
+    const m = marks[i];
+    const head: (typeof marks)[number] | undefined = cur ? marks[cur.parts[0]] : undefined;
+    if (cur && head && m.ref.startSec === head.ref.startSec && m.span.chord === head.span.chord && m.fromSec - cur.toSec <= LANE_JOIN_GAP_SEC + 1e-9) {
+      cur.toSec = Math.max(cur.toSec, m.toSec);
+      cur.parts.push(i);
+    } else {
+      cur = { fromSec: m.fromSec, toSec: m.toSec, noChord: m.noChord, parts: [i] };
+      out.push(cur);
+    }
+  }
+  return out;
+}
+
+/** True when `t` lies in a joined gap: inside a drawn lane stretch but under none of its marks. */
+export function inJoinedGap(marks: readonly Pick<UncertainMark, 'fromSec' | 'toSec' | 'ref' | 'span' | 'noChord'>[], t: number): boolean {
+  return laneStretches(marks).some((s) => s.parts.length > 1 && t >= s.fromSec && t < s.toSec && !s.parts.some((i) => t >= marks[i].fromSec && t < marks[i].toSec));
+}
+
 /** Index of the mark under `t` (inside [fromSec, toSec)), -1 when none. */
 export function markAt(marks: readonly Pick<UncertainMark, 'fromSec' | 'toSec'>[], t: number): number {
   return marks.findIndex((m) => t >= m.fromSec && t < m.toSec);

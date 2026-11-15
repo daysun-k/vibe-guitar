@@ -16,7 +16,7 @@ import type { Lyrics } from '../lyrics/types';
 import { prettyChord, shapeName, type KeyEstimate } from '../music/key';
 import { bigBeatIndexAt, bigBeatInfo, bigBeatsUntil, type BigBeat, type PhaseEstimate } from '../music/meter';
 import { buildLane, buildSections, droppedSeventh, simpleShape, stripItems, type LaneBar, type LaneSection, type StripItem } from './lane';
-import { markAt, uncertainMarks, type UncertainMark } from './uncertain';
+import { laneStretches, markAt, uncertainMarks, type UncertainMark } from './uncertain';
 
 export interface PlayOptions {
   level: Level;
@@ -128,7 +128,11 @@ export function buildPlayModel(source: Chart, opts: PlayOptions, rawLyrics: Lyri
     return i >= 0 ? labels[i].name : null;
   };
   const uncertain = uncertainMarks(source, arrangement, key, timing, labelAt, opts.showUncertain !== false, { level: opts.level, capo, profile: opts.profile, allowRootChange: opts.allowRootChange });
-  const bars = buildLane(arrangement, timing, big, Math.min(durationSec, coverEnd + 0.01), (i) => keys[i] || labels[i].name, (i) => !!arrangement.events[i]?.change, uncertain.length ? uncertain : undefined);
+  // The lane draws marks joined over small gaps (VGT-19 Amendment 2); a segment's flag then names
+  // the stretch's first mark, so `flag` stays an index into model.uncertain.
+  const stretches = laneStretches(uncertain);
+  const bars = buildLane(arrangement, timing, big, Math.min(durationSec, coverEnd + 0.01), (i) => keys[i] || labels[i].name, (i) => !!arrangement.events[i]?.change, stretches.length ? stretches : undefined);
+  for (const b of bars) for (const s of b.segments) if (s.flag >= 0) s.flag = stretches[s.flag].parts[0];
 
   // Lyrics are optional: anything wrong with them degrades to "no lyrics", never to no chords.
   let lyrics: Lyrics | null = null;

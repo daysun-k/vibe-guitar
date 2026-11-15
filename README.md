@@ -175,7 +175,9 @@ Port of the approved mockup B ("진행표형", diagrams 3x):
   Re-analyses merge stretches like chords: the newer chart's stretches, plus the older chart's stretches lying
   wholly in ranges only it heard.
   In the lane a stretch is drawn at its own beats: a stretch covering only part of a bar or a chord is its own
-  segment with the "?", and a bar holding one is never drawn as a repeat sign.
+  segment with the "?", and a bar holding one is never drawn as a repeat sign. Stretches inside the same chord
+  naming the same chord with a gap of at most 0.5 s are drawn as one stretch with one "?" (docs/uncertainty-protocol.md
+  "Amendment 2"); 코드 고치기 still reads the stretch under the playhead, so inside such a gap it shows no 대안.
 
 Music fixes applied before drawing (pure functions in `src/music/`, tests in `tests/music.test.ts`):
 

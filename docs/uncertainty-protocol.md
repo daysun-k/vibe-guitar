@@ -233,3 +233,46 @@ is changed on TEST results.
 second choice (as written) and only replace-tier spans taking it.
 
 **Frozen values in code:** `src/recognize/uncertainty-criterion.ts`.
+
+## Amendment 2 (2026-11-15, lane drawing only; frozen before any TEST-3 song was selected, captured or replayed)
+**Frozen record.** `~/Documents/paseo-briefings/vibe-guitar-uncertainty/amendment2/frozen-rule.md`, frozen
+2026-11-15 03:54Z, sha256 `c3ee1c13b0c3ba676da73448f2e8b735a6bd3b541a81742722d88531a23f016b`. The rule and the
+TEST-3 check below are copied from it.
+
+**Why.** After the DEV short-mark measurement on the 23 DEV songs re-captured on 2026-11-15, the user chose
+(2026-11-15) "작은 틈만 이어 그리기 (Recommended)". DEV numbers that chose it (re-capture, 23 songs, R1 23/23):
+lane "?" per minute 17.74 -> 13.37 (-24.6%); visual capture of all errors 50.4% -> 50.8%; precision 43.8% ->
+43.4%.
+
+**Display rule (lane only).**
+- Input: the chart's visible uncertain spans (`visibleSpans`, unchanged: criterion S4 < 0.394164403405739,
+  replace tier S4 < -0.3143507889471948, spans on auto no-chord events included).
+- Two spans are joined FOR DRAWING when they lie in the same chord event (same event index of the chart at their
+  start times), name the same chord, and the gap between the first span's toSec and the next span's fromSec is
+  <= 0.5 s. Joining repeats left to right (a chain of small gaps becomes one drawn stretch).
+- The drawn stretch covers the gap. Lane segments are cut at the drawn stretch's bounds exactly as before (VGT-19
+  lane variant 1); one "?" per drawn segment.
+- Unchanged: `chart.uncertain` data, the 1st-choice chart, the criterion, the replace tier, the 코드 고치기 panel
+  ("대안: X" and its one-tap button come from the original span under the playhead; in a joined gap no span is
+  under the playhead, so the panel shows no 대안 there), the phone stand (per-chord flag), the settings switch.
+
+**TEST-3 check (once, after this freeze).**
+- Songs: frozen pool order docs/annotation-heldout-v1-pool.json from rank 93 (first time any rank >= 93 is used;
+  user decision 2026-11-15), upload rule amended-v1 applied to the existing raw results of
+  docs/annotation-heldout-v1-search-log.json (no new search), the first 20 songs with a qualifying upload
+  (fewer if ranks 93-136 run out). No song is skipped after its chart is seen.
+- Capture: the audio-dump build of main, official upload, from the start at 1x, one sitting; PCM kept in
+  ~/vibe-guitar-audio/captures (user decision: keep recordings).
+- Measured with no reference: per song and pooled, lane "?" per minute (sum over bars of flagsInBar marks / chart
+  coverage minutes) for the shipped spans and for the joined drawing; R1 for every song.
+- Pass: pooled lane "?" per minute drops by at least 15% with the rule. Below 15%: report to the user (alarm);
+  nothing is tuned on TEST-3.
+- Visual capture cannot fall under this rule (drawn stretches only add time), so it is not a pass condition; if
+  annotations can be time-mapped by the existing v2 method for some songs, capture and precision are reported as
+  information only.
+
+**In code.** `laneStretches` and `LANE_JOIN_GAP_SEC` in `src/play/uncertain.ts` join the play model's marks
+(the visible spans the lane draws) before `buildLane`; a lane segment's `flag` still names a mark (the stretch's
+first part). `fixAltIndex` returns no 대안 inside a joined gap.
+
+TEST-3 result: pending.
