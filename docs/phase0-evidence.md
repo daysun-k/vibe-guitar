@@ -75,8 +75,13 @@ Where B5-AUTO's one-line summary and BACKLOG-1115 disagree (in-page navigation, 
 
 Hand-made chart authoring is now optional: the user receives prepared practice charts built from public
 annotations. The set on 2026-11-15 is Let It Be, Come Together, Drive My Car and While My Guitar Gently Weeps
-(an earlier list had And She Was); the parent agent imports them into the user's extension that day, so the
-user has no import step. That import is not recorded here yet (C2 stays unverified).
+(an earlier list had And She Was). On 2026-11-15 the parent agent stored Come Together (`oolpPmuK2I8`) and While
+My Guitar Gently Weeps (`bI8P6ZSHSvE`) in the user's Aside extension through the panel's own save path (the
+service worker's chart-write save); both read back equal by value to the practice-chart files, and the auto
+charts were kept. Let It Be (`QDYfEBY9NM4`) already held the same practice chart (same events, timing and
+coverage). Drive My Car (`kfSQkZuIx84`) was not replaced because it holds an edited auto chart (last edit
+2026-11-15T01:14Z, origin unknown); its practice chart is imported by hand only if the user wants it. This does
+not verify C2: nothing was exported or re-imported through the panel's UI, so C2 stays unverified.
 
 | ID | Item | Status | Build, date | Site | Result | Evidence |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -241,10 +246,11 @@ Ordered so a sitting can start with one song and stop after any step. No step as
 
 ### 1. Required, about 5 minutes: one practice song (C12, C3, C5, A8, D12)
 
-In Aside open ONE of the four practice songs on www.youtube.com: Let It Be (`QDYfEBY9NM4`), Come Together
-(`oolpPmuK2I8`), Drive My Car (`kfSQkZuIx84`) or While My Guitar Gently Weeps (`bI8P6ZSHSvE`). The chart is
-already in your extension, so there is no import step. Click the toolbar icon, choose a level, and play along
-once with the guitar.
+In Aside open ONE of the three practice songs on www.youtube.com: Let It Be (`QDYfEBY9NM4`), Come Together
+(`oolpPmuK2I8`) or While My Guitar Gently Weeps (`bI8P6ZSHSvE`). Their practice charts are already stored in your
+extension, so there is no import step. (Drive My Car, `kfSQkZuIx84`, keeps the edited auto chart it already has;
+import its practice chart with 편집 → JSON 가져오기 only if you want it.) Click the toolbar icon, choose a level,
+and play along once with the guitar.
 
 Answer one question: **where did you stop or struggle?** An approximate minute is enough ("about 1:30"), or
 "nowhere". The agent reads the chart at that minute and maps the answer to the rows: C12 (could you play along
