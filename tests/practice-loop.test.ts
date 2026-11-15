@@ -60,7 +60,9 @@ describe('speed control', () => {
 
   it('content scripts set only the offered rates on the page player', () => {
     const yt = readFileSync(new URL('../src/extension/content/youtube.ts', import.meta.url), 'utf8');
-    expect(yt).toMatch(/if \(!isPracticeRate\(msg\.rate\)\)[\s\S]*?applyPracticeRate\(video, msg\.rate, rateViaPagePlayer\)/);
+    expect(yt).toMatch(/if \(!isPracticeRate\(msg\.rate\)\)[\s\S]*?applyPracticeRate\(video, msg\.rate, rateViaPagePlayer, instanceSignal\)/);
+    // The bridge listens on this window and origin only and stops with this instance (tests/yt-rate.test.ts).
+    expect(yt).toMatch(/createRateBridge\(\{\s*win: window,\s*origin: location\.origin,\s*signal: instanceSignal,/);
     // The page-world side checks again (tests/yt-rate.test.ts covers handleRateRequest).
     const ytMain = readFileSync(new URL('../src/extension/content/youtube-main.ts', import.meta.url), 'utf8');
     expect(ytMain).toContain('handleRateRequest(e.data,');
