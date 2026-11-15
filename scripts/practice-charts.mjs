@@ -12,8 +12,7 @@
 // close (snapEvents). A song whose map is not "strong" (fitted to chord boundaries,
 // so it can be a whole beat off) is refused unless --allow-weak. Local files only (no network).
 import * as esbuild from 'esbuild';
-import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync } from 'node:fs';
-import { writeFile } from 'node:fs/promises';
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -158,13 +157,54 @@ export function realTarget(p, depth = 0) {
   return cur;
 }
 
+/** device:inode of the file or folder p points to (links followed), or null when it does not exist. */
+function identity(p) {
+  try {
+    const s = statSync(p);
+    return `${s.dev}:${s.ino}`;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * True when target, or any existing folder above it, is the repository folder itself, compared by
+ * device and inode rather than by spelling: letter case on a case-insensitive disk, Unicode
+ * normalization and links cannot hide the repository (review beginner-merge-r2 R2-F1).
+ */
+function underRepoByIdentity(target, repo) {
+  const repoId = identity(repo);
+  if (!repoId) return false;
+  for (let cur = target; ; cur = path.dirname(cur)) {
+    if (identity(cur) === repoId) return true;
+    if (path.dirname(cur) === cur) return false;
+  }
+}
+
 /** Throws when p (after resolving symlinks) is the repository or inside it: outputs never go there. */
 export function assertOutsideRepo(p, repo = root) {
   const repoReal = realTarget(repo);
   for (const target of new Set([path.resolve(p), realTarget(p)])) {
-    if (target === repoReal || target.startsWith(repoReal + path.sep) || target === path.resolve(repo) || target.startsWith(path.resolve(repo) + path.sep)) {
+    if (target === repoReal || target.startsWith(repoReal + path.sep) || target === path.resolve(repo) || target.startsWith(path.resolve(repo) + path.sep)
+        || underRepoByIdentity(target, repo)) {
       throw new Error(`${p}: 저장소 안에는 쓰지 않아요 (${target}). 저장소 밖의 폴더를 --out으로 지정해 주세요.`);
     }
+  }
+}
+
+/**
+ * Writes data to file through a new temporary file in the same folder and a rename, so an existing
+ * hard link or symlink at file is replaced rather than written through (a hard link into the
+ * repository would otherwise change the repository's file).
+ */
+export function writeReplacing(file, data) {
+  const tmp = path.join(path.dirname(file), `.${path.basename(file)}.${process.pid}.${Date.now()}.tmp`);
+  writeFileSync(tmp, data, { encoding: 'utf8', flag: 'wx' });
+  try {
+    renameSync(tmp, file);
+  } catch (e) {
+    rmSync(tmp, { force: true });
+    throw e;
   }
 }
 
@@ -308,8 +348,8 @@ async function main() {
       // An existing file may be a symlink into the repository.
       assertOutsideRepo(file);
       assertOutsideRepo(sideFile);
-      await writeFile(file, `${JSON.stringify(chart, null, 2)}\n`, 'utf8');
-      await writeFile(sideFile, `${JSON.stringify(sidecar, null, 2)}\n`, 'utf8');
+      writeReplacing(file, `${JSON.stringify(chart, null, 2)}\n`);
+      writeReplacing(sideFile, `${JSON.stringify(sidecar, null, 2)}\n`);
       const a = sidecar.agreement;
       const simplified = sidecar.labels
         .filter((l) => l.kind !== 'exact')

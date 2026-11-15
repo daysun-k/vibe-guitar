@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -325,6 +325,38 @@ describe('scripts/practice-charts.mjs', () => {
       expect(out.refused).toBe(true);
       expect(out.plain).toBe(false);
       expect(existsSync(path.join(repo, 'abcdefghijk.json'))).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses a letter-case alias of the repository and never writes through a hard link (review beginner-merge-r2 R2-F1)', () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'practice-guard-'));
+    try {
+      const repo = path.join(dir, 'repo');
+      mkdirSync(path.join(repo, 'docs'), { recursive: true });
+      writeFileSync(path.join(repo, 'x.json'), 'orig\n');
+      const outside = path.join(dir, 'outside');
+      mkdirSync(outside);
+      linkSync(path.join(repo, 'x.json'), path.join(outside, 'abcdefghijk.json'));
+      const caseInsensitive = existsSync(path.join(dir, 'REPO'));
+      const script = new URL('../scripts/practice-charts.mjs', import.meta.url).href;
+      const probe = `const m = await import(${JSON.stringify(script)});
+        const refused = (p) => { try { m.assertOutsideRepo(p, ${JSON.stringify(repo)}); return false; } catch (e) { return /저장소 안에는 쓰지 않아요/.test(e.message); } };
+        m.writeReplacing(${JSON.stringify(path.join(outside, 'abcdefghijk.json'))}, 'new\\n');
+        console.log(JSON.stringify({ alias: refused(${JSON.stringify(path.join(dir, 'REPO', 'out', 'abcdefghijk.json'))}), aliasDocs: refused(${JSON.stringify(path.join(dir, 'Repo', 'Docs'))}), plain: refused(${JSON.stringify(path.join(outside, 'ok.json'))}) }));`;
+      const r = spawnSync(process.execPath, ['--input-type=module', '-e', probe], { encoding: 'utf8' });
+      expect(r.status, r.stderr).toBe(0);
+      const out = JSON.parse(r.stdout.trim());
+      if (caseInsensitive) {
+        expect(out.alias).toBe(true);
+        expect(out.aliasDocs).toBe(true);
+      }
+      expect(out.plain).toBe(false);
+      // The hard-linked output was replaced, not written through: the repository file is unchanged.
+      expect(readFileSync(path.join(repo, 'x.json'), 'utf8')).toBe('orig\n');
+      expect(readFileSync(path.join(outside, 'abcdefghijk.json'), 'utf8')).toBe('new\n');
+      expect(existsSync(path.join(repo, 'out'))).toBe(false);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
