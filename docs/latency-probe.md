@@ -114,3 +114,44 @@ The p95 miss does not come from the constant. Residuals are flat inside each con
 in one session; 68.0, 30.0 and 41.8 ms in another): every new anchor after a play, pause or seek
 lands with its own offset. Reducing that per-anchor jitter is a separate follow-up.
 
+
+## VGT-22: per-anchor offset (success criteria, written before the change)
+
+Written on 2026-11-15 before any code change for VGT-22; the targets below are not moved afterwards.
+
+**Real probe (same protocol as above: 3 sessions of the full plan, one toolbar click, `npm run latency-report`):**
+
+| | Target |
+| --- | --- |
+| Validation \|residual\| p95 (odd clicks, after the report's correction) | ≤ 50 ms |
+| Validation median (after the report's correction) | within 10 ms |
+| Drift inside continuous segments | within 10 ms/min |
+| Clicks stored from the 1.5x stretch | 0 |
+| Complete runs | 3 of 3, no missing click |
+
+The protocol, click track and statistics stay as they are. The median target is checked as the report defines
+it (validation clicks after the fit correction). `CAPTURE_LATENCY_SEC` stays 0.128 s in the VGT-22 change; if
+the post-fix measurement's median before correction is outside 10 ms, the report's suggested constant is adopted
+in a separate commit that cites that measurement.
+
+**Evidence before the real measurement (offline, no browser):**
+
+1. Simulated capture through the production path (`AudioPlacer` → `ListeningSession` → click detector →
+   `analyzeProbeDump`, `tests/latency-probe.test.ts`) with a model of the suspected cause: after each play or
+   seek the element already reports "playing" (play / seeked event and the 250 ms ticks) while its clock stays
+   at the start position for a startup delay of 15–80 ms that differs per start. With the current code this
+   harness must reproduce what the 2026-11-13 run showed: segment medians spread by tens of ms (at least 40 ms
+   max − min in a session) while residuals stay flat inside each segment. After the fix, the same harness must
+   give a spread of at most 5 ms and a validation p95 |residual| of at most 10 ms.
+2. A negative control in the same harness: if every report in a segment shares the same offset (an offset per
+   start in the browser's own pipeline rather than in how an anchor pairs a position with the audio clock),
+   the fix is not expected to remove the spread. The test records that, so the real probe decides between the
+   two causes.
+3. The 0 s start (`ListeningSession.append` clamp): in the simulated session that starts at 0 s, the first
+   segment's extra delay must be at most 2 ms after the fix (it is +37.5 ms with the clamp).
+4. The probe dump gains, per stored segment, the start that the first anchor alone gave (the current
+   placement) next to the stored start, and how far the anchors inside the segment disagree. The report then
+   prints, from the same real run, the segment medians and p95 the current placement would have given. Reading
+   the real run: anchors inside a segment that disagree by tens of ms and a p95 within target confirm and fix
+   the cause; anchors that agree while segment medians still spread mean the offset comes from the browser per
+   start, which this change does not fix, and that is reported as such.
