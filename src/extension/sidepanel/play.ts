@@ -8,6 +8,7 @@ import { prettyChord, shapeName } from '../../music/key';
 import { bigBeatSeconds } from '../../music/meter';
 import { barsForChartEvent, barsForHardChord, barsForUncertainStretch, changeConcertLabel, frameAt, upcomingShapes, type PlayModel } from '../../play/model';
 import { bassHTML, slashChordHTML, splitSlashBass } from './chord-name';
+import { fitLaneNames } from './lane-fit';
 import { escapeHtml, renderShapeDiagram, shapeDiagramHeight } from './diagram';
 import { ScrubState } from './scrub';
 
@@ -199,7 +200,12 @@ export class PlayScreen {
       this.last.line = -2;
     });
     // The fixing panel, lyrics and diagrams resize the lane after it opens: keep the marked bars in view.
-    new ResizeObserver(() => this.scrollToFix()).observe(this.lane);
+    // A new panel width (or the lane shown again) fits the chord names to their cells again.
+    new ResizeObserver(() => {
+      fitLaneNames(this.lane);
+      this.scrollToFix();
+    }).observe(this.lane);
+    void document.fonts?.ready.then(() => fitLaneNames(this.lane));
   }
 
   private showSounding = false;
@@ -381,6 +387,7 @@ export class PlayScreen {
     this.lane.innerHTML = h;
     this.barEls = [...this.lane.querySelectorAll<HTMLElement>('.bar')];
     this.secEls = [...this.lane.querySelectorAll<HTMLElement>('.sec')];
+    fitLaneNames(this.lane);
   }
 
   private lyricHTML(m: PlayModel, li: number): string {

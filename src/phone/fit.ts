@@ -12,13 +12,13 @@ export const FIT_MIN_PX = 16;
 
 /**
  * Font size (px) that makes text measuring `contentPx` at `basePx` fit a box `boxPx` wide: `basePx`
- * when it already fits, never below FIT_MIN_PX (or `basePx`, if that is smaller). Null when the box
- * has no width yet (hidden): measure again once it is shown.
+ * when it already fits, never below `minPx` (FIT_MIN_PX on the phone; or `basePx`, if that is smaller).
+ * Null when the box has no width yet (hidden): measure again once it is shown.
  */
-export function fitFontPx(basePx: number, contentPx: number, boxPx: number): number | null {
+export function fitFontPx(basePx: number, contentPx: number, boxPx: number, minPx = FIT_MIN_PX): number | null {
   if (!(boxPx > 0) || !(basePx > 0)) return null;
   if (contentPx <= boxPx) return basePx;
-  return Math.max(Math.min(FIT_MIN_PX, basePx), Math.floor((basePx * boxPx) / contentPx));
+  return Math.max(Math.min(minPx, basePx), Math.floor((basePx * boxPx) / contentPx));
 }
 
 /** The next chord is drawn at most this fraction of the current chord's size (34vw : 22vw in the CSS). */
