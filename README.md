@@ -140,24 +140,29 @@ Port of the approved mockup B ("진행표형", diagrams 3x):
   playback the fix changes only the in-memory demo chart.
 - **Uncertainty**: at 중급/상급 an actionable hint such as "Em도 돼요" on low-confidence 7th chords. 입문
   reduces 7/maj7 to triads; the change mark (●) and its tooltip say so (no superscript 7 next to the name).
-- **불확실한 곳 (VGT-19)**: where an auto chart has an uncertain stretch (`chart.uncertain`) the lane marks it
-  with a dashed amber outline and a small "?" after the chord name, at its own beats (a stretch covering only
-  part of a bar or a chord is drawn as its own segment). While the playhead is inside it, one line under the
-  shape strip says "확실하지 않아요 · 다른 후보 Am" with a "Am으로 바꾸기" button; the strip still shows at most
-  three shapes. Two tiers (docs/uncertainty-protocol.md "Amendment 1", numbers in docs/uncertainty-results.md):
-  every marked stretch names its second choice, but the button (and the wording "G일 가능성이 더 커요") appears
-  only on the most uncertain tier (`replace: true`), where the second choice is right more often; elsewhere use
-  코드 고치기. The second choice is named like the chords on that screen (capo shape names, the level's
-  simplification; the concert name only as a small extra when 실제 음 이름 보기 is on). A stretch shows only
-  while the chord under it is still the auto chord it was computed for, so a fixed chord drops its mark; a
-  second choice that would read the same as the shown chord (e.g. G for Gmaj7 at 입문) is not offered.
-  The button replaces just that stretch: the chord is split at the stretch bounds, the stretch becomes a
-  manual event with the second choice (confidence 1), the parts before and after keep the auto chord and
-  confidence, and the stretch leaves `uncertain`. It is stored like 코드 고치기 (serialized
-  `ChartStore.acceptAlt`, chart `edited`, the same status line and 되돌리기; in demo only the in-memory chart).
-  **불확실한 곳 표시** in the settings sheet (on by default) hides every mark. Re-analyses merge stretches like
-  chords: the newer chart's stretches, plus the older chart's stretches lying wholly in ranges only it heard.
-  While a song has visible stretches, the line under the strip keeps its height so the lane does not jump.
+- **불확실한 곳 (VGT-19)**: where an auto chart has an uncertain stretch (`chart.uncertain`) the lane shows only
+  a small "?" after the chord name (no outline, no extra line under the shape strip; the tooltip and screen
+  reader say "확실하지 않아요, 대안 Am"). The second choice lives in **코드 고치기**: right of the origin note
+  ("자동으로 들은 코드") the panel shows "대안: Am" when the chord being fixed holds a visible stretch (the one
+  under the playhead, else the chord's first). Two tiers (docs/uncertainty-protocol.md "Amendment 1", numbers
+  in docs/uncertainty-results.md): on the most uncertain tier (`replace: true`), where the second choice is right
+  more often, "대안: Am" is a small button and one tap replaces that stretch and closes the panel; elsewhere it is
+  plain text and the picker below fixes the chord as usual. The second choice is named like the chords on that
+  screen (capo shape names, the level's simplification; the concert name only as a small extra when 실제 음 이름
+  보기 is on). A stretch shows only while the chord under it is still the auto chord it was computed for, so a
+  fixed chord drops its mark; a second choice that would read the same as the shown chord (e.g. G for Gmaj7 at
+  입문) is not offered. The replacement splits the chord at the stretch bounds, the stretch becomes a manual
+  event with the second choice (confidence 1), the parts before and after keep the auto chord and confidence,
+  and the stretch leaves `uncertain`. It is stored like 코드 고치기 (serialized `ChartStore.acceptAlt`, chart
+  `edited`, the status line "바꿨어요: A → B" with 되돌리기; in demo only the in-memory chart); after 되돌리기 the
+  status line simply clears. **불확실한 곳 표시** in the settings sheet (on by default) hides every mark.
+  Re-analyses merge stretches like chords: the newer chart's stretches, plus the older chart's stretches lying
+  wholly in ranges only it heard.
+  Two lane variants, temporary until one is chosen from screenshots (`sidepanel.html?lv=1|2`, default 1):
+  **lv=1** draws a stretch at its own beats (a stretch covering only part of a bar or a chord is its own segment
+  with the "?"); **lv=2** keeps the lane cut only at chords, exactly as without stretches, and puts one "?" on each
+  chord segment (or repeat sign) overlapping a stretch of that chord. Display only: the data, the second choice
+  and the replacement are the same in both.
 
 Music fixes applied before drawing (pure functions in `src/music/`, tests in `tests/music.test.ts`):
 
@@ -331,13 +336,15 @@ placeholder lyrics 0.4 s early) that exercises the spelling, phase and offset fi
 cached lyrics only (no request in demo mode). Query parameters: `t=<sec>`, `play`, `rate=0.5|0.75`,
 `loop=<a>-<b>` (mark bars a–b, 1-based, as the loop),
 `theme=light|dark`, `level=beginner|novice|intermediate|advanced`, `capo=auto|0..7`, `snd` (sounding
-names), `unc=0` (불확실한 곳 표시 off), `sheet=1`, `lyrics=0`, `mute` (no count-in click), `phonectl` (휴대폰에서 조작 허용 on), `phone` (휴대폰 악보대 switch on; connects to
+names), `unc=0` (불확실한 곳 표시 off), `lv=2` (uncertain-mark lane variant 2, temporary), `fix` (open 코드 고치기), `sheet=1`, `lyrics=0`, `mute` (no count-in click), `phonectl` (휴대폰에서 조작 허용 on), `phone` (휴대폰 악보대 switch on; connects to
 `127.0.0.1` only).
 
 The synthetic song carries four uncertain stretches (whole verse Fm at 11.6–13.6 s, the second half of verse
 C♯ at 14.6–15.6 s, the low-confidence Fm7 at 19.6–21.6 s, chorus C♯ → A♯m at 27.6–29.6 s). In the panel's
 DevTools console, `await vibeGuitar.seek(12.4)` moves the demo there and resolves once it is drawn (demo
-only: it does nothing while a real player is followed).
+only: it does nothing while a real player is followed); then `document.getElementById('fix-open').click()` opens
+코드 고치기 at that chord: at 12.4 s (verse Fm, replace tier) it shows the "대안: G" button, at 14.0 s or 15.0 s
+(verse C♯, info only) the text "대안: D".
 
 Opened outside the extension (file://) the page runs the synthetic demo with default settings, which is
 how `node scripts/screens.mjs` (after `npm run build`) writes `docs/screens/*.png` at 400 and 600 px, light
