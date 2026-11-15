@@ -32,13 +32,15 @@ interface Owned {
   range: CoverageRange;
 }
 
+/** A segment stored right after playback started at 0 s can start slightly before 0 s: ranges are clipped there. */
 function ownership(segments: SegmentAnalysis[]): Owned[] {
   const byLength = [...segments].sort((a, b) => b.endSec - b.startSec - (a.endSec - a.startSec));
   const taken: CoverageRange[] = [];
   const owned: Owned[] = [];
   for (const seg of byLength) {
-    for (const range of subtract(seg.startSec, seg.endSec, normalizeCoverage(taken))) owned.push({ seg, range });
-    taken.push({ fromSec: seg.startSec, toSec: seg.endSec });
+    const fromSec = Math.max(0, seg.startSec);
+    for (const range of subtract(fromSec, seg.endSec, normalizeCoverage(taken))) owned.push({ seg, range });
+    taken.push({ fromSec, toSec: seg.endSec });
   }
   return owned.sort((a, b) => a.range.fromSec - b.range.fromSec);
 }

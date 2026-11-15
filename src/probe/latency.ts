@@ -178,6 +178,45 @@ export interface PlacedSegment {
   startSec: number;
   endSec: number;
   onsetsSec: number[];
+  /**
+   * The start the segment's first player report alone gave (the placement before VGT-22).
+   * Absent in dumps made before VGT-22, whose startSec is that start.
+   */
+  firstStartSec?: number;
+  /** Interquartile range of the per-block start estimates inside the segment (VGT-22 dumps). */
+  startIqrSec?: number;
+}
+
+/** The parts of a stored ListeningSession segment that the probe dump reads. */
+export interface StoredSegmentView {
+  readonly startSec: number;
+  readonly endSec: number;
+  readonly durationSec: number;
+  readonly firstStartSec: number;
+  readonly startEstimates: readonly number[];
+  readonly audio: { view(): Float32Array };
+}
+
+/** The dump entry for one stored segment (offscreen probe hook and the simulated capture share it). */
+export function placedSegmentOf(seg: StoredSegmentView, sampleRate: number): PlacedSegment {
+  return {
+    startSec: seg.startSec,
+    endSec: seg.endSec,
+    onsetsSec: detectClicks(seg.audio.view(), sampleRate).map((t) => seg.startSec + t),
+    firstStartSec: seg.firstStartSec,
+    startIqrSec: seg.startEstimates.length ? percentile([...seg.startEstimates], 75) - percentile([...seg.startEstimates], 25) : 0,
+  };
+}
+
+/**
+ * The same segment as the first player report alone would have placed it: every onset moves by
+ * firstStartSec - startSec. Used to report, from one real run, what the placement before VGT-22
+ * gave. Null when the dump does not carry firstStartSec.
+ */
+function asFirstAnchorPlaced(seg: PlacedSegment): PlacedSegment | null {
+  if (seg.firstStartSec === undefined) return null;
+  const d = seg.firstStartSec - seg.startSec;
+  return { startSec: seg.firstStartSec, endSec: seg.endSec + d, onsetsSec: seg.onsetsSec.map((t) => t + d) };
 }
 
 export interface ClickMatch {
@@ -284,7 +323,17 @@ export const PROBE_TARGETS = {
 export interface SessionReport {
   sessionId: string;
   captureSampleRate: number | null;
-  segments: { startSec: number; endSec: number; clicks: number; medianResidualSec: number }[];
+  segments: {
+    startSec: number;
+    endSec: number;
+    clicks: number;
+    medianResidualSec: number;
+    /** startSec - firstStartSec: how far the stored start moved from the first report's (VGT-22 dumps). */
+    firstAnchorShiftSec?: number;
+    startIqrSec?: number;
+  }[];
+  /** Max - min of the median residuals of the segments with clicks (the per-anchor offset, VGT-22). */
+  segmentSpreadSec: number;
   mainPlaced: number;
   mainMissing: number[];
   replays: number;
@@ -304,16 +353,27 @@ export interface ProbeReport {
     p95AbsSec: number;
     maxAbsSec: number;
     uncorrectedMedianSec: number;
-    /** p95 of |corrected residual| without segments that start at 0 s (see startClampSec). */
+    /** p95 of |corrected residual| without segments stored from the start of the track (see startClampSec). */
     p95AbsExcludingStartSec: number;
   };
   /**
-   * Median residual of segments that start at exactly 0 s minus the overall correction.
-   * ListeningSession.append clamps a segment start to 0, so audio stored right after
-   * playback starts at 0 s lands late by up to the latency constant: a placement error
-   * separate from the constant itself. NaN when no such segment had clicks.
+   * Median residual of segments stored from the start of the track (start at most
+   * START_SEGMENT_SEC) minus the overall correction. Before VGT-22, ListeningSession.append
+   * clamped a segment start to 0 s, so audio stored right after playback started at 0 s
+   * landed late by up to the latency constant; the start is no longer clamped, and this
+   * checks that such segments land like the rest. NaN when no such segment had clicks.
    */
   startClampSec: number;
+  /**
+   * What the placement before VGT-22 (each segment placed by its first player report alone)
+   * gives on the same run, from the dump's firstStartSec. Null for older dumps.
+   */
+  firstAnchor: {
+    validationMedianSec: number;
+    validationP95AbsSec: number;
+    /** Per session, as SessionReport.segmentSpreadSec. */
+    segmentSpreadSec: number[];
+  } | null;
   driftSecPerMin: number;
   rateCheckPlaced: number;
   suggestedLatencySec: number;
@@ -328,6 +388,23 @@ export interface ProbeReport {
  * a positive residual means audio lands too late, so the latency must grow.
  */
 export function analyzeProbeDump(dump: ProbeDump): ProbeReport {
+  const r = analyzePlacement(dump);
+  const shifted = dump.sessions.map((s) => s.segments.map(asFirstAnchorPlaced));
+  if (shifted.every((segs) => segs.every((g) => g !== null))) {
+    const old = analyzePlacement({ ...dump, sessions: dump.sessions.map((s, i) => ({ ...s, segments: shifted[i] as PlacedSegment[] })) });
+    r.firstAnchor = {
+      validationMedianSec: old.validation.medianSec,
+      validationP95AbsSec: old.validation.p95AbsSec,
+      segmentSpreadSec: old.sessions.map((s) => s.segmentSpreadSec),
+    };
+  }
+  return r;
+}
+
+/** A segment starting at or before this (s) was stored from the start of the track. */
+export const START_SEGMENT_SEC = 0.25;
+
+function analyzePlacement(dump: ProbeDump): ProbeReport {
   const problems: string[] = [];
   if (!dump || !Array.isArray(dump.sessions) || !dump.sessions.length) throw new Error('세션이 없는 결과 파일입니다');
   const used = dump.sessions[0].latencyUsedSec;
@@ -342,7 +419,7 @@ export function analyzeProbeDump(dump: ProbeDump): ProbeReport {
   const sessions: SessionReport[] = dump.sessions.map((s) => {
     const r = matchClicks(s.clicks, s.segments);
     const main = r.matches.filter((m) => m.kind === 'main');
-    const atStart = (m: ClickMatch) => s.segments[m.segment].startSec <= 1e-9;
+    const atStart = (m: ClickMatch) => s.segments[m.segment].startSec <= START_SEGMENT_SEC;
     for (const m of main) {
       if (m.clickIndex % 2 === 0) fit.push(m.residualSec);
       else val.push({ ...m, atStart: atStart(m) });
@@ -383,13 +460,23 @@ export function analyzeProbeDump(dump: ProbeDump): ProbeReport {
         `${s.sessionId}: 측정이 끝까지 기록되지 않았습니다 (빠진 본 클릭 ${mainMissing.length}개${pastRateStretch ? '' : ', 1.5x 구간 뒤 기록 없음'}): 이 세션을 다시 측정하세요`,
       );
     }
+    const segments: SessionReport['segments'] = s.segments.map((seg, si) => {
+      const inSeg = main.filter((m) => m.segment === si);
+      return {
+        startSec: seg.startSec,
+        endSec: seg.endSec,
+        clicks: inSeg.length,
+        medianResidualSec: median(inSeg.map((m) => m.residualSec)),
+        ...(seg.firstStartSec !== undefined ? { firstAnchorShiftSec: seg.startSec - seg.firstStartSec } : {}),
+        ...(seg.startIqrSec !== undefined ? { startIqrSec: seg.startIqrSec } : {}),
+      };
+    });
+    const segMedians = segments.filter((g) => g.clicks > 0).map((g) => g.medianResidualSec);
     return {
       sessionId: s.sessionId,
       captureSampleRate: s.captureSampleRate,
-      segments: s.segments.map((seg, si) => {
-        const inSeg = main.filter((m) => m.segment === si);
-        return { startSec: seg.startSec, endSec: seg.endSec, clicks: inSeg.length, medianResidualSec: median(inSeg.map((m) => m.residualSec)) };
-      }),
+      segments,
+      segmentSpreadSec: segMedians.length ? Math.max(...segMedians) - Math.min(...segMedians) : NaN,
       mainPlaced: main.length,
       mainMissing,
       replays: [...placedCounts.values()].reduce((a, n) => a + Math.max(0, n - 1), 0),
@@ -407,7 +494,7 @@ export function analyzeProbeDump(dump: ProbeDump): ProbeReport {
   const startClampSec = median(startResiduals) - correction;
   if (Math.abs(startClampSec) > PROBE_TARGETS.medianSec) {
     problems.push(
-      `0 s에서 시작한 구간이 나머지보다 ${(startClampSec * 1000).toFixed(1)} ms 다르게 배치됩니다 (ListeningSession.append가 구간 시작을 0 s로 고정): 상수와 별개인 배치 오류입니다`,
+      `곡 처음(0 s)부터 기록한 구간이 나머지보다 ${(startClampSec * 1000).toFixed(1)} ms 다르게 배치됩니다: 상수와 별개인 배치 오류입니다 (VGT-22 이전 빌드라면 구간 시작을 0 s로 고정한 탓)`,
     );
   }
   const validation = {
@@ -424,6 +511,7 @@ export function analyzeProbeDump(dump: ProbeDump): ProbeReport {
     fit: { n: fit.length, medianResidualSec: correction },
     validation,
     startClampSec,
+    firstAnchor: null,
     driftSecPerMin: drift,
     rateCheckPlaced,
     suggestedLatencySec: used + correction,
@@ -451,16 +539,24 @@ export function formatProbeReport(r: ProbeReport): string {
     lines.push(`세션 ${s.sessionId} (캡처 ${s.captureSampleRate ?? '?'} Hz)`);
     lines.push(`  배치된 본 클릭 ${s.mainPlaced}개 (재생 반복 ${s.replays}), 빠진 클릭 ${s.mainMissing.length ? s.mainMissing.join(', ') : '없음'}, 잘못 검출 ${s.extras}`);
     lines.push(`  잔차 중앙값 ${ms(s.medianResidualSec)}, 드리프트 ${ms(s.driftSecPerMin)}/분, 1.5x 구간 클릭 저장 ${s.rateCheckPlaced}개`);
-    s.segments.forEach((g, i) =>
-      lines.push(`  구간 ${i + 1}: ${g.startSec.toFixed(2)}–${g.endSec.toFixed(2)} s, 클릭 ${g.clicks}개, 잔차 중앙값 ${ms(g.medianResidualSec)}`),
-    );
+    s.segments.forEach((g, i) => {
+      const anchor =
+        g.firstAnchorShiftSec !== undefined ? `, 첫 보고 기준 시작과의 차이 ${ms(g.firstAnchorShiftSec)}, 블록별 시작 추정 IQR ${ms(g.startIqrSec ?? NaN)}` : '';
+      lines.push(`  구간 ${i + 1}: ${g.startSec.toFixed(2)}–${g.endSec.toFixed(2)} s, 클릭 ${g.clicks}개, 잔차 중앙값 ${ms(g.medianResidualSec)}${anchor}`);
+    });
+    lines.push(`  구간 잔차 중앙값의 폭(최대-최소) ${ms(s.segmentSpreadSec)}`);
   }
   lines.push('');
   lines.push(`맞춤(짝수 클릭) ${r.fit.n}개: 잔차 중앙값 ${ms(r.fit.medianResidualSec)}`);
   lines.push(`검증(홀수 클릭) ${r.validation.n}개: 보정 전 중앙값 ${ms(r.validation.uncorrectedMedianSec)}`);
   lines.push(`  보정 후 중앙값 ${ms(r.validation.medianSec)} [목표 |값| <= ${ms(PROBE_TARGETS.medianSec)}: ${ok(r.pass.median)}]`);
   lines.push(`  보정 후 |잔차| p95 ${ms(r.validation.p95AbsSec)} [목표 <= ${ms(PROBE_TARGETS.p95Sec)}: ${ok(r.pass.p95)}], 최대 ${ms(r.validation.maxAbsSec)}`);
-  lines.push(`  0 s 시작 구간을 뺀 |잔차| p95 ${ms(r.validation.p95AbsExcludingStartSec)}; 0 s 시작 구간의 추가 지연 ${ms(r.startClampSec)}`);
+  lines.push(`  곡 처음부터 기록한 구간을 뺀 |잔차| p95 ${ms(r.validation.p95AbsExcludingStartSec)}; 곡 처음부터 기록한 구간의 추가 지연 ${ms(r.startClampSec)}`);
+  if (r.firstAnchor) {
+    lines.push(
+      `  같은 측정을 첫 보고만으로 배치했다면(VGT-22 이전 방식): 보정 후 중앙값 ${ms(r.firstAnchor.validationMedianSec)}, |잔차| p95 ${ms(r.firstAnchor.validationP95AbsSec)}, 세션별 구간 폭 ${r.firstAnchor.segmentSpreadSec.map(ms).join(' / ')}`,
+    );
+  }
   lines.push(`드리프트(연속 구간 안) ${ms(r.driftSecPerMin)}/분 [목표 |값| <= ${ms(PROBE_TARGETS.driftSecPerMin)}/분: ${ok(r.pass.drift)}]`);
   lines.push(`1x가 아닌 재생 저장 안 함: 1.5x 구간 클릭 ${r.rateCheckPlaced}개 저장 [${ok(r.pass.rateNotStored)}]`);
   lines.push(`모든 세션이 끝까지 기록됨 [${ok(r.pass.complete)}]`);

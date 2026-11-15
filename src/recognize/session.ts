@@ -45,7 +45,57 @@ export class Segment {
   readonly beatChunks = new Map<number, BeatLogits>();
   /** Set when the segment was closed; a closed segment never grows again. */
   closed = false;
-  constructor(readonly startSec: number) {}
+  /**
+   * Where each appended block says the segment starts (its reported end position minus the
+   * segment's audio length after it), sorted ascending.
+   */
+  private readonly estimates: number[] = [];
+  private pinned: number | null = null;
+
+  /**
+   * `firstStartSec`: the start the first block's player report gives (the whole placement before
+   * VGT-22). Kept next to the stored start for the latency probe.
+   */
+  constructor(readonly firstStartSec: number) {}
+
+  /**
+   * Start of the segment on the playback timeline: the median of the per-block estimates. A
+   * player that reports "playing" (play or seeked event, its next ticks) before its clock and
+   * audio really start makes the first reports of a start run ahead by that startup delay; the
+   * reports after it agree with each other, so the median does not take the delay over the
+   * whole segment the way the first report alone did (docs/latency-probe.md, VGT-22). May be
+   * slightly below 0 s: audio stored right after playback starts at 0 s keeps its real place.
+   */
+  get startSec(): number {
+    if (this.pinned !== null) return this.pinned;
+    const e = this.estimates;
+    if (!e.length) return this.firstStartSec;
+    const m = e.length >> 1;
+    return e.length % 2 ? e[m] : (e[m - 1] + e[m]) / 2;
+  }
+
+  /** The per-block start estimates, sorted ascending. */
+  get startEstimates(): readonly number[] {
+    return this.estimates;
+  }
+
+  /** Records one block's start estimate (ListeningSession.append calls this for every block). */
+  addStartEstimate(sec: number): void {
+    const e = this.estimates;
+    let lo = 0;
+    let hi = e.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (e[mid] <= sec) lo = mid + 1;
+      else hi = mid;
+    }
+    e.splice(lo, 0, sec);
+  }
+
+  /** Fixes the start to a known value (replay of a stored segment whose start was recorded). */
+  pinStart(sec: number): void {
+    this.pinned = sec;
+  }
 
   get durationSec(): number {
     return this.audio.length / MODEL_SAMPLE_RATE;
@@ -79,7 +129,9 @@ export class ListeningSession {
 
   /**
    * Adds 22.05 kHz samples whose last sample plays at `positionAtEndSec`.
-   * Starts a new segment after a break or when the timeline jumped (seek).
+   * Starts a new segment after a break or when the timeline jumped (seek). Every block adds
+   * its own estimate of the segment start (see Segment.startSec). The start is not clamped
+   * at 0 s: coverage() and the auto chart clip at 0 s instead.
    */
   append(samples: Float32Array, positionAtEndSec: number): void {
     if (!samples.length) return;
@@ -91,11 +143,12 @@ export class ListeningSession {
     const cur = this.current;
     if (!cur || Math.abs(cur.endSec + dur - positionAtEndSec) > CONTINUITY_TOLERANCE_SEC) {
       if (cur) cur.closed = true;
-      const start = Math.max(0, positionAtEndSec - dur);
-      this.current = new Segment(start);
+      this.current = new Segment(positionAtEndSec - dur);
       this.segments.push(this.current);
     }
-    this.current!.audio.push(samples);
+    const seg = this.current!;
+    seg.audio.push(samples);
+    seg.addStartEstimate(positionAtEndSec - seg.durationSec);
   }
 
   /** Pause, seek, ad, rate change, recording change: the next audio opens a new segment. */
@@ -148,8 +201,9 @@ export class ListeningSession {
     return n;
   }
 
+  /** Heard ranges on the playback timeline, clipped at 0 s (a segment may start slightly before it). */
   coverage(): CoverageRange[] {
-    return normalizeCoverage(this.segments.filter((s) => s.durationSec > 0).map((s) => ({ fromSec: s.startSec, toSec: s.endSec })));
+    return normalizeCoverage(this.segments.filter((s) => s.durationSec > 0).map((s) => ({ fromSec: Math.max(0, s.startSec), toSec: s.endSec })));
   }
 
   coveredFraction(): number {

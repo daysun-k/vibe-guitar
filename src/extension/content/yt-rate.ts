@@ -71,21 +71,87 @@ export function parseRateReply(data: unknown): { seq: number; ok: boolean; reaso
   return { seq: d.seq, ok: d.ok === true, ...(reason ? { reason } : {}) };
 }
 
+/** A window message as the bridge reads it. */
+export interface BridgeMessage {
+  data: unknown;
+  origin: string;
+  source: unknown;
+}
+
+/** The part of `window` (and the timers) the isolated-world bridge uses; tests pass a fake. */
+export interface BridgeWindow {
+  postMessage(data: unknown, targetOrigin: string): void;
+  addEventListener(type: 'message', listener: (e: BridgeMessage) => void, options: { signal: AbortSignal }): void;
+}
+
+export interface BridgeEnv {
+  win: BridgeWindow;
+  origin: string;
+  /** Aborted when this content-script instance is replaced (claimInstance). */
+  signal: AbortSignal;
+  setTimeout: (fn: () => void, ms: number) => unknown;
+}
+
+/**
+ * Isolated world: the request/reply bridge to the page world. Each request gets its own seq and
+ * resolves once: with the first reply carrying that seq (from this window and origin), or with
+ * ok: false after RATE_REPLY_TIMEOUT_MS. A reply after the timeout, a second reply, a reply for
+ * another seq and anything after the instance was aborted are ignored; aborting resolves the
+ * pending requests with ok: false at once (applyPracticeRate then leaves the <video> alone).
+ */
+export function createRateBridge(env: BridgeEnv): (rate: PracticeRate) => Promise<{ ok: boolean }> {
+  let seq = 0;
+  const pending = new Map<number, (r: { ok: boolean }) => void>();
+  env.signal.addEventListener('abort', () => {
+    for (const resolve of pending.values()) resolve({ ok: false });
+    pending.clear();
+  });
+  env.win.addEventListener(
+    'message',
+    (e) => {
+      if (e.source !== env.win || e.origin !== env.origin) return;
+      const r = parseRateReply(e.data); // untrusted: the page can post anything here
+      if (!r) return;
+      pending.get(r.seq)?.({ ok: r.ok });
+      pending.delete(r.seq);
+    },
+    { signal: env.signal },
+  );
+  return (rate) => {
+    const n = ++seq;
+    return new Promise((resolve) => {
+      if (env.signal.aborted) {
+        resolve({ ok: false });
+        return;
+      }
+      pending.set(n, resolve);
+      env.win.postMessage({ __vibeGuitar: RATE_REQUEST, seq: n, rate } satisfies RateRequest, env.origin);
+      env.setTimeout(() => {
+        if (pending.delete(n)) resolve({ ok: false });
+      }, RATE_REPLY_TIMEOUT_MS);
+    });
+  };
+}
+
 /**
  * Isolated world: set a practice rate. Asks the page's player first; when it did not answer
- * ok, or the <video> did not end up at the rate, sets the <video> rate directly.
+ * ok, or the <video> did not end up at the rate, sets the <video> rate directly. When `signal`
+ * (this content-script instance) was aborted meanwhile, a newer instance owns the page: it
+ * does nothing, so a stale fallback cannot overwrite the newer instance's rate.
  */
 export async function applyPracticeRate(
   video: { playbackRate: number },
   rate: PracticeRate,
   viaPagePlayer: (rate: PracticeRate) => Promise<{ ok: boolean }>,
-): Promise<'player-api' | 'video-element'> {
+  signal?: AbortSignal,
+): Promise<'player-api' | 'video-element' | 'aborted'> {
   let ok = false;
   try {
     ok = (await viaPagePlayer(rate)).ok;
   } catch {
     ok = false;
   }
+  if (signal?.aborted) return 'aborted';
   if (ok && Math.abs(video.playbackRate - rate) < 1e-3) return 'player-api';
   video.playbackRate = rate;
   return 'video-element';
