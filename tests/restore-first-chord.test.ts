@@ -53,10 +53,10 @@ describe('the first recognized chord is remembered', () => {
   it('2순위로 바꾸기 stores the chord and the consumed span on the replaced part', () => {
     const c = base([rspan(5, 6, 'G', 'Em')]);
     const out = acceptUncertainAlt(c, { startSec: 4, chord: 'G' }, c.uncertain![0], NOW);
-    expect(out.events[2]).toEqual({ startSec: 5, chord: 'Em', confidence: 1, source: 'manual', auto: { chord: 'G', confidence: 0.45, span: rspan(5, 6, 'G', 'Em') } });
+    expect(out.events[2]).toEqual({ startSec: 5, chord: 'Em', confidence: 1, source: 'manual', auto: { chord: 'G', confidence: 0.45, span: rspan(5, 6, 'G', 'Em'), split: { startSec: 4, head: true, tail: true } } });
     // fixing that part again keeps the record, span included
     const again = correctChordEvent(out, { startSec: 5, chord: 'Em' }, 'D', NOW);
-    expect(again.events[2].auto).toEqual({ chord: 'G', confidence: 0.45, span: rspan(5, 6, 'G', 'Em') });
+    expect(again.events[2].auto).toEqual({ chord: 'G', confidence: 0.45, span: rspan(5, 6, 'G', 'Em'), split: { startSec: 4, head: true, tail: true } });
   });
 });
 
@@ -88,14 +88,43 @@ describe('restoreAutoChord', () => {
     sameContent(restoreAutoChord(fixed, { startSec: 5, chord: 'D' }, null, NOW), before);
   });
 
-  it('a head or tail fixed meanwhile is not merged; a span stored over the stretch since is not duplicated', () => {
+  it('a recorded fragment changed meanwhile: only the chord comes back (no merge, no span); an overlapping span is not duplicated', () => {
     const before = base([rspan(5, 6, 'G', 'Em')]);
     const replaced = acceptUncertainAlt(before, { startSec: 4, chord: 'G' }, before.uncertain![0], NOW);
     const headFixed = correctChordEvent(replaced, { startSec: 4, chord: 'G' }, 'Bm', NOW);
     const back = restoreAutoChord(headFixed, { startSec: 5, chord: 'Em' }, null, NOW);
-    expect(back.events.map((e) => [e.startSec, e.chord, e.source])).toEqual([[0, 'C', 'auto'], [4, 'Bm', 'manual'], [5, 'G', 'auto'], [8, 'Am', 'auto']]);
+    expect(back.events.map((e) => [e.startSec, e.chord, e.source])).toEqual([[0, 'C', 'auto'], [4, 'Bm', 'manual'], [5, 'G', 'auto'], [6, 'G', 'auto'], [8, 'Am', 'auto']]);
+    expect(back.uncertain).toEqual([]);
+    // the same when the tail changed
+    const tailFixed = correctChordEvent(replaced, { startSec: 6, chord: 'G' }, 'D', NOW);
+    expect(restoreAutoChord(tailFixed, { startSec: 5, chord: 'Em' }, null, NOW).events.map((e) => [e.startSec, e.chord])).toEqual([[0, 'C'], [4, 'G'], [5, 'G'], [6, 'D'], [8, 'Am']]);
+    // a record without `split` (incomplete) is not guessed at
+    const noSplit: Chart = { ...replaced, events: replaced.events.map((e) => (e.auto ? { ...e, auto: { chord: e.auto.chord, confidence: e.auto.confidence, span: e.auto.span } } : e)) };
+    expect(restoreAutoChord(noSplit, { startSec: 5, chord: 'Em' }, null, NOW).events).toHaveLength(5);
     const overlapped: Chart = { ...replaced, uncertain: [rspan(5.5, 7, 'G', 'D')] };
     expect(restoreAutoChord(overlapped, { startSec: 5, chord: 'Em' }, null, NOW).uncertain).toEqual([rspan(5.5, 7, 'G', 'D')]);
+  });
+
+  it('review r1 F1: a pre-existing auto neighbour with the same chord and confidence is never merged', () => {
+    const cs = (coverage: [number, number][], starts: number[], uncertain: UncertainSpan[]): Chart => ({
+      ...base(uncertain),
+      events: starts.map((startSec): ChordEvent => ({ startSec, chord: 'C', confidence: 0.7, source: 'auto' })),
+      coverage: coverage.map(([fromSec, toSec]) => ({ fromSec, toSec })),
+    });
+    // the reviewer's counterexample: C@0 heard to 2, C@4 heard 4–8, span 4–6 C→Am
+    // then the same with abutting coverage (C@4 a separate event right after C@0's range), and a C after the event
+    const cases: [Chart, number][] = [
+      [cs([[0, 2], [4, 8]], [0, 4], [rspan(4, 6, 'C', 'Am')]), 4],
+      [cs([[0, 8]], [0, 4], [rspan(4, 6, 'C', 'Am')]), 4],
+      [cs([[0, 12]], [0, 4, 8], [rspan(6, 8, 'C', 'Am')]), 6],
+    ];
+    for (const [before, at] of cases) {
+      const replaced = acceptUncertainAlt(before, { startSec: 4, chord: 'C' }, before.uncertain![0], NOW);
+      const back = restoreAutoChord(replaced, { startSec: at, chord: 'Am' }, null, NOW);
+      sameContent(back, before); // C@4 and the 4–8 s chord stay
+      expect(back.events.map((e) => e.startSec)).toContain(4);
+      expect(validateChart(back).ok).toBe(true);
+    }
   });
 
   it('a no-chord stretch replaced by its second choice comes back as no chord', () => {
@@ -187,10 +216,13 @@ describe('chart format', () => {
       withEvent({ auto: { chord: 'G', confidence: 0.4, extra: 1 } as never }),
       withEvent({ auto: { chord: 'G', confidence: 0.4, span: { fromSec: 6, toSec: 5, chord: 'G', alt: 'Em' } } }),
       withEvent({ auto: { chord: 'G', confidence: 0.4, span: { fromSec: 5, toSec: 6, chord: 'G', alt: 'Em', replace: false } as never } }),
+      withEvent({ auto: { chord: 'G', confidence: 0.4, span: rspan(5, 6, 'G', 'Em') } }), // span without split
+      withEvent({ auto: { chord: 'G', confidence: 0.4, split: { startSec: 4, head: true, tail: false } } }), // split without span
+      withEvent({ auto: { chord: 'G', confidence: 0.4, span: rspan(5, 6, 'G', 'Em'), split: { startSec: 4, head: 1 } as never } }),
     ];
     for (const c of bad) expect(validateChart(c).ok, JSON.stringify(c.events[1])).toBe(false);
     // the schema checks the same shape (it cannot compare span bounds)
-    for (const c of [bad[0], bad[1], bad[2], bad[4], bad[6]]) expect(schemaValidate(c), JSON.stringify(c.events[1])).toBe(false);
+    for (const c of [bad[0], bad[1], bad[2], bad[4], bad[6], bad[7], bad[8], bad[9]]) expect(schemaValidate(c), JSON.stringify(c.events[1])).toBe(false);
   });
 });
 

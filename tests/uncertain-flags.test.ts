@@ -194,7 +194,7 @@ describe('ChartStore: the second choice goes through the serialized writes and u
     const r = await handleChartWrite(store, { type: 'chart-write', op: 'accept-alt', source: 'youtube', id: rec.id, event: { startSec: 4, chord: 'G' }, span: rspan(4, 8, 'G', 'Em'), at: NOW.toISOString() });
     expect(r.ok).toBe(true);
     const after = area.data[MAIN] as Chart;
-    expect(after.events[1]).toEqual({ startSec: 4, chord: 'Em', confidence: 1, source: 'manual', auto: { chord: 'G', confidence: 0.45, span: rspan(4, 8, 'G', 'Em') } });
+    expect(after.events[1]).toEqual({ startSec: 4, chord: 'Em', confidence: 1, source: 'manual', auto: { chord: 'G', confidence: 0.45, span: rspan(4, 8, 'G', 'Em'), split: { startSec: 4, head: false, tail: false } } });
     expect(await store.saveAuto(chart([[30, 'D']], [[30, 34]], undefined, '2026-11-14T11:00:00.000Z'))).toBe('pending');
     const before = (r as { before: Chart }).before;
     const restored = await store.undoCorrection('youtube', rec.id, before, after);
@@ -423,7 +423,7 @@ describe('two tiers on the panel (Amendment 1)', () => {
     expect(m.bars.flatMap((b) => b.segments).filter((s) => s.flag >= 0).map((s) => s.flag)).toEqual([0, 1]);
     // the replacement of a replace-tier stretch is stored like before
     const after = acceptUncertainAlt(c, m.uncertain[0].ref, m.uncertain[0].span, NOW);
-    expect(after.events[1]).toEqual({ startSec: 4, chord: 'Em', confidence: 1, source: 'manual', auto: { chord: 'G', confidence: 0.45, span: rspan(4, 6, 'G', 'Em') } });
+    expect(after.events[1]).toEqual({ startSec: 4, chord: 'Em', confidence: 1, source: 'manual', auto: { chord: 'G', confidence: 0.45, span: rspan(4, 6, 'G', 'Em'), split: { startSec: 4, head: false, tail: true } } });
     expect(after.uncertain).toEqual([span(20, 22, 'F', 'Dm')]);
   });
 

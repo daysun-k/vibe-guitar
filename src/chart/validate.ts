@@ -54,7 +54,17 @@ function checkAutoOrigin(a: unknown, p: string, errors: string[]): void {
     errors.push(`${p} must be an object`);
     return;
   }
-  checkKeys(a, p, ['chord', 'confidence', 'span'], ['chord', 'confidence'], errors);
+  checkKeys(a, p, ['chord', 'confidence', 'span', 'split'], ['chord', 'confidence'], errors);
+  if ((a.span === undefined) !== (a.split === undefined)) errors.push(`${p}.span and ${p}.split go together`);
+  if (a.split !== undefined) {
+    const sp = a.split;
+    if (!isObj(sp)) errors.push(`${p}.split must be an object`);
+    else {
+      checkKeys(sp, `${p}.split`, ['startSec', 'head', 'tail'], ['startSec', 'head', 'tail'], errors);
+      if (!isNum(sp.startSec) || sp.startSec < 0) errors.push(`${p}.split.startSec must be a number >= 0`);
+      if (typeof sp.head !== 'boolean' || typeof sp.tail !== 'boolean') errors.push(`${p}.split.head and .tail must be booleans`);
+    }
+  }
   checkChord(a.chord, `${p}.chord`, errors);
   if (!isNum(a.confidence) || a.confidence < 0 || a.confidence > 1) errors.push(`${p}.confidence must be in [0, 1]`);
   if (a.span !== undefined) {

@@ -139,11 +139,14 @@ Port of the approved mockup B ("진행표형", diagrams 3x):
   undoes the last fix while the stored chart is still the fixed one. Clicking a bar still only seeks. In demo
   playback the fix changes only the in-memory demo chart.
   **처음 코드로 되돌리기**: a fixed auto chord remembers the chord first recognized there (`auto` on the manual
-  event: chord and confidence, plus the uncertain span when 대안 replaced it; a second fix keeps the first one,
+  event: chord and confidence, plus, when 대안 replaced it, the uncertain span and which parts before and
+  after the split made; a second fix keeps the first one,
   and so does an editor save that changes a chord at a kept time). For such a chord the panel shows "처음 들은
   코드: X" (named like the panel's other chords, a capo shape name or 코드 없음) with the button "처음 코드로
-  되돌리기": one tap makes it the auto chord again; a chord made by 대안 is merged back with the untouched auto
-  parts before and after it and its span returns to `uncertain`, so the chart reads as before the replacement.
+  되돌리기": one tap makes it the auto chord again; a chord made by 대안 is merged back with the parts that split
+  made (only those, and only while each is still the untouched auto part; an auto chord that was already
+  there, even the same chord, is never merged) and its span returns to `uncertain`, so the chart reads as
+  before the replacement. If one of those parts was changed since, only the chord comes back (no merge, no span).
   Chords fixed before this existed (no `auto`) get the recording's stored auto chart's chord at their start
   (`autochart:<source>:<id>`, only when it differs; none without an auto chart). It is stored like a fix
   (serialized `ChartStore.restoreAuto`, a conflict when the chart changed meanwhile, the status line "바꿨어요:

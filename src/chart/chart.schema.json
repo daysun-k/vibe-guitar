@@ -65,8 +65,20 @@
                   "alt": { "type": "string", "minLength": 1 },
                   "replace": { "const": true }
                 }
+              },
+              "split": {
+                "type": "object",
+                "description": "What that split created: the original event's start and whether a leading (head) and a trailing (tail) auto fragment were made.",
+                "additionalProperties": false,
+                "required": ["startSec", "head", "tail"],
+                "properties": {
+                  "startSec": { "type": "number", "minimum": 0 },
+                  "head": { "type": "boolean" },
+                  "tail": { "type": "boolean" }
+                }
               }
-            }
+            },
+            "dependencies": { "span": ["split"], "split": ["span"] }
           }
         },
         "if": { "properties": { "source": { "const": "auto" } } },

@@ -47,8 +47,21 @@ export interface ChordEvent {
 export interface AutoOrigin {
   chord: string;
   confidence: number;
-  /** The uncertain span 2순위로 바꾸기 consumed (the event was split at its bounds). */
+  /** The uncertain span 2순위로 바꾸기 consumed (the event was split at its bounds); always with `split`. */
   span?: UncertainSpan;
+  /**
+   * What that split created, so restoring folds back only its own fragments: the original event's
+   * start, and whether a leading fragment (the auto event before, from `startSec`) and a trailing one
+   * (the auto event from `span.toSec`) were made. Always with `span`.
+   */
+  split?: SplitOrigin;
+}
+
+/** See AutoOrigin.split. */
+export interface SplitOrigin {
+  startSec: number;
+  head: boolean;
+  tail: boolean;
 }
 
 export interface CoverageRange {

@@ -86,7 +86,7 @@ describe('acceptUncertainAlt on a no-chord event', () => {
     expect(out.events).toEqual([
       { startSec: 0, chord: 'C', confidence: 0.7, source: 'auto' },
       { startSec: 4, chord: 'N', confidence: 0.7, source: 'auto' },
-      { startSec: 5, chord: 'Am', confidence: 1, source: 'manual', auto: { chord: 'N', confidence: 0.7, span: span(5, 7, 'N', 'Am', true) } },
+      { startSec: 5, chord: 'Am', confidence: 1, source: 'manual', auto: { chord: 'N', confidence: 0.7, span: span(5, 7, 'N', 'Am', true), split: { startSec: 4, head: true, tail: true } } },
       { startSec: 7, chord: 'N', confidence: 0.7, source: 'auto' },
       { startSec: 8, chord: 'G', confidence: 0.7, source: 'auto' },
     ]);
