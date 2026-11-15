@@ -2,8 +2,8 @@
 
 Listening mode places each captured tab-audio block on the song timeline with `AudioPlacer`
 (`src/recognize/placement.ts`): the player position at the block's AudioContext time minus
-`CAPTURE_LATENCY_SEC` (`src/extension/offscreen/listen.ts`; 128 ms since the 2026-11-13 measurement
-below, a 50 ms guess before). This probe measures the
+`CAPTURE_LATENCY_SEC` (`src/extension/offscreen/listen.ts`; 69 ms since the 2026-11-15 measurement
+below, after VGT-22; 128 ms from the 2026-11-13 measurement before that, a 50 ms guess before). This probe measures the
 error of that placement with a click track, through the production path, and suggests the constant.
 
 **What it measures:** the time between the media element's `currentTime` clock and the captured audio,
