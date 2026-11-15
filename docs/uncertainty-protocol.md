@@ -275,4 +275,6 @@ lane "?" per minute 17.74 -> 13.37 (-24.6%); visual capture of all errors 50.4% 
 (the visible spans the lane draws) before `buildLane`; a lane segment's `flag` still names a mark (the stretch's
 first part). `fixAltIndex` returns no 대안 inside a joined gap.
 
-TEST-3 result: pending.
+TEST-3 result (2026-11-15, once): 20 songs (pool ranks 95-127, 15 ranks without a qualifying upload skipped), all
+captured, R1 20/20; pooled lane "?" per minute 18.81 -> 14.59 over 76.24 min, a 22.5% drop: PASS (pass line 15%). See
+`docs/uncertainty-results.md` "Amendment 2: lane join (DEV and TEST-3)".
