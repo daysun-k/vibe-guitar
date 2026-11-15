@@ -139,6 +139,8 @@ export type ChartWriteMessage =
   | { type: 'chart-write'; op: 'correct-event'; source: RecordingSource; id: string; event: EventRef; chord: string; at: string }
   /** Play view (VGT-19): play an uncertain stretch of an auto event as its second choice. */
   | { type: 'chart-write'; op: 'accept-alt'; source: RecordingSource; id: string; event: EventRef; span: UncertainSpan; at: string }
+  /** Play view: a manual event plays its first recognized chord again (처음 코드로 되돌리기). */
+  | { type: 'chart-write'; op: 'restore-auto'; source: RecordingSource; id: string; event: EventRef; at: string }
   | { type: 'chart-write'; op: 'undo-correct'; source: RecordingSource; id: string; before: Chart; after: Chart };
 
 /** Service worker → side panel: reply to a ChartWriteMessage (`before`: the chart a correction replaced). */

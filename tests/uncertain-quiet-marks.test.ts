@@ -98,7 +98,7 @@ describe('코드 고치기 panel: tapping 대안 (fake DOM)', () => {
     els = {}; // a fresh panel per fixer
     const m = demo();
     const acceptAlt = vi.fn(async (_i: number) => {});
-    const host: FixHost = { model: () => m, now: () => t, seek: () => {}, showSounding: () => false, mark: () => {}, save: async () => {}, acceptAlt };
+    const host: FixHost = { model: () => m, now: () => t, seek: () => {}, showSounding: () => false, mark: () => {}, save: async () => {}, acceptAlt, restore: async () => {} };
     const fixer = new ChordFixer(host);
     fixer.open();
     const which = els['fix-which'];

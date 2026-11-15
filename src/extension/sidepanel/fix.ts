@@ -5,8 +5,9 @@
  * by its own button and starts at the chord under the playhead.
  */
 import { isNoChord } from '../../arrange/chord';
-import { PICK_QUALITIES, pickBass, pickName, pickRoot, pickToConcert, sameChordSymbol, splitPick, type EventRef } from '../../editor/correct';
-import { prettyChord, shapeName } from '../../music/key';
+import type { AutoOrigin } from '../../chart/types';
+import { PICK_QUALITIES, firstHeard, pickBass, pickName, pickRoot, pickToConcert, sameChordSymbol, splitPick, type EventRef } from '../../editor/correct';
+import { prettyChord, respellChord, shapeName } from '../../music/key';
 import type { PlayModel } from '../../play/model';
 import { withRo, type UncertainMark } from '../../play/uncertain';
 import { slashChordHTML } from './chord-name';
@@ -25,6 +26,10 @@ export interface FixHost {
   save(event: EventRef, concert: string, names: { from: string; to: string }): Promise<void>;
   /** Plays model.uncertain[index] as its second choice (replace tier only); rejects when not stored. */
   acceptAlt(index: number): Promise<void>;
+  /** 처음 코드로 되돌리기: the event plays its first recognized chord again; `from`/`to` name it for the status line. */
+  restore(event: EventRef, names: { from: string; to: string }): Promise<void>;
+  /** The recording's stored auto chart chord at `sec`, for events fixed before ChordEvent.auto (null: none). */
+  storedAutoAt?(sec: number): AutoOrigin | null;
 }
 
 /** Index of the chart event sounding at `t` (the first event before the song's first chord). */
@@ -71,6 +76,14 @@ export function fixAltHTML(u: Pick<UncertainMark, 'alt' | 'altSounding' | 'repla
     : `<small class="fix-alt">대안: ${slashChordHTML(u.alt)}${snd}</small>`;
 }
 
+/**
+ * "처음 들은 코드: X" with the "처음 코드로 되돌리기" button, for a fixed event whose first recognized
+ * chord is known (`name`: as this panel names chords, a capo shape name or 코드 없음).
+ */
+export function fixFirstHTML(name: string): string {
+  return `<span class="fix-first">처음 들은 코드: ${slashChordHTML(name)} <button class="fix-restore" data-restore="1">처음 코드로 되돌리기</button></span>`;
+}
+
 const $ = (id: string): HTMLElement => {
   const el = document.getElementById(id);
   if (!el) throw new Error(`#${id} missing`);
@@ -86,6 +99,8 @@ export class ChordFixer {
   private bassPc: number | null = null;
   private none = false;
   private busy = false;
+  /** Shown name of the selected event's first recognized chord (null: nothing to restore). */
+  private firstName: string | null = null;
   private readonly panel = $('fix');
   private readonly openBtn = $('fix-open');
 
@@ -117,8 +132,10 @@ export class ChordFixer {
     });
     $('fix-save').addEventListener('click', () => void this.save());
     $('fix-which').addEventListener('click', (e) => {
-      const b = (e.target as HTMLElement).closest<HTMLElement>('[data-u]');
+      const target = e.target as HTMLElement;
+      const b = target.closest<HTMLElement>('[data-u]');
       if (b) void this.acceptAlt(Number(b.dataset.u));
+      else if (target.closest<HTMLElement>('[data-restore]')) void this.restore();
     });
     this.panel.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') this.close();
@@ -196,7 +213,11 @@ export class ChordFixer {
     const snd = this.host.showSounding() && capo && !isNoChord(shown.chord) ? ` <small class="snd">실제 ${escapeHtml(prettyChord(shown.chord))}</small>` : '';
     const k = fixAltIndex(m.uncertain, shown.startSec, at);
     const alt = k >= 0 ? fixAltHTML(m.uncertain[k], k, this.host.showSounding()) : '';
-    $('fix-which').innerHTML = `<time>${formatTime(shown.startSec)}</time> <b>${slashChordHTML(shownName(shown.chord, capo))}</b>${snd}<small>${escapeHtml(originNote(shown))}</small>${alt}`;
+    // 처음 들은 코드 of a fixed event: its own record, else the stored auto chart (events fixed earlier).
+    const first = firstHeard(shown, shown.source === 'manual' && !shown.auto ? (this.host.storedAutoAt?.(shown.startSec) ?? null) : null);
+    this.firstName = first ? shownName(respellChord(first.chord, m.key), capo) : null;
+    const restore = this.firstName ? fixFirstHTML(this.firstName) : '';
+    $('fix-which').innerHTML = `<time>${formatTime(shown.startSec)}</time> <b>${slashChordHTML(shownName(shown.chord, capo))}</b>${snd}<small>${escapeHtml(originNote(shown))}</small>${alt}${restore}`;
     ($('fix-prev') as HTMLButtonElement).disabled = i === 0;
     ($('fix-next') as HTMLButtonElement).disabled = i === m.chart.events.length - 1;
     this.renderPicker();
@@ -241,6 +262,23 @@ export class ChordFixer {
     this.renderPicker();
     try {
       await this.host.acceptAlt(k);
+      this.close();
+    } catch {
+      // the status line under the panel already says why
+    } finally {
+      this.busy = false;
+      if (this.isOpen) this.renderPicker();
+    }
+  }
+
+  /** "처음 코드로 되돌리기" tapped: stored like a fix (status line with 되돌리기), then the panel closes. */
+  private async restore(): Promise<void> {
+    const m = this.host.model();
+    if (!m || !this.ref || !this.firstName || this.busy) return;
+    this.busy = true;
+    this.renderPicker();
+    try {
+      await this.host.restore(this.ref, { from: shownName(this.ref.chord, this.capo(m)), to: this.firstName });
       this.close();
     } catch {
       // the status line under the panel already says why

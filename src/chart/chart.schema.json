@@ -44,8 +44,33 @@
           "startSec": { "type": "number", "minimum": 0 },
           "chord": { "type": "string", "minLength": 1 },
           "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
-          "source": { "enum": ["manual", "auto"] }
-        }
+          "source": { "enum": ["manual", "auto"] },
+          "auto": {
+            "type": "object",
+            "description": "Manual events only: the first recognized chord this event replaced (restored by 처음 코드로 되돌리기).",
+            "additionalProperties": false,
+            "required": ["chord", "confidence"],
+            "properties": {
+              "chord": { "type": "string", "minLength": 1 },
+              "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+              "span": {
+                "type": "object",
+                "description": "The uncertain span 2순위로 바꾸기 consumed (the event was split at its bounds).",
+                "additionalProperties": false,
+                "required": ["fromSec", "toSec", "chord", "alt"],
+                "properties": {
+                  "fromSec": { "type": "number", "minimum": 0 },
+                  "toSec": { "type": "number", "minimum": 0 },
+                  "chord": { "type": "string", "minLength": 1 },
+                  "alt": { "type": "string", "minLength": 1 },
+                  "replace": { "const": true }
+                }
+              }
+            }
+          }
+        },
+        "if": { "properties": { "source": { "const": "auto" } } },
+        "then": { "not": { "required": ["auto"] } }
       }
     },
     "coverage": {

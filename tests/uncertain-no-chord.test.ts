@@ -86,7 +86,7 @@ describe('acceptUncertainAlt on a no-chord event', () => {
     expect(out.events).toEqual([
       { startSec: 0, chord: 'C', confidence: 0.7, source: 'auto' },
       { startSec: 4, chord: 'N', confidence: 0.7, source: 'auto' },
-      { startSec: 5, chord: 'Am', confidence: 1, source: 'manual' },
+      { startSec: 5, chord: 'Am', confidence: 1, source: 'manual', auto: { chord: 'N', confidence: 0.7, span: span(5, 7, 'N', 'Am', true) } },
       { startSec: 7, chord: 'N', confidence: 0.7, source: 'auto' },
       { startSec: 8, chord: 'G', confidence: 0.7, source: 'auto' },
     ]);
@@ -126,7 +126,7 @@ describe('코드 고치기 on a no-chord event (fake DOM)', () => {
   const whichAt = (c: Chart, t: number) => {
     els = {};
     const m = model(c);
-    const host: FixHost = { model: () => m, now: () => t, seek: () => {}, showSounding: () => false, mark: () => {}, save: async () => {}, acceptAlt: async () => {} };
+    const host: FixHost = { model: () => m, now: () => t, seek: () => {}, showSounding: () => false, mark: () => {}, save: async () => {}, acceptAlt: async () => {}, restore: async () => {} };
     new ChordFixer(host).open();
     return els['fix-which'].innerHTML;
   };

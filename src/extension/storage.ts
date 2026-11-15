@@ -3,7 +3,7 @@ import { DEFAULT_PROFILE, type Level, type Profile } from '../arrange/levels';
 import { chartStorageKey, type Chart, type RecordingSource, type UncertainSpan } from '../chart/types';
 import { mergeAutoCharts } from '../chart/merge';
 import { validateChart } from '../chart/validate';
-import { CorrectionConflict, acceptUncertainAlt, correctChordEvent, type EventRef } from '../editor/correct';
+import { CorrectionConflict, acceptUncertainAlt, autoChordAt, correctChordEvent, findEvent, restoreAutoChord, type EventRef } from '../editor/correct';
 import type { AccuracyPair } from '../eval/overview';
 import type { ChartWriteMessage, ChartWriteResult } from './messages';
 
@@ -274,6 +274,24 @@ export class ChartStore {
   }
 
   /**
+   * "처음 코드로 되돌리기": one manual event plays its first recognized chord again, with the same write
+   * turn, storage key and undo as correctEvent. An event fixed before ChordEvent.auto existed gets the
+   * chord of the recording's stored auto chart at its start (read inside the same turn).
+   */
+  restoreAuto(source: RecordingSource, id: string, event: EventRef, at: Date): Promise<{ before: Chart; after: Chart }> {
+    return this.exclusive(async () => {
+      const before = await this.load(source, id);
+      if (!before) throw new CorrectionConflict('저장된 코드표가 없어요.');
+      const e = before.events[findEvent(before, event)];
+      const auto = e && !e.auto ? await this.loadAuto(source, id) : null;
+      const fallback = auto ? autoChordAt(auto, e!.startSec) : null;
+      const after = checked(restoreAutoChord({ ...before, recording: { ...before.recording, source, id } }, event, fallback, at));
+      await this.area.set({ [chartStorageKey(source, id)]: after });
+      return { before, after };
+    });
+  }
+
+  /**
    * Undoes correctEvent (or acceptAlt) for the requested recording while its stored chart is still exactly
    * the corrected one (any other write since, e.g. an import with new timing, blocks undo).
    * An auto chart in use is restored as the recording's latest stored auto chart (later
@@ -340,7 +358,14 @@ export async function acceptChartAlt(source: RecordingSource, id: string, event:
   return { before: r.before, after: r.chart };
 }
 
-/** Side panel: undoes correctChartEvent or acceptChartAlt through the serialized ChartStore. */
+/** Side panel: restores one event's first recognized chord through the serialized ChartStore. */
+export async function restoreChartAuto(source: RecordingSource, id: string, event: EventRef): Promise<{ before: Chart; after: Chart }> {
+  const r = await requestWrite({ type: 'chart-write', op: 'restore-auto', source, id, event, at: new Date().toISOString() });
+  if (!r.chart || !r.before) throw new Error('서비스 워커가 되돌린 코드표를 돌려주지 않았어요');
+  return { before: r.before, after: r.chart };
+}
+
+/** Side panel: undoes correctChartEvent, acceptChartAlt or restoreChartAuto through the serialized ChartStore. */
 export async function undoChartCorrection(source: RecordingSource, id: string, before: Chart, after: Chart): Promise<Chart> {
   const r = await requestWrite({ type: 'chart-write', op: 'undo-correct', source, id, before, after });
   if (!r.chart) throw new Error('서비스 워커가 되돌린 코드표를 돌려주지 않았어요');
@@ -360,6 +385,10 @@ export async function handleChartWrite(store: ChartStore, msg: ChartWriteMessage
     }
     if (msg.op === 'accept-alt') {
       const { before, after } = await store.acceptAlt(msg.source, msg.id, msg.event, msg.span, new Date(msg.at));
+      return { ok: true, chart: after, before };
+    }
+    if (msg.op === 'restore-auto') {
+      const { before, after } = await store.restoreAuto(msg.source, msg.id, msg.event, new Date(msg.at));
       return { ok: true, chart: after, before };
     }
     if (msg.op === 'undo-correct') return { ok: true, chart: await store.undoCorrection(msg.source, msg.id, msg.before, msg.after) };

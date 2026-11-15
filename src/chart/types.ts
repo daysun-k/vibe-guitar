@@ -36,6 +36,19 @@ export interface ChordEvent {
   /** 0..1. Manual events are usually 1. */
   confidence: number;
   source: EventSource;
+  /**
+   * Manual events only: the first recognized chord this event replaced (코드 고치기 or 2순위로 바꾸기),
+   * so "처음 코드로 되돌리기" can bring it back. A later fix keeps the first one.
+   */
+  auto?: AutoOrigin;
+}
+
+/** The auto event a manual event replaced (see ChordEvent.auto). */
+export interface AutoOrigin {
+  chord: string;
+  confidence: number;
+  /** The uncertain span 2순위로 바꾸기 consumed (the event was split at its bounds). */
+  span?: UncertainSpan;
 }
 
 export interface CoverageRange {

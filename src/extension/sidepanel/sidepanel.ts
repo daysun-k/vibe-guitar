@@ -23,7 +23,7 @@ import {
   undoStamp,
   type StampState,
 } from '../../editor/core';
-import { acceptUncertainAlt, correctChordEvent, type EventRef } from '../../editor/correct';
+import { acceptUncertainAlt, autoChordAt, correctChordEvent, restoreAutoChord, type EventRef } from '../../editor/correct';
 import { DraftBook, chartWriteTarget, checkSaveTarget, isDraftEmpty, reattachDraft, recordingKeyOf, type EditorDraft } from '../../editor/drafts';
 import type { Lyrics } from '../../lyrics/types';
 import { keyLabel, prettyChord, respellChartForKey, shapeName } from '../../music/key';
@@ -56,7 +56,7 @@ import type {
   PlayerStateMessage,
 } from '../messages';
 import { estimatePosition, type PlayerSnapshot } from '../playview';
-import { acceptChartAlt, adoptAutoChart, chartSongKey, correctChartEvent, listCharts, loadAccuracyPairs, loadAutoChart, loadChart, loadSettings, normalizeSettings, saveChart, saveSettings, undoChartCorrection, type Settings } from '../storage';
+import { acceptChartAlt, adoptAutoChart, chartSongKey, correctChartEvent, listCharts, loadAccuracyPairs, loadAutoChart, loadChart, loadSettings, normalizeSettings, restoreChartAuto, saveChart, saveSettings, undoChartCorrection, type Settings } from '../storage';
 import { escapeHtml, renderShapeDiagram } from './diagram';
 import { LyricsAsker, lyricsOutcome, lyricsLookupReady } from './lyrics-asker';
 import { controlTabId, keepPlayerAfterDemo } from './player-target';
@@ -123,6 +123,8 @@ let captureOff = false;
 let capturedTab: CapturedTab | null = null;
 /** Auto chart waiting for the user's confirm (a manual chart is in use). */
 let pendingAuto: Chart | null = null;
+/** The stored auto chart of the shown recording (a chart that is not itself the auto chart), for 처음 들은 코드. */
+let storedAuto: Chart | null = null;
 /** Lyrics for chartKey (null = none / not loaded) and the request bookkeeping. */
 let lyrics: Lyrics | null = null;
 let lyricsNote = '';
@@ -246,8 +248,11 @@ async function reloadChart(): Promise<void> {
 async function refreshPendingAuto(): Promise<void> {
   const r = player?.recording;
   pendingAuto = null;
+  storedAuto = null;
   if (r && chart && chart.provenance.createdBy !== 'recognizer' && hasChrome) {
     const auto = await loadAutoChart(r.source, r.id);
+    // 처음 들은 코드 of events fixed before ChordEvent.auto existed comes from this chart.
+    storedAuto = auto;
     // An edited auto chart keeps the auto chart's createdAt: that auto chart is its base, not news.
     const base = auto && chart.provenance.createdBy === 'edited' && auto.provenance.createdAt === chart.provenance.createdAt;
     if (auto && !base) pendingAuto = auto;
@@ -1025,6 +1030,19 @@ async function acceptAlt(i: number): Promise<void> {
     (r) => acceptChartAlt(r.source, r.id, u.ref, u.span),
     `바꿨어요: ${shown} → ${u.alt}`,
     '바꾸지 못했어요.',
+  );
+}
+
+/**
+ * 처음 코드로 되돌리기: the event plays its first recognized chord again, stored and undone like a fix (the
+ * service worker reads the stored auto chart itself for events fixed before ChordEvent.auto).
+ */
+function restoreFirst(event: EventRef, names: { from: string; to: string }): Promise<void> {
+  return storeChartChange(
+    (c) => restoreAutoChord(c, event),
+    (r) => restoreChartAuto(r.source, r.id, event),
+    `바꿨어요: ${names.from} → ${names.to}`,
+    '되돌리지 못했어요.',
   );
 }
 
@@ -1880,6 +1898,8 @@ async function main(): Promise<void> {
     mark: (sec) => screen.markFix(sec),
     save: saveFix,
     acceptAlt,
+    restore: restoreFirst,
+    storedAutoAt: (sec) => (!demo && storedAuto ? autoChordAt(storedAuto, sec) : null),
   });
   $('fix-undo').onclick = () => void undoFix();
   if (hasChrome) {
