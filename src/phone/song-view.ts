@@ -11,6 +11,7 @@ import type { Timing } from '../chart/types';
 import { findEventIndex } from '../extension/playview';
 import { bigBeatIndexAt, bigBeatInfo, bigBeatsUntil, type BigBeat } from '../music/meter';
 import type { PlayModel } from '../play/model';
+import type { UncertainMark } from '../play/uncertain';
 
 export const SONG_VIEW_LIMITS = {
   events: 3000,
@@ -49,6 +50,13 @@ export interface SongView {
    * index into `shapes`, -1 for a rest and -2 for a chord without a shape (shown as N.C.).
    */
   events: number[];
+  /**
+   * Events holding a visible uncertain stretch (VGT-19), as ascending indices into the event triples:
+   * the phone draws a small "?" after their name. Only a yes/no per event, never the second choice.
+   * Absent when there is none, the panel's 불확실한 곳 표시 is off, or the relay does not take it
+   * (panels and relays before this field never send it, and old relays reject a view carrying it).
+   */
+  uncertain?: number[];
   /** Flat pairs per lane bar: startSec, endSec. */
   bars: number[];
   /** Section name, its first bar index and its start time. */
@@ -78,8 +86,23 @@ export interface SongViewOptions {
   showSounding: boolean;
 }
 
+/**
+ * Arranged events the phone marks with "?": for every chord mark (a no-chord stretch has no name on
+ * the phone), the event under the mark's middle, the one uncertainMarks matched to the span's chord.
+ */
+export function uncertainEvents(events: readonly { startSec: number; endSec: number; rest: boolean }[], marks: readonly Pick<UncertainMark, 'fromSec' | 'toSec' | 'noChord'>[]): number[] {
+  const out = new Set<number>();
+  for (const u of marks) {
+    if (u.noChord) continue;
+    const mid = (u.fromSec + u.toSec) / 2;
+    const i = events.findIndex((e) => mid >= e.startSec && mid < e.endSec);
+    if (i >= 0 && !events[i].rest) out.add(i);
+  }
+  return [...out].sort((a, b) => a - b);
+}
+
 /** The song view of a play model; null when it exceeds the limits (the phone then shows no song). */
-export function buildSongView(m: Pick<PlayModel, 'arrangement' | 'labels' | 'stripKeys' | 'bars' | 'sections' | 'timing' | 'durationSec'>, opts: SongViewOptions): SongView | null {
+export function buildSongView(m: Pick<PlayModel, 'arrangement' | 'labels' | 'stripKeys' | 'bars' | 'sections' | 'timing' | 'durationSec'> & { uncertain?: PlayModel['uncertain'] }, opts: SongViewOptions): SongView | null {
   const shapes: ShapeView[] = [];
   const byKey = new Map<string, number>();
   const events: number[] = [];
@@ -118,6 +141,8 @@ export function buildSongView(m: Pick<PlayModel, 'arrangement' | 'labels' | 'str
     bars: m.bars.flatMap((b) => [ms(b.startSec), ms(Math.max(b.startSec, b.endSec))]),
     sections: m.sections.map((s) => [safeText(s.name, SONG_VIEW_LIMITS.sectionName) || '–', s.firstBar, ms(s.startSec)]),
   };
+  const flagged = uncertainEvents(m.arrangement.events, m.uncertain ?? []);
+  if (flagged.length) view.uncertain = flagged;
   return validateSongView(view);
 }
 
@@ -149,7 +174,7 @@ function sixOf(v: unknown, ok: (x: unknown) => boolean): boolean {
 /** A validated copy of a song view (unknown fields dropped by construction), or null. */
 export function validateSongView(v: unknown): SongView | null {
   const L = SONG_VIEW_LIMITS;
-  if (!isObj(v) || !onlyKeys(v, ['v', 'title', 'artist', 'capo', 'showSounding', 'durationSec', 'timing', 'shapes', 'events', 'bars', 'sections'])) return null;
+  if (!isObj(v) || !onlyKeys(v, ['v', 'title', 'artist', 'capo', 'showSounding', 'durationSec', 'timing', 'shapes', 'events', 'uncertain', 'bars', 'sections'])) return null;
   if (v.v !== 1 || !text(v.title, L.text) || !text(v.artist, L.text) || !int(v.capo, 0, 12) || typeof v.showSounding !== 'boolean') return null;
   if (!finite(v.durationSec, 0, L.durationSec)) return null;
   const t = v.timing;
@@ -180,6 +205,13 @@ export function validateSongView(v: unknown): SongView | null {
     if (!finite(ev[i], T_MIN, T_MAX) || !finite(ev[i + 1], ev[i], T_MAX) || !int(ev[i + 2], NO_SHAPE, shapes.length - 1)) return null;
     if (i > 0 && ev[i] < ev[i - 3]) return null;
   }
+  let uncertain: number[] | undefined;
+  if (v.uncertain !== undefined) {
+    const u = v.uncertain;
+    if (!Array.isArray(u) || u.length > ev.length / 3) return null;
+    for (let i = 0; i < u.length; i++) if (!int(u[i], 0, ev.length / 3 - 1) || (i > 0 && u[i] <= u[i - 1])) return null;
+    uncertain = [...(u as number[])];
+  }
   const bars = v.bars;
   if (!Array.isArray(bars) || bars.length % 2 !== 0 || bars.length / 2 > L.bars) return null;
   for (let i = 0; i < bars.length; i += 2) {
@@ -194,7 +226,7 @@ export function validateSongView(v: unknown): SongView | null {
   }
   const timing: SongView['timing'] = { bpm: t.bpm, beatsPerBar: t.beatsPerBar, beatUnit: t.beatUnit, firstDownbeatSec: t.firstDownbeatSec };
   if (beatTimes) timing.beatTimes = beatTimes;
-  return {
+  const out: SongView = {
     v: 1,
     title: v.title,
     artist: v.artist,
@@ -207,6 +239,15 @@ export function validateSongView(v: unknown): SongView | null {
     bars: [...(bars as number[])],
     sections,
   };
+  if (uncertain) out.uncertain = uncertain;
+  return out;
+}
+
+/** The view without its "?" marks: what a relay that did not announce them can take. */
+export function withoutUncertain(view: SongView): SongView {
+  if (view.uncertain === undefined) return view;
+  const { uncertain: _, ...rest } = view;
+  return rest;
 }
 
 // ---------- reading a song view (phone) ----------
@@ -215,14 +256,16 @@ export interface PhoneSong {
   view: SongView;
   timing: Timing;
   big: BigBeat;
-  events: { startSec: number; endSec: number; shape: number }[];
+  /** `uncertain`: the event holds a visible uncertain stretch (a "?" after its name). */
+  events: { startSec: number; endSec: number; shape: number; uncertain: boolean }[];
   bars: { startSec: number; endSec: number }[];
 }
 
 export function readSongView(view: SongView): PhoneSong {
   const timing: Timing = { ...view.timing };
+  const flagged = new Set(view.uncertain ?? []);
   const events = [];
-  for (let i = 0; i < view.events.length; i += 3) events.push({ startSec: view.events[i]!, endSec: view.events[i + 1]!, shape: view.events[i + 2]! });
+  for (let i = 0; i < view.events.length; i += 3) events.push({ startSec: view.events[i]!, endSec: view.events[i + 1]!, shape: view.events[i + 2]!, uncertain: flagged.has(i / 3) });
   const bars = [];
   for (let i = 0; i < view.bars.length; i += 2) bars.push({ startSec: view.bars[i]!, endSec: view.bars[i + 1]! });
   return { view, timing, big: bigBeatInfo(timing), events, bars };
@@ -233,6 +276,9 @@ export interface PhoneFrame {
   nowEvent: number;
   /** Next change of shape (the play view's next strip slot), -1 when none is known. */
   nextEvent: number;
+  /** The current / next chord holds an uncertain stretch: a small "?" after its name. */
+  nowUncertain: boolean;
+  nextUncertain: boolean;
   /** Whole big beats until `nextEvent` starts (0 when there is none). */
   beatsLeft: number;
   /** Lane bar under the playhead, -1 outside every bar. */
@@ -299,7 +345,9 @@ export function phoneFrame(s: PhoneSong, t: number): PhoneFrame {
   s.view.sections.forEach(([, firstBar, startSec], k) => {
     if (bar >= firstBar || (bar < 0 && t >= startSec)) section = k;
   });
-  return { nowEvent, nextEvent, beatsLeft, bar, bigInBar, barFraction, section };
+  const nowUncertain = nowEvent >= 0 && ev[nowEvent]!.uncertain;
+  const nextUncertain = nextEvent >= 0 && ev[nextEvent]!.uncertain;
+  return { nowEvent, nextEvent, nowUncertain, nextUncertain, beatsLeft, bar, bigInBar, barFraction, section };
 }
 
 /** Voicing for the diagram renderer (renderShapeDiagram reads chord, frets and fingers). */

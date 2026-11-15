@@ -41,7 +41,7 @@ import {
   type PhoneEntry,
   type SongPartMessage,
 } from '../../phone/protocol';
-import type { SongView } from '../../phone/song-view';
+import { withoutUncertain, type SongView } from '../../phone/song-view';
 import { SONG_CHANGED, type CommandContext } from './phone-control';
 
 export type PhoneStatus =
@@ -136,6 +136,12 @@ export class PhoneLink {
   /** The revision phones have and the player target it was published for; null while none may be acted on. */
   private published: { rev: number; target: string | null } | null = null;
   private parts: SongPartMessage[] = [];
+  /** The whole view `parts` were made from (with its "?" marks even when they were left out). */
+  private partsView: SongView | null = null;
+  /** `parts` carry the "?" marks (VGT-19). */
+  private partsUncertain = false;
+  /** The connected relay announced it takes the "?" marks (caps); reset on every new connection. */
+  private relayUncertain = false;
   private lastAnchor: AnchorMessage | null = null;
   private control = false;
   /** The phone list shown: the relay's, with 'approved' only for the phone holding the grant. */
@@ -330,8 +336,29 @@ export class PhoneLink {
   private publishSong(view: SongView, target: string | null | typeof NOT_READY): void {
     this.rev++;
     this.published = target === NOT_READY ? null : { rev: this.rev, target };
-    this.parts = songParts(view, this.epoch, this.rev) ?? songParts(EMPTY_SONG, this.epoch, this.rev)!;
+    this.makeParts(view);
     if (this.isOpen()) for (const p of this.parts) this.send(p);
+  }
+
+  /**
+   * The same song again as a new revision because the relay's caps changed what may be sent (the "?"
+   * marks). The published binding keeps its target and follows the new revision in place, so a
+   * command already running for this song is not cut off.
+   */
+  private republish(): void {
+    if (!this.partsView) return;
+    this.rev++;
+    if (this.published) this.published.rev = this.rev;
+    this.makeParts(this.partsView);
+    if (this.isOpen()) for (const p of this.parts) this.send(p);
+  }
+
+  /** Parts of `view` at this.rev; its "?" marks only for a relay that announced them (old relays reject them). */
+  private makeParts(view: SongView): void {
+    const sent = this.relayUncertain ? view : withoutUncertain(view);
+    this.partsView = view;
+    this.partsUncertain = sent.uncertain !== undefined;
+    this.parts = songParts(sent, this.epoch, this.rev) ?? songParts(EMPTY_SONG, this.epoch, this.rev)!;
   }
 
   private send(m: unknown): void {
@@ -360,7 +387,10 @@ export class PhoneLink {
       this.seen.clear();
       this.setGrant(null);
       if (this.control) this.send({ t: 'control', on: true });
+      // Until this relay announces the "?" marks it may be one that rejects them.
+      this.relayUncertain = false;
       if (!this.parts.length) this.publishSong(this.songJson ? (JSON.parse(this.songJson) as SongView) : EMPTY_SONG, this.songTarget);
+      else if (this.partsUncertain) this.republish();
       else for (const p of this.parts) this.send(p);
       this.lastAnchor = null;
       this.tick();
@@ -377,7 +407,12 @@ export class PhoneLink {
       const m = validateRelayToPanel(String(ev.data));
       if (!m) return; // ignore anything else
       if (m.t === 'viewers') this.setStatus({ kind: 'connected', viewers: m.n });
-      else if (m.t === 'phones') this.relayList(this.control ? m.list : []);
+      else if (m.t === 'caps') {
+        const had = this.relayUncertain;
+        this.relayUncertain = m.uncertain;
+        // The song went out without its marks: send it again with them (a pending song gets them anyway).
+        if (!had && m.uncertain && !this.songTimer && this.partsView?.uncertain && !this.partsUncertain) this.republish();
+      } else if (m.t === 'phones') this.relayList(this.control ? m.list : []);
       else this.onCommand(m, ws);
     };
     ws.onclose = (ev) => {

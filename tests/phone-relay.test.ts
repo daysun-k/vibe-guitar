@@ -126,6 +126,8 @@ describe('relay: what a phone receives', () => {
     pub.write(Buffer.concat([Buffer.from(upgradeRequest('/publish', `127.0.0.1:${pubPort}`, EXT_ORIGIN), 'latin1'), ...song.map(frame), frame(anchor)]));
     await new Promise((r) => setTimeout(r, 150));
     const res = (await raw(viewerPort, upgradeRequest(`/viewer?t=${relay.token}`, relay.lanHost, `http://${relay.lanHost}`))).toString('utf8');
+    // the panel is told once that this relay takes the per-chord "?" marks (VGT-19)
+    expect(Buffer.concat(fromRelay).toString('utf8')).toContain('{"t":"caps","uncertain":true}');
     expect(res).toContain('"t":"publisher","connected":true');
     expect(res).toContain('"t":"song"');
     expect(res).toContain('\\"title\\":\\"시험\\"');

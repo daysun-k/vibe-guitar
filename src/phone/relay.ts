@@ -19,6 +19,7 @@ import {
   DEFAULT_PUBLISHER_PORT,
   DEFAULT_VIEWER_PORT,
   MAX_MESSAGE_BYTES,
+  RELAY_CAPS,
   SongAssembler,
   isNewer,
   publisherAllowed,
@@ -491,6 +492,8 @@ export async function startRelay(opts: RelayOptions): Promise<Relay> {
     disarmIdleStop();
     log(`publisher connected (${info.origin})`);
     toViewers(JSON.stringify({ t: 'publisher', connected: true }));
+    // What this relay's song view check and phone page take beyond the first version (the "?" marks).
+    conn.send(JSON.stringify(RELAY_CAPS));
     tellPublisherCount();
     tellPublisherPhones();
     conn.start(head);

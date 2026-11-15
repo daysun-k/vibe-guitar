@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { slashChordHTML, splitSlashBass } from '../src/extension/sidepanel/chord-name';
 import { renderShapeDiagram } from '../src/extension/sidepanel/diagram';
 import { FIT_MIN_PX, fitFontPx } from '../src/phone/fit';
-import { AD_TEXT, COUNTIN_TEXT, FAILURE_TEXT, NO_POSITION_TEXT, beatSegments, outcomeText, statusLine, toggleLook } from '../src/phone/stand';
+import { AD_TEXT, COUNTIN_TEXT, FAILURE_TEXT, NO_POSITION_TEXT, beatSegments, chordNameHTML, outcomeText, statusLine, toggleLook } from '../src/phone/stand';
 
 const html = readFileSync(new URL('../src/phone/viewer.html', import.meta.url), 'utf8');
 const script = readFileSync(new URL('../src/phone/viewer.ts', import.meta.url), 'utf8');
@@ -44,8 +44,8 @@ describe('phone page CSS', () => {
       ...[...script.matchAll(/class=\\?"([\w-]+)/g)].map((m) => m[1]!),
     ]);
     const svgClasses = new Set([...svg.matchAll(/class="([^"]*)"/g)].flatMap((m) => m[1]!.split(/\s+/)));
-    // Chord names as the page draws them (setChordName → slashChordHTML).
-    const nameClasses = new Set([...slashChordHTML('C♯m7♭5/G♯').matchAll(/class="([^"]*)"/g)].flatMap((m) => m[1]!.split(/\s+/)));
+    // Chord names as the page draws them (setChordName → chordNameHTML, with the uncertain "?").
+    const nameClasses = new Set([...chordNameHTML('C♯m7♭5/G♯', true).matchAll(/class="([^"]*)"/g)].flatMap((m) => m[1]!.split(/\s+/)));
     for (const c of classes) {
       const used = markupClasses.has(c) || svgClasses.has(c) || scriptClasses.has(c) || nameClasses.has(c);
       expect(used, `.${c}`).toBe(true);
@@ -99,10 +99,10 @@ describe('VGT-16 phone page never gets wider than the screen', () => {
   });
 
   it('the slash bass is drawn smaller inside the fitted name, so fitting measures and shrinks it too', () => {
-    // Both names go through setChordName (escaped slashChordHTML), never plain text or raw innerHTML.
-    expect(script).toContain("setChordName('now-name', n.name);");
-    expect(script).toContain("setChordName('next-name', n.name);");
-    expect(script).toContain('el.innerHTML = slashChordHTML(name);');
+    // Both names go through setChordName (escaped slashChordHTML via chordNameHTML), never plain text or raw innerHTML.
+    expect(script).toContain("setChordName('now-name', n.name, f.nowUncertain);");
+    expect(script).toContain("setChordName('next-name', n.name, f.nextUncertain);");
+    expect(script).toContain('el.innerHTML = chordNameHTML(name, uncertain);');
     expect(script).not.toMatch(/setText\('(now|next)-name'/);
     // em-sized inside .chord: fitText sets the .chord font size, scrollWidth includes the bass span.
     const bass = rule(portrait, '.chord .slash-bass');

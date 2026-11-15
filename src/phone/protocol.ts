@@ -317,11 +317,25 @@ export function validatePanelMessage(text: string): PanelMessage | null {
   }
 }
 
+/**
+ * Relay -> panel, sent once when the panel connects: the song view fields this relay (and the phone
+ * page it serves) takes beyond the first version. `uncertain`: the per-chord "?" marks (VGT-19). A
+ * relay that never sends it rejects a view carrying them, so the panel leaves them out until it has
+ * this. Unknown extra keys are ignored, so a later relay can name more.
+ */
+export interface CapsMessage {
+  t: 'caps';
+  uncertain: boolean;
+}
+
+export const RELAY_CAPS: CapsMessage = { t: 'caps', uncertain: true };
+
 /** Relay -> panel messages the panel acts on, or null (the panel ignores anything else). */
-export function validateRelayToPanel(text: string): { t: 'viewers'; n: number } | PhonesMessage | ForwardedCommand | null {
+export function validateRelayToPanel(text: string): { t: 'viewers'; n: number } | PhonesMessage | ForwardedCommand | CapsMessage | null {
   const v = parseJson(text);
   if (!isObj(v)) return null;
   if (v.t === 'viewers') return onlyKeys(v, ['t', 'n']) && int(v.n, 0, 1000) ? { t: 'viewers', n: v.n } : null;
+  if (v.t === 'caps') return { t: 'caps', uncertain: v.uncertain === true };
   if (v.t === 'cmd') return validCommand(v, true) as ForwardedCommand | null;
   if (v.t !== 'phones' || !onlyKeys(v, ['t', 'list']) || !Array.isArray(v.list) || v.list.length > 16) return null;
   const list: PhoneEntry[] = [];
