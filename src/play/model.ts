@@ -15,7 +15,7 @@ import { LYRICS_LIMITS } from '../lyrics/lrclib';
 import type { Lyrics } from '../lyrics/types';
 import { prettyChord, shapeName, type KeyEstimate } from '../music/key';
 import { bigBeatIndexAt, bigBeatInfo, bigBeatsUntil, type BigBeat, type PhaseEstimate } from '../music/meter';
-import { buildLane, buildSections, droppedSeventh, simpleShape, stripItems, type LaneBar, type LaneSection, type StripItem } from './lane';
+import { buildLane, buildSections, droppedSeventh, flagWholeSegments, simpleShape, stripItems, type LaneBar, type LaneSection, type StripItem } from './lane';
 import { markAt, uncertainMarks, type UncertainMark } from './uncertain';
 
 export interface PlayOptions {
@@ -28,6 +28,12 @@ export interface PlayOptions {
   allowRootChange?: boolean;
   /** 불확실한 곳 표시 (VGT-19): mark uncertain stretches and offer the second choice. Default on. */
   showUncertain?: boolean;
+  /**
+   * Temporary lane variant of the uncertain marks (side panel `lv`, until the user picks one):
+   * 1 (default) cuts lane segments at stretch bounds; 2 keeps the lane cut only at chords and puts
+   * one "?" on each chord overlapping a stretch. Display only.
+   */
+  laneVariant?: 1 | 2;
 }
 
 export interface EventLabel {
@@ -128,7 +134,16 @@ export function buildPlayModel(source: Chart, opts: PlayOptions, rawLyrics: Lyri
     return i >= 0 ? labels[i].name : null;
   };
   const uncertain = uncertainMarks(source, arrangement, key, timing, labelAt, opts.showUncertain !== false, { level: opts.level, capo, profile: opts.profile, allowRootChange: opts.allowRootChange });
-  const bars = buildLane(arrangement, timing, big, Math.min(durationSec, coverEnd + 0.01), (i) => keys[i] || labels[i].name, (i) => !!arrangement.events[i]?.change, uncertain.length ? uncertain : undefined);
+  const laneEnd = Math.min(durationSec, coverEnd + 0.01);
+  const keyOf = (i: number) => keys[i] || labels[i].name;
+  const changedAt = (i: number) => !!arrangement.events[i]?.change;
+  const bars =
+    opts.laneVariant === 2
+      ? flagWholeSegments(
+          buildLane(arrangement, timing, big, laneEnd, keyOf, changedAt),
+          uncertain.map((u) => ({ fromSec: u.fromSec, toSec: u.toSec, event: arrangement.events.findIndex((e) => (u.fromSec + u.toSec) / 2 >= e.startSec && (u.fromSec + u.toSec) / 2 < e.endSec) })),
+        )
+      : buildLane(arrangement, timing, big, laneEnd, keyOf, changedAt, uncertain.length ? uncertain : undefined);
 
   // Lyrics are optional: anything wrong with them degrades to "no lyrics", never to no chords.
   let lyrics: Lyrics | null = null;

@@ -17,7 +17,7 @@ export interface LaneSegment {
   endSec: number;
   /** Width in big beats (≥ 1; fractional, ≥ 1/3, in a bar cut at an uncertain stretch). */
   weight: number;
-  /** Index into the `flags` passed to buildLane of the uncertain stretch this segment draws, -1 when none. */
+  /** Index into the `flags` passed to buildLane (or flagWholeSegments) of the uncertain stretch this segment draws, -1 when none. */
   flag: number;
 }
 
@@ -152,6 +152,33 @@ export function buildLane(a: Arrangement, t: Timing, big: BigBeat, toSec: number
     prevKey = keys[keys.length - 1];
     prevEvent = segments[segments.length - 1]?.event ?? -1;
     return { ...b, segments, repeat };
+  });
+}
+
+/**
+ * Lane variant 2 (temporary `lv=2`, VGT-19 quiet marks): `bars` is the lane built without stretches
+ * (cut only at chords, exactly as before VGT-19); each chord segment that overlaps a stretch drawn on
+ * its own chord gets that stretch in `flag` (the one overlapping it most), so the whole chord carries
+ * one "?". `flags[k].event` is the arrangement event drawn under stretch k. Bounds within 0.1 s of a
+ * bar line are treated as in buildLane (flagsInBar), so a sliver past a bar line flags nothing there.
+ */
+export function flagWholeSegments(bars: readonly LaneBar[], flags: readonly { fromSec: number; toSec: number; event: number }[]): LaneBar[] {
+  return bars.map((b) => {
+    const inBar = flagsInBar(flags, b.startSec, b.endSec);
+    const segments = b.segments.map((s) => {
+      let flag = -1;
+      let bestLen = 1e-6;
+      for (const f of inBar) {
+        if (s.event < 0 || flags[f.index].event !== s.event) continue;
+        const len = Math.min(s.endSec, f.toSec) - Math.max(s.startSec, f.fromSec);
+        if (len > bestLen) {
+          flag = f.index;
+          bestLen = len;
+        }
+      }
+      return { ...s, flag };
+    });
+    return { ...b, segments };
   });
 }
 
