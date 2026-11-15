@@ -250,6 +250,16 @@ describe('editor save of a loaded auto chart', () => {
     expect(r.chart.coverage).toEqual(existing.coverage);
   });
 
+  it('unchanged or one chord changed: the "?" stretches stay stored (first-session check F10)', () => {
+    const existing: Chart = { ...auto(), uncertain: [{ fromSec: 2.5, toSec: 3.5, chord: 'G#', alt: 'E', replace: true }, { fromSec: 20.5, toSec: 21, chord: 'F', alt: 'Dm' }] };
+    const same = buildChartDetailed({ ...base, chords: ['C', 'A♭', 'Am', 'F'], stamps: existing.events.map((e) => e.startSec), existing });
+    expect(same.chart.uncertain).toEqual(existing.uncertain);
+    const one = buildChartDetailed({ ...base, chords: ['C', 'Em', 'Am', 'F'], stamps: existing.events.map((e) => e.startSec), existing });
+    expect(one.chart.uncertain).toEqual(existing.uncertain);
+    const restamped = buildChartDetailed({ ...base, chords: ['C', 'G#', 'Am', 'F'], stamps: [0, 2.5, 4, 20], existing });
+    expect(restamped.chart.uncertain).toBeUndefined();
+  });
+
   it('re-stamped times: today’s behaviour, reported as lost', () => {
     const existing = auto();
     const r = buildChartDetailed({ ...base, chords: ['C', 'G#', 'Am', 'F'], stamps: [0, 2.5, 4, 20], existing });
