@@ -68,17 +68,23 @@
               },
               "split": {
                 "type": "object",
-                "description": "What that split created: the original event's start and whether a leading (head) and a trailing (tail) auto fragment were made.",
+                "description": "What that split created: the original event's start and whether a leading (head) and a trailing (tail) auto fragment were made. Without span (코드 고치기 at a \"?\" stretch) it names the fixed stretch in fromSec/toSec.",
                 "additionalProperties": false,
                 "required": ["startSec", "head", "tail"],
                 "properties": {
                   "startSec": { "type": "number", "minimum": 0 },
                   "head": { "type": "boolean" },
-                  "tail": { "type": "boolean" }
-                }
+                  "tail": { "type": "boolean" },
+                  "fromSec": { "type": "number", "minimum": 0 },
+                  "toSec": { "type": "number", "minimum": 0 }
+                },
+                "dependencies": { "fromSec": ["toSec"], "toSec": ["fromSec"] }
               }
             },
-            "dependencies": { "span": ["split"], "split": ["span"] }
+            "dependencies": { "span": ["split"] },
+            "if": { "required": ["span"] },
+            "then": { "properties": { "split": { "not": { "anyOf": [{ "required": ["fromSec"] }, { "required": ["toSec"] }] } } } },
+            "else": { "properties": { "split": { "required": ["fromSec", "toSec"] } } }
           }
         },
         "if": { "properties": { "source": { "const": "auto" } } },

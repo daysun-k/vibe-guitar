@@ -15,6 +15,53 @@ export interface EventRef {
   chord: string;
 }
 
+/**
+ * The "?" stretch of an event that 코드 고치기 fixes at a "?" stop (seconds, [fromSec, toSec)), with the
+ * stored spans the lane joined to draw it (`parts`, in time order), so a save can check that the same
+ * stretch is still drawn (stretchIsCurrent).
+ */
+export interface FixStretch {
+  fromSec: number;
+  toSec: number;
+  parts: { fromSec: number; toSec: number }[];
+}
+
+/** Largest gap (s) between two marks of one chord event drawn as one lane stretch (VGT-19 Amendment 2). */
+export const LANE_JOIN_GAP_SEC = 0.5;
+
+/**
+ * The lane's join rule (laneStretches): a mark joins the stretch drawn so far (whose first mark is
+ * `head`, which reaches `curToSec`) when it belongs to the same stored chord event, names the same chord
+ * and starts at most LANE_JOIN_GAP_SEC after the stretch's end.
+ */
+export function laneJoins(head: { eventStartSec: number; chord: string }, curToSec: number, next: { eventStartSec: number; chord: string; fromSec: number }): boolean {
+  return next.eventStartSec === head.eventStartSec && next.chord === head.chord && next.fromSec - curToSec <= LANE_JOIN_GAP_SEC + 1e-9;
+}
+
+/**
+ * True when `stretch` is still a stretch the lane draws from the chart's current stored spans of the
+ * event `ref` (the save-time check of a "?" stop fix, the same rule as the stop list): every part is a
+ * stored span still shown on that event (uncertainSpanEvent), the parts are in time order and chain
+ * under laneJoins, and they span exactly [fromSec, toSec). A part removed, moved or re-chorded, a chain
+ * now broken by a missing middle span, or an event with another chord makes it stale.
+ */
+export function stretchIsCurrent(chart: Chart, ref: EventRef, stretch: FixStretch): boolean {
+  const i = findEvent(chart, ref);
+  const parts = stretch.parts;
+  if (i < 0 || !Array.isArray(parts) || !parts.length) return false;
+  const spans = (chart.uncertain ?? []).filter((s) => uncertainSpanEvent(chart, s) === i);
+  const found = parts.map((p) => spans.find((s) => s.fromSec === p?.fromSec && s.toSec === p?.toSec));
+  if (found.some((s) => !s)) return false;
+  const head = { eventStartSec: chart.events[i].startSec, chord: found[0]!.chord };
+  let to = found[0]!.toSec;
+  for (let k = 1; k < found.length; k++) {
+    const s = found[k]!;
+    if (s.fromSec < found[k - 1]!.fromSec || !laneJoins(head, to, { eventStartSec: head.eventStartSec, chord: s.chord, fromSec: s.fromSec })) return false;
+    to = Math.max(to, s.toSec);
+  }
+  return found[0]!.fromSec === stretch.fromSec && to === stretch.toSec;
+}
+
 /** The chart changed since the panel showed it (the event is gone or has another chord). */
 export class CorrectionConflict extends Error {}
 
@@ -145,6 +192,42 @@ export function acceptUncertainAlt(chart: Chart, ref: EventRef, span: UncertainS
 }
 
 /**
+ * 코드 고치기 at a "?" stop: a copy of the chart where only the stretch [fromSec, toSec) of the auto event
+ * `ref` plays `chord`. The event is split at the stretch bounds like acceptUncertainAlt: the head before
+ * and the tail after keep the auto chord with its confidence; the stretch becomes a manual event
+ * (confidence 1) remembering the auto chord and the split (`auto.split` with the stretch's own bounds, no
+ * span: no span is consumed), so restoreAutoChord merges the fragments back exactly. The uncertain spans
+ * inside the stretch stay stored (hidden while the stretch is manual, shown again once restored). Empty
+ * heads/tails are not created. A CorrectionConflict when the event changed meanwhile, is no longer an
+ * auto event, or the stretch is no longer drawn from its current stored spans (stretchIsCurrent).
+ */
+export function correctChordStretch(chart: Chart, ref: EventRef, stretch: FixStretch, chord: string, now: Date = new Date()): Chart {
+  const conflict = () => new CorrectionConflict('코드표가 그 사이에 바뀌었어요. 다시 골라 주세요.');
+  const i = findEvent(chart, ref);
+  if (i < 0) throw conflict();
+  const e = chart.events[i];
+  const end = eventEndSec(chart, i);
+  if (e.source !== 'auto' || !(stretch.fromSec >= e.startSec - EDGE_SEC && stretch.toSec <= end + EDGE_SEC && stretch.toSec > stretch.fromSec)) throw conflict();
+  // The stretch the panel showed is still drawn from this event's stored spans (review fix-stops-at-marks-r1 F1).
+  if (!stretchIsCurrent(chart, ref, stretch)) throw conflict();
+  const head = stretch.fromSec - e.startSec > EDGE_SEC;
+  const tail = end - stretch.toSec > EDGE_SEC;
+  const parts: ChordEvent[] = [];
+  if (head) parts.push(e);
+  const split = { startSec: e.startSec, head, tail, fromSec: stretch.fromSec, toSec: stretch.toSec };
+  parts.push({ startSec: head ? stretch.fromSec : e.startSec, chord: storedChord(chord), confidence: 1, source: 'manual', auto: { chord: e.chord, confidence: e.confidence, split } });
+  if (tail) parts.push({ ...e, startSec: stretch.toSec });
+  const out: Chart = {
+    ...chart,
+    events: [...chart.events.slice(0, i), ...parts, ...chart.events.slice(i + 1)],
+    provenance: { ...chart.provenance, createdBy: chart.provenance.createdBy === 'manual' ? 'manual' : 'edited', updatedAt: now.toISOString() },
+  };
+  const v = validateChart(out);
+  if (!v.ok) throw new Error(`corrected chart is invalid: ${v.errors.join('; ')}`);
+  return out;
+}
+
+/**
  * The auto chord of `auto` (the recording's stored auto chart) sounding at `sec`: its last event
  * starting at or before `sec`, while `sec` lies inside that event's heard range. Null when none.
  * Used for "처음 들은 코드" of events fixed before ChordEvent.auto existed.
@@ -175,9 +258,10 @@ export function firstHeard(e: ChordEvent, fallback: AutoOrigin | null): AutoOrig
 /**
  * "처음 코드로 되돌리기": a copy of the chart where a manual event plays its first recognized chord
  * again as an auto event (its `auto`, else `fallback` from the stored auto chart). An event made by
- * 2순위로 바꾸기 is merged back with the fragments that split recorded making (`auto.split`) while
- * each is still exactly that fragment, so the original event comes back exactly, and the consumed
- * span returns to `uncertain` (unless a span stored since overlaps it). An auto neighbour the split
+ * 2순위로 바꾸기 (or by 코드 고치기 at a "?" stretch, correctChordStretch) is merged back with the fragments
+ * that split recorded making (`auto.split`) while each is still exactly that fragment, so the original
+ * event comes back exactly, and a consumed span returns to `uncertain` (unless a span stored since
+ * overlaps it; a "?" stretch fix consumed none). An auto neighbour the split
  * did not make is never merged, even with the same chord and confidence; when a recorded fragment
  * changed (or the record is incomplete) only the chord comes back: no merge, no span. The chart becomes 'edited' like correctChordEvent. A CorrectionConflict
  * when the event changed meanwhile or there is nothing to restore.
@@ -193,6 +277,8 @@ export function restoreAutoChord(chart: Chart, ref: EventRef, fallback: AutoOrig
   let to = i + 1;
   const span = e.auto?.span;
   const split = e.auto?.split;
+  // The split stretch: the consumed span's bounds, or (코드 고치기 at a "?" stop) the split's own.
+  const bounds = span ?? (split?.fromSec !== undefined && split.toSec !== undefined ? { fromSec: split.fromSec, toSec: split.toSec } : undefined);
   let uncertain = chart.uncertain;
   // A fragment the split made, still exactly as made: auto, the original chord and confidence, at `startSec`.
   const fragment = (x: ChordEvent | undefined, startSec: number): x is ChordEvent =>
@@ -200,17 +286,19 @@ export function restoreAutoChord(chart: Chart, ref: EventRef, fallback: AutoOrig
   const prev = chart.events[i - 1];
   const next = chart.events[i + 1];
   const intact =
-    !!span &&
+    !!bounds &&
     !!split &&
-    e.startSec === (split.head ? span.fromSec : split.startSec) &&
+    e.startSec === (split.head ? bounds.fromSec : split.startSec) &&
     (!split.head || fragment(prev, split.startSec)) &&
-    (!split.tail || fragment(next, span.toSec));
-  if (span && split && intact) {
+    (!split.tail || fragment(next, bounds.toSec));
+  if (bounds && split && intact) {
     if (split.head) {
       from = i - 1;
       restored = prev!;
     }
     if (split.tail) to = i + 2;
+  }
+  if (span && split && intact) {
     const list = chart.uncertain ?? [];
     const at = list.findIndex((s) => s.fromSec >= span.fromSec);
     const k = at < 0 ? list.length : at;

@@ -7,7 +7,7 @@ import { arrangeEvents, type Arrangement } from '../arrange/arrange';
 import { isNoChord } from '../arrange/chord';
 import type { Level, Profile } from '../arrange/levels';
 import type { Chart, Timing, UncertainSpan } from '../chart/types';
-import { sameChordSymbol, uncertainSpanEvent, type EventRef } from '../editor/correct';
+import { LANE_JOIN_GAP_SEC, laneJoins, sameChordSymbol, uncertainSpanEvent, type EventRef } from '../editor/correct';
 import { prettyChord, respellChord, shapeName, type KeyEstimate } from '../music/key';
 
 export interface VisibleSpan {
@@ -88,8 +88,7 @@ export function uncertainMarks(chart: Chart, arrangement: Arrangement, key: KeyE
   return out;
 }
 
-/** Largest gap (s) between two marks of one chord event drawn as one lane stretch (VGT-19 Amendment 2). */
-export const LANE_JOIN_GAP_SEC = 0.5;
+export { LANE_JOIN_GAP_SEC };
 
 /** A stretch the lane draws: one mark, or marks joined over small gaps. */
 export interface LaneStretch {
@@ -113,7 +112,7 @@ export function laneStretches(marks: readonly Pick<UncertainMark, 'fromSec' | 't
   for (const i of order) {
     const m = marks[i];
     const head: (typeof marks)[number] | undefined = cur ? marks[cur.parts[0]] : undefined;
-    if (cur && head && m.ref.startSec === head.ref.startSec && m.span.chord === head.span.chord && m.fromSec - cur.toSec <= LANE_JOIN_GAP_SEC + 1e-9) {
+    if (cur && head && laneJoins({ eventStartSec: head.ref.startSec, chord: head.span.chord }, cur.toSec, { eventStartSec: m.ref.startSec, chord: m.span.chord, fromSec: m.fromSec })) {
       cur.toSec = Math.max(cur.toSec, m.toSec);
       cur.parts.push(i);
     } else {

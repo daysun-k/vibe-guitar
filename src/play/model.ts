@@ -297,6 +297,20 @@ export function barsForChartEvent(m: Pick<PlayModel, 'chart' | 'arrangement' | '
   return at >= 0 ? [at] : [];
 }
 
+/**
+ * Lane bars (indexes into m.bars) drawing the "?" stretch named by its first mark `mark` (an index into
+ * m.uncertain; the lane's segments carry it in `flag`), for 코드 고치기's outline at a "?" stop. When the
+ * lane draws it nowhere, the bar holding the stretch start stands in.
+ */
+export function barsForUncertainStretch(m: Pick<PlayModel, 'bars' | 'uncertain'>, mark: number): number[] {
+  const u = m.uncertain[mark];
+  if (!u) return [];
+  const out = m.bars.flatMap((b, n) => (b.segments.some((s) => s.flag === mark) ? [n] : []));
+  if (out.length) return out;
+  const at = m.bars.findIndex((b) => u.fromSec + 0.001 >= b.startSec && u.fromSec + 0.001 < b.endSec);
+  return at >= 0 ? [at] : [];
+}
+
 /** Every bar occupied by this hard shape, including sustained events and repeat bars. */
 export function barsForHardChord(m: PlayModel, shape: string): number[] {
   return m.bars.flatMap((b, i) => b.segments.some((s) => s.event >= 0 && m.arrangement.events[s.event].shape === shape) ? [i] : []);

@@ -127,7 +127,20 @@ Port of the approved mockup B ("진행표형", diagrams 3x):
   loop repeats only seek and never count in. A speed change during a count-in cancels it ("속도가 바뀌어서
   카운트인을 멈췄어요. 다시 눌러 주세요.").
 - **Fixing one chord (코드 고치기)**: the button opens a small panel at the chord under the playhead (‹ ›
-  step to the previous/next chord event and seek there). Every lane bar the selected event is drawn in gets a
+  step to the previous/next stop and seek there). The stops, in time order: each chord event's start, then
+  every "?" stretch the lane draws inside that chord (marks joined over a small gap count once, as drawn; a
+  stretch covering its whole chord is no separate stop; only while 불확실한 곳 표시 is on), then the next chord,
+  so a "?" inside a long chord can be reached and fixed by itself. At a "?" stop the header names the stretch's
+  time ("0:17~0:19") with "자동으로 들은 코드 · 확실하지 않음" and the 대안 of the mark under the stop as before,
+  only the bars the stretch is drawn in are outlined, and "이 코드로 고치기" changes only that stretch: the chord
+  is split at the stretch bounds like a 대안 replacement (the parts before and after keep the auto chord; the
+  stretch becomes a manual chord whose `auto.split` records its own `fromSec`/`toSec`, no span is consumed),
+  sent as `correct-event` with `stretch` and the stored spans it was drawn from (`ChartStore.correctEvent` →
+  `correctChordStretch`). At save time `stretchIsCurrent` checks the stored chart with the lane's own join rule
+  (`laneJoins`): each of those spans still shown on that chord, chained left to right over gaps of at most
+  0.5 s, exactly from the stretch start to its end; otherwise (a span gone, so the drawing split, or the chord
+  changed) it is a conflict like any stale fix and nothing is stored. The "?" spans inside it stay stored, hidden while
+  it is fixed. At a chord event's own stop everything below is as before. Every lane bar the selected event is drawn in gets a
   dashed outline, so a chord held over several bars shows its whole range (the lane's own cuts decide: a
   sliver under 0.1 s it leaves out of a bar is not outlined); when the outlined bars do not all fit in view, the
   lane scrolls the first outlined row to the top, just under its section header. The header names the event's time range,
@@ -151,7 +164,8 @@ Port of the approved mockup B ("진행표형", diagrams 3x):
   되돌리기": one tap makes it the auto chord again; a chord made by 대안 is merged back with the parts that split
   made (only those, and only while each is still the untouched auto part; an auto chord that was already
   there, even the same chord, is never merged) and its span returns to `uncertain`, so the chart reads as
-  before the replacement. If one of those parts was changed since, only the chord comes back (no merge, no span).
+  before the replacement; a "?" stretch fixed at its own stop is merged back the same way (its "?" spans show
+  again). If one of those parts was changed since, only the chord comes back (no merge, no span).
   Chords fixed before this existed (no `auto`) get the recording's stored auto chart's chord at their start
   (`autochart:<source>:<id>`, only when it differs; none without an auto chart). It is stored like a fix
   (serialized `ChartStore.restoreAuto`, a conflict when the chart changed meanwhile, the status line "바꿨어요:
@@ -375,6 +389,21 @@ only: it does nothing while a real player is followed); then `document.getElemen
 코드 고치기 at that chord: at 12.4 s (verse Fm, replace tier) it shows the "대안: G" button, at 14.0 s or 15.0 s
 (verse C♯, info only) the text "대안: D", at 90.0 s (코드 없음) the "대안: G" button. After tapping a 대안 (or
 saving a fix), opening 코드 고치기 again at that chord shows "처음 들은 코드: Em" with "처음 코드로 되돌리기".
+
+**Hidden preview of a real chart (testing without the user's browser windows).** Serve the built `dist` and a
+chart JSON from one plain http server and open
+`http://<host>:<port>/sidepanel.html?demo=1&chart=<chart URL>&t=<seconds>`, for example
+`http://127.0.0.1:8765/sidepanel.html?demo=1&chart=charts/Q4W8RY3fxdI.json&t=14.2` (`chart`: relative to the
+page or absolute, URL-encoded when it has its own query; it must be on the same server). Automation such as
+`aside repl` opens plain http pages in its invisible context, so nothing appears in the user's windows. The
+page fetches only that URL (`credentials: same-origin`, no redirect), checks it with the chart validator and
+plays it as the demo's first choice ("… (미리보기)"): paused at `t`, no lyrics, 코드 고치기 working on the
+in-memory chart (never saved; no extension or web storage), the same `window.vibeGuitar` hooks as the demo,
+and the other demo parameters as above. A chart that does not load or validate shows "미리보기 코드표를 열지
+못했어요" with the reason (the import's "형식 오류: …" for an invalid chart) instead of the demo. Only a page
+served over http(s) takes `chart` (inside the extension it shows that error); without `chart` the demo is
+unchanged. Example: `python3 -m http.server 8765 --bind 127.0.0.1` in a scratch folder holding links to the
+`dist` files and a `charts` folder of chart JSONs (keep recordings' charts out of the repository).
 
 Opened outside the extension (file://) the page runs the synthetic demo with default settings, which is
 how `node scripts/screens.mjs` (after `npm run build`) writes `docs/screens/*.png` at 400 and 600 px, light

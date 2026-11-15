@@ -52,7 +52,8 @@ export interface AutoOrigin {
   /**
    * What that split created, so restoring folds back only its own fragments: the original event's
    * start, and whether a leading fragment (the auto event before, from `startSec`) and a trailing one
-   * (the auto event from `span.toSec`) were made. Always with `span`.
+   * (the auto event from the end of the split stretch) were made. With `span` (2순위로 바꾸기), or alone
+   * with its own `fromSec`/`toSec` (코드 고치기 at a "?" stretch, which consumes no span).
    */
   split?: SplitOrigin;
 }
@@ -62,6 +63,12 @@ export interface SplitOrigin {
   startSec: number;
   head: boolean;
   tail: boolean;
+  /**
+   * The stretch 코드 고치기 fixed at a "?" stop, when no span was consumed (then `AutoOrigin.span` is
+   * absent); both or neither, and never together with `AutoOrigin.span` (whose bounds are the split's).
+   */
+  fromSec?: number;
+  toSec?: number;
 }
 
 export interface CoverageRange {

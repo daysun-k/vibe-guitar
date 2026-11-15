@@ -55,14 +55,20 @@ function checkAutoOrigin(a: unknown, p: string, errors: string[]): void {
     return;
   }
   checkKeys(a, p, ['chord', 'confidence', 'span', 'split'], ['chord', 'confidence'], errors);
-  if ((a.span === undefined) !== (a.split === undefined)) errors.push(`${p}.span and ${p}.split go together`);
+  if (a.span !== undefined && a.split === undefined) errors.push(`${p}.span needs ${p}.split`);
   if (a.split !== undefined) {
     const sp = a.split;
     if (!isObj(sp)) errors.push(`${p}.split must be an object`);
     else {
-      checkKeys(sp, `${p}.split`, ['startSec', 'head', 'tail'], ['startSec', 'head', 'tail'], errors);
+      checkKeys(sp, `${p}.split`, ['startSec', 'head', 'tail', 'fromSec', 'toSec'], ['startSec', 'head', 'tail'], errors);
       if (!isNum(sp.startSec) || sp.startSec < 0) errors.push(`${p}.split.startSec must be a number >= 0`);
       if (typeof sp.head !== 'boolean' || typeof sp.tail !== 'boolean') errors.push(`${p}.split.head and .tail must be booleans`);
+      // Its own stretch exactly when no span was consumed (코드 고치기 at a "?" stop).
+      const own = sp.fromSec !== undefined || sp.toSec !== undefined;
+      if (a.span !== undefined && own) errors.push(`${p}.split.fromSec/toSec are not allowed with ${p}.span`);
+      if (a.span === undefined) {
+        if (!isNum(sp.fromSec) || !isNum(sp.toSec) || sp.fromSec < 0 || sp.toSec <= sp.fromSec) errors.push(`${p}.split without ${p}.span needs 0 <= fromSec < toSec`);
+      }
     }
   }
   checkChord(a.chord, `${p}.chord`, errors);
