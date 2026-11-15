@@ -98,6 +98,18 @@ export function changeLabel(c: { from: string; to: string; text: string; root: b
   return `원래 모양 ${c.from}, 바뀐 모양 ${c.to}${c.root ? '(근음 바뀜)' : ''}. ${c.text}`;
 }
 
+/**
+ * Lane scrollTop that shows 코드 고치기's outlined rows (client coordinates; `headSpace` is the sticky
+ * section header with its gap at the top of the lane): null when the first row's top and the last row's
+ * bottom are already in view, else the scrollTop putting the first row just under the header.
+ */
+export function fixScrollTop(g: { viewTop: number; viewBottom: number; scrollTop: number; headSpace: number; firstTop: number; lastBottom: number }): number | null {
+  const top = g.viewTop + g.headSpace;
+  if (g.firstTop >= top - 1 && g.lastBottom <= g.viewBottom + 1) return null;
+  const to = Math.max(0, g.scrollTop + g.firstTop - top);
+  return Math.abs(to - g.scrollTop) < 1 ? null : to;
+}
+
 /** Keeps `el` near 30 % of the scroller unless the user scrolled away ("현재 위치로" brings it back). */
 function follower(scroller: HTMLElement, btn: HTMLElement) {
   let free = false;
@@ -186,8 +198,8 @@ export class PlayScreen {
     addEventListener('resize', () => {
       this.last.line = -2;
     });
-    // The fixing panel, lyrics and diagrams resize the lane after it opens: keep the marked bar in view.
-    new ResizeObserver(() => this.lane.querySelector('.bar.fix-at')?.scrollIntoView({ block: 'nearest', behavior: 'instant' })).observe(this.lane);
+    // The fixing panel, lyrics and diagrams resize the lane after it opens: keep the marked bars in view.
+    new ResizeObserver(() => this.scrollToFix()).observe(this.lane);
   }
 
   private showSounding = false;
@@ -221,7 +233,7 @@ export class PlayScreen {
 
   /**
    * Dashed outline on every lane bar drawing chart event `event` (the chord being fixed, see
-   * barsForChartEvent); the first outlined bar is scrolled into view. null clears it.
+   * barsForChartEvent), scrolled into view by scrollToFix. null clears it.
    */
   markFix(event: number | null): void {
     const on = new Set(event === null || !this.m ? [] : barsForChartEvent(this.m, event));
@@ -229,8 +241,23 @@ export class PlayScreen {
     if (event === null) this.fol.reset();
     else if (on.size) {
       this.fol.release();
-      this.barEls[Math.min(...on)]?.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+      this.scrollToFix();
     }
+  }
+
+  /**
+   * Shows the outlined bars (코드 고치기): when they do not all fit in view, the row of the first one
+   * goes to the top of the lane, just under its section's sticky header, so the rest follow below it.
+   */
+  private scrollToFix(): void {
+    const bars = this.barEls.filter((b) => b.classList.contains('fix-at'));
+    if (!bars.length) return;
+    const row = (b: HTMLElement) => (b.closest<HTMLElement>('.row4') ?? b).getBoundingClientRect();
+    const h3 = bars[0].closest('.sec')?.querySelector<HTMLElement>('h3');
+    const headSpace = h3 ? h3.offsetHeight + (parseFloat(getComputedStyle(h3).marginBottom) || 0) : 0;
+    const view = this.lane.getBoundingClientRect();
+    const to = fixScrollTop({ viewTop: view.top, viewBottom: view.bottom, scrollTop: this.lane.scrollTop, headSpace, firstTop: row(bars[0]).top, lastBottom: row(bars[bars.length - 1]).bottom });
+    if (to !== null) this.lane.scrollTop = to;
   }
 
   private loopMarks: LoopMarks = { range: null, picking: null };

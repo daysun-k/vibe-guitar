@@ -6,7 +6,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Chart, ChordEvent, CoverageRange } from '../src/chart/types';
 import { ChordFixer, fixTimeText, type FixHost } from '../src/extension/sidepanel/fix';
-import { PlayScreen } from '../src/extension/sidepanel/play';
+import { PlayScreen, fixScrollTop } from '../src/extension/sidepanel/play';
 import { barsForChartEvent, buildPlayModel, chartEventRange, type PlayModel } from '../src/play/model';
 
 /** 120 bpm 4/4 (a bar is 2 s), heard 0–12 unless `coverage` says otherwise. */
@@ -102,38 +102,106 @@ describe('barsForChartEvent: the bars the lane draws the event in', () => {
   });
 });
 
+describe('fixScrollTop: where the lane scrolls for the outlined rows', () => {
+  // View 100–250, a 30 px sticky section header: rows show from 130 down.
+  const g = { viewTop: 100, viewBottom: 250, scrollTop: 0, headSpace: 30 };
+  it('rows that do not fit: the first row goes just under the header (start alignment)', () => {
+    expect(fixScrollTop({ ...g, firstTop: 195, lastBottom: 320 })).toBe(65);
+    expect(fixScrollTop({ ...g, scrollTop: 200, firstTop: -5, lastBottom: 120 })).toBe(65);
+  });
+  it('everything already visible: the lane stays', () => {
+    expect(fixScrollTop({ ...g, firstTop: 130, lastBottom: 250 })).toBeNull();
+    expect(fixScrollTop({ ...g, firstTop: 160, lastBottom: 220 })).toBeNull();
+  });
+  it('a first row hidden under the sticky header counts as not visible', () => {
+    expect(fixScrollTop({ ...g, scrollTop: 50, firstTop: 110, lastBottom: 170 })).toBe(30);
+  });
+  it('a range taller than the view whose first row is already at the top: the lane stays', () => {
+    expect(fixScrollTop({ ...g, firstTop: 130, lastBottom: 500 })).toBeNull();
+  });
+  it('never above the top of the lane', () => {
+    expect(fixScrollTop({ ...g, scrollTop: 10, firstTop: 105, lastBottom: 400 })).toBe(0);
+  });
+});
+
 describe('PlayScreen.markFix', () => {
-  const fakeBars = (n: number) =>
-    Array.from({ length: n }, () => {
+  afterEach(() => vi.unstubAllGlobals());
+  /**
+   * Fake lane, one section: a 24 px sticky header with a 6 px gap, then rows of four bars, 60 px tall
+   * every 65 px from content y 30. The view is client 100 to 100 + height.
+   */
+  const screen = (m: PlayModel, height: number) => {
+    vi.stubGlobal('getComputedStyle', () => ({ marginBottom: '6px' }));
+    const lane = { scrollTop: 0, getBoundingClientRect: () => ({ top: 100, bottom: 100 + height }) };
+    const sec = { querySelector: () => ({ offsetHeight: 24 }) };
+    const rows = Array.from({ length: Math.ceil(m.bars.length / 4) }, (_, r) => ({
+      getBoundingClientRect: () => {
+        const top = 100 + 30 + r * 65 - lane.scrollTop;
+        return { top, bottom: top + 60 };
+      },
+    }));
+    const barEls = m.bars.map((_, i) => {
       const on = new Set<string>();
       return {
         on,
-        classList: { toggle: (c: string, v: boolean) => (v ? on.add(c) : on.delete(c)) },
-        scrollIntoView: vi.fn(),
+        classList: { toggle: (c: string, v: boolean) => (v ? on.add(c) : on.delete(c)), contains: (c: string) => on.has(c) },
+        closest: (sel: string) => (sel === '.row4' ? rows[Math.floor(i / 4)] : sel === '.sec' ? sec : null),
       };
     });
-  const screen = (m: PlayModel) => {
-    const barEls = fakeBars(m.bars.length);
     const fol = { release: vi.fn(), reset: vi.fn() };
-    const self = { m, barEls, fol };
-    const mark = (e: number | null) => PlayScreen.prototype.markFix.call(self as unknown as PlayScreen, e);
+    const self = { m, barEls, fol, lane } as unknown as PlayScreen;
+    const scrollToFix = (PlayScreen.prototype as unknown as { scrollToFix: () => void }).scrollToFix;
+    Object.assign(self, { scrollToFix });
+    const mark = (e: number | null) => PlayScreen.prototype.markFix.call(self, e);
     const outlined = () => barEls.flatMap((b, i) => (b.on.has('fix-at') ? [i] : []));
-    return { barEls, fol, mark, outlined };
+    // What the lane's ResizeObserver calls.
+    const resized = () => (self as unknown as { scrollToFix: () => void }).scrollToFix();
+    return { lane, fol, mark, outlined, resized };
   };
+  // Heard 0–32 (16 bars, 4 rows): G 0–10.5, E 10.5–17.5 (bars 5–8: rows 1 and 2), C 17.5–32.
+  const long = () => model([[0, 'G'], [10.5, 'E'], [17.5, 'C']], [{ fromSec: 0, toSec: 32 }]);
 
-  it('outlines all bars of the event, scrolls the first into view; null clears every outline', () => {
-    const m = model([[0, 'G'], [2.5, 'E'], [9.5, 'C']]);
-    const s = screen(m);
+  it('outlines all bars of the event and puts the first outlined row at the top, under the section header', () => {
+    const s = screen(long(), 150);
     s.mark(1);
-    expect(s.outlined()).toEqual([1, 2, 3, 4]);
-    expect(s.barEls[1].scrollIntoView).toHaveBeenCalledTimes(1);
-    expect(s.barEls.filter((b) => b.scrollIntoView.mock.calls.length).length).toBe(1);
+    expect(s.outlined()).toEqual([5, 6, 7, 8]);
+    // Row 1 starts at content y 95: scrolled so it sits 30 px (header + gap) below the view top.
+    expect(s.lane.scrollTop).toBe(65);
     expect(s.fol.release).toHaveBeenCalled();
-    s.mark(2);
-    expect(s.outlined()).toEqual([4, 5]);
+  });
+  it('the same from a lane scrolled past the range (arrows going back)', () => {
+    const s = screen(long(), 150);
+    s.lane.scrollTop = 300;
+    s.mark(1);
+    expect(s.lane.scrollTop).toBe(65);
+  });
+  it('the whole range already in view: the lane does not move', () => {
+    const s = screen(long(), 300);
+    s.lane.scrollTop = 10;
+    s.mark(1);
+    expect(s.outlined()).toEqual([5, 6, 7, 8]);
+    expect(s.lane.scrollTop).toBe(10);
+  });
+  it('null clears every outline and leaves the lane where it is', () => {
+    const s = screen(long(), 150);
+    s.mark(1);
     s.mark(null);
     expect(s.outlined()).toEqual([]);
     expect(s.fol.reset).toHaveBeenCalled();
+    expect(s.lane.scrollTop).toBe(65);
+  });
+  it('a resize re-scrolls the outlined rows; without an outline it does nothing', () => {
+    const s = screen(long(), 150);
+    s.mark(2); // C: bars 8–15, rows 2–3
+    expect(s.outlined()).toEqual([8, 9, 10, 11, 12, 13, 14, 15]);
+    expect(s.lane.scrollTop).toBe(130);
+    s.lane.scrollTop = 0; // the lane reflowed (the panel opened, lyrics or diagrams resized)
+    s.resized();
+    expect(s.lane.scrollTop).toBe(130);
+    s.mark(null);
+    s.lane.scrollTop = 0;
+    s.resized();
+    expect(s.lane.scrollTop).toBe(0);
   });
 });
 

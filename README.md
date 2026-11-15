@@ -129,7 +129,8 @@ Port of the approved mockup B ("진행표형", diagrams 3x):
 - **Fixing one chord (코드 고치기)**: the button opens a small panel at the chord under the playhead (‹ ›
   step to the previous/next chord event and seek there). Every lane bar the selected event is drawn in gets a
   dashed outline, so a chord held over several bars shows its whole range (the lane's own cuts decide: a
-  sliver under 0.1 s it leaves out of a bar is not outlined), and the header names the event's time range,
+  sliver under 0.1 s it leaves out of a bar is not outlined); when the outlined bars do not all fit in view, the
+  lane scrolls the first outlined row to the top, just under its section header. The header names the event's time range,
   "0:06~0:13" (to the next event, or to the end of the heard range for the last one; one time when both ends
   fall in the same second). A fix changes that whole range. Pick a root and a kind (or
   코드 없음) and press "이 코드로 고치기". A bass row (베이스 없음 or /C … /B) keeps a slash chord's bass
