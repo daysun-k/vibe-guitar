@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -299,6 +299,34 @@ describe('scripts/practice-charts.mjs', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
       for (const t of targets) rmSync(t, { recursive: true, force: true });
+    }
+  });
+
+  it('resolves an output symlink the way the filesystem does: a directory link before a later ".." (review beginner-merge-r1 F1)', () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'practice-guard-'));
+    try {
+      const repo = path.join(dir, 'repo');
+      mkdirSync(path.join(repo, 'docs'), { recursive: true });
+      const outside = path.join(dir, 'outside');
+      mkdirSync(path.join(outside, 'out'), { recursive: true });
+      // bridge -> repo/docs, and a dangling output file whose target is bridge/../abcdefghijk.json:
+      // lexically that is outside/abcdefghijk.json, but the filesystem follows bridge first and lands in repo.
+      symlinkSync(path.join(repo, 'docs'), path.join(outside, 'bridge'));
+      const file = path.join(outside, 'out', 'abcdefghijk.json');
+      symlinkSync(`${outside}${path.sep}bridge${path.sep}..${path.sep}abcdefghijk.json`, file);
+      const script = new URL('../scripts/practice-charts.mjs', import.meta.url).href;
+      const probe = `const m = await import(${JSON.stringify(script)});
+        const refused = (p) => { try { m.assertOutsideRepo(p, ${JSON.stringify(repo)}); return false; } catch (e) { return /저장소 안에는 쓰지 않아요/.test(e.message); } };
+        console.log(JSON.stringify({ target: m.realTarget(${JSON.stringify(file)}), refused: refused(${JSON.stringify(file)}), plain: refused(${JSON.stringify(path.join(outside, 'ok.json'))}) }));`;
+      const r = spawnSync(process.execPath, ['--input-type=module', '-e', probe], { encoding: 'utf8' });
+      expect(r.status, r.stderr).toBe(0);
+      const out = JSON.parse(r.stdout.trim());
+      expect(out.target).toBe(path.join(realpathSync(repo), 'abcdefghijk.json'));
+      expect(out.refused).toBe(true);
+      expect(out.plain).toBe(false);
+      expect(existsSync(path.join(repo, 'abcdefghijk.json'))).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
     }
   });
 });

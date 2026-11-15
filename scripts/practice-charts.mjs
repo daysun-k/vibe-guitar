@@ -12,7 +12,7 @@
 // close (snapEvents). A song whose map is not "strong" (fitted to chord boundaries,
 // so it can be a whole beat off) is refused unless --allow-weak. Local files only (no network).
 import * as esbuild from 'esbuild';
-import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, realpathSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -124,30 +124,38 @@ function latestCapture(capturesDir, youtubeId) {
 }
 
 /**
- * The real path p refers to: symlinks resolved in every existing component, including a dangling
- * symlink (resolved through its target), and the components that do not exist yet appended.
+ * The real path p refers to, resolved the way the filesystem does it: component by component from
+ * the left, a symlink (also a dangling one) replaced by its target before any later ".." is applied,
+ * and components that do not exist yet kept as they are. Never normalizes ".." lexically first:
+ * "bridge/../x" with bridge -> elsewhere means elsewhere/../x, not x (review beginner-merge-r1 F1).
  */
 export function realTarget(p, depth = 0) {
-  const abs = path.resolve(p);
-  let cur = abs;
-  const rest = [];
-  for (;;) {
+  if (depth > 40) throw new Error(`${p}: 심볼릭 링크가 너무 많이 이어져요.`);
+  const abs = path.isAbsolute(p) ? p : `${process.cwd()}${path.sep}${p}`;
+  const parts = abs.split(path.sep).filter((s) => s !== '' && s !== '.');
+  let cur = path.sep;
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i];
+    if (part === '..') {
+      cur = path.dirname(cur);
+      continue;
+    }
+    const next = path.join(cur, part);
     let st = null;
     try {
-      st = lstatSync(cur);
+      st = lstatSync(next);
     } catch {
       st = null;
     }
     if (st?.isSymbolicLink()) {
-      if (depth > 40) throw new Error(`${p}: 심볼릭 링크가 너무 많이 이어져요.`);
-      return realTarget(path.join(path.resolve(path.dirname(cur), readlinkSync(cur)), ...rest), depth + 1);
+      const link = readlinkSync(next);
+      const rest = parts.slice(i + 1);
+      const target = path.isAbsolute(link) ? link : `${cur}${path.sep}${link}`;
+      return realTarget(rest.length ? `${target}${path.sep}${rest.join(path.sep)}` : target, depth + 1);
     }
-    if (st) return path.join(realpathSync(cur), ...rest);
-    const parent = path.dirname(cur);
-    if (parent === cur) return abs;
-    rest.unshift(path.basename(cur));
-    cur = parent;
+    cur = next; // an existing real component, or one that does not exist yet (nothing below it can be a link)
   }
+  return cur;
 }
 
 /** Throws when p (after resolving symlinks) is the repository or inside it: outputs never go there. */
