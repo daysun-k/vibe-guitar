@@ -3,12 +3,18 @@
 Things only a person with Chrome, a guitar and the real services can check. Record the result
 (date, Chrome version, OK / not OK, notes) next to each item. Build and load first: see README "Load and test".
 
+Status as of 2026-11-15 (main f98189b): [phase0-evidence.md](phase0-evidence.md) records, per item, what was
+already checked, on which build and where the evidence is; its last section is the short list that still needs
+you. Items marked `[x]` were checked by an agent in Aside (and a real iPhone) on the date given; repeat them only
+if something looks wrong. No step here asks you to tell a right chord from a wrong one by ear: accuracy is
+measured against public annotations instead (see F).
+
 ## A. Position sync: YouTube and YouTube Music
 
 - [ ] **YouTube**: open a `watch?v=` page and play. The side panel header shows the right video id, title and
       "재생"; the time in the header advances smoothly.
-- [ ] Pause, seek (click the progress bar, arrow keys), change speed (0.75x / 1.25x). The header and the
-      chord display follow within about 0.3 s.
+- [x] Pause, seek (click the progress bar, arrow keys), change speed (0.75x / 1.25x). The header and the
+      chord display follow within about 0.3 s. (Agent, 2026-11-13, ec7aedd: 20-130 ms.)
 - [ ] **SPA navigation**: click another video from the recommendations (no full page reload). The header
       switches to the new id and the chart for the new id loads (or "코드표가 없습니다").
 - [ ] **Ads**: when an ad plays, the header shows "광고" and the red banner appears; chords do not advance.
@@ -20,14 +26,18 @@ Things only a person with Chrome, a guitar and the real services can check. Reco
       a different recording (e.g. "Perfect Duet"), the header shows that recording's own id (not
       iKzRIweSBLA) and a yellow notice "주소의 v=iKzRIweSBLA와 다른 녹음이 재생 중입니다". Record both ids.
       A chart saved now is stored under the playing id (check 편집 → JSON 내보내기 file name).
-- [ ] Switching browser tabs: the panel follows the active tab's player.
-- [ ] Measure drift: with a hand-made chart, does the chord change land on the audible change? Adjust
-      설정 → 싱크 보정 and write down the offset that feels right (ms) for each site.
+- [x] Switching browser tabs: the panel follows the active tab's player. (Agent, 2026-11-13, ec7aedd.)
+- [ ] Does the chart keep up? While playing a song with a chart, note whether the chord changes stay with the
+      song or fall behind somewhere (where). Optional: if they always feel early or late, try 설정 → 싱크 보정 and
+      write down the value that feels right, then set it back to 0. (Capture placement was measured with the
+      latency probe on 2026-11-13: drift 0 ms/min, constant now 0.128 s; after a pause or seek each new anchor
+      can be off by tens of ms, follow-up VGT-22. See docs/latency-probe.md.)
 
 ## B. Tab audio capture
 
-- [ ] YouTube: click the toolbar icon. 캡처 tab shows 상태 "캡처 중", 오디오 수신 "예", a moving RMS value,
+- [x] YouTube: click the toolbar icon. 캡처 tab shows 상태 "캡처 중", 오디오 수신 "예", a moving RMS value,
       the sample rate (usually 48000 Hz), and chroma bars that change with the music. The tab stays audible.
+      (Agent, 2026-11-13, ec7aedd: 예, 48000 Hz; 100+ evaluation captures since.)
 - [ ] YouTube Music: same as above.
 - [ ] Navigate to another video in the same tab: capture keeps running (expected per Chrome docs), and
       대상 탭 shows the new video's address (on a site outside the extension's permissions it says
@@ -35,27 +45,25 @@ Things only a person with Chrome, a guitar and the real services can check. Reco
 - [ ] 캡처 중지 stops it and the tab sound remains normal. 상태 "중지됨", 오디오 수신 "아니요 (캡처 꺼짐)", RMS,
       샘플레이트 and 트랙 "–", no chroma bars; the 듣기 모드 card (if shown) says "기록 멈춤: 캡처가 꺼졌어요 · 툴바
       아이콘을 누르면 다시 켜져요" with no chord. Clicking the toolbar icon again brings back "캡처 중" and live values.
-- [ ] **Apple Music web (music.apple.com)**, signed in, playing a full song:
-      - [ ] Click the toolbar icon. Record: 오디오 수신 예/아니요, RMS level, chroma moving or flat.
-            "아니요" with RMS ≈ 0 while music is audible means DRM-protected audio is not capturable → per the
-            proposal, Apple Music is then unsupported (no circumvention).
-      - [ ] 캡처 tab → "Apple Music 어댑터 (실험)": record which path worked: MusicKit, media element, or
-            unreachable; whether the position advances and the song id is present.
-      - [ ] 연주 tab → play button with 카운트인 1마디: either it pauses, jumps, counts and plays (MusicKit
-            bridge), or it shows "이 플레이어에서는 카운트인 재생을 지원하지 않아요" without a count-in overlay.
+- [ ] **Apple Music web (music.apple.com), one capability check** (you use Apple Music web, decided
+      2026-11-15): signed in, play a full song, click the toolbar icon and record 오디오 수신 예/아니요.
+      "아니요" (RMS ≈ 0) while the music is audible means DRM-protected audio cannot be captured: Apple Music is
+      then unsupported and there is no workaround; stop here. Only if it says "예", tell the agent; the adapter
+      and count-in checks follow from that.
 
-## C. Play-along with 3–5 hand-made charts
+## C. Play-along with prepared practice charts
 
-Make charts for 3–5 songs you know (mix of 4/4 and 3/4 or 6/8 if possible; at least one in a flat key such
-as Ab or Eb to try the capo suggestion).
+You will receive prepared practice charts built from public chord annotations (Let It Be, Come Together,
+Drive My Car, And She Was). Import one with 편집 → JSON 가져오기 on that song's page. Making a chart by hand
+is optional.
 
 For each song:
 
-- [ ] Editor: paste sequence, tap tempo, stamp changes, save. Note how long it took and how many re-takes.
-- [ ] Export JSON and re-import it: the chart still works.
+- [ ] Optional: editor: paste sequence, tap tempo, stamp changes, save. Note how long it took and how many re-takes.
+- [ ] Import the prepared chart (편집 → JSON 가져오기): it loads for that song and plays in time.
 - [ ] Play view: is the **next chord** visible before the change (strip: neutral border + big-beat
       countdown; grid: "soon" border on its bar)? Try 미리 알림 ½, 1 and 2 bars in the settings sheet.
-- [ ] Capo: does 자동 pick a capo you agree with? With "실제 음 이름 보기" on, do the strip and the grid show the
+- [ ] Capo: is the capo 자동 picks comfortable for you? With "실제 음 이름 보기" on, do the strip and the grid show the
       sounding names (shape G, sounding A♭)?
 - [ ] Levels 입문 / 초급 / 중급 / 상급: are the shapes playable for you? 입문 shows reduced 7ths with the change
       mark (●) and its tooltip only, with no superscript 7 next to the name; 중급/상급 show "…도 돼요" only on
@@ -71,22 +79,23 @@ For each song:
 - [ ] Drafts: start a chart on song A, skip to song B: the editor is empty for B, saving cannot write A's
       stamps under B, and returning to A restores the draft.
 - [ ] Overall: could you play along without stopping? Write the top 3 annoyances.
+- [ ] "?" marks (auto charts only): while playing, did the small "?" marks help, distract, or go unnoticed?
 
 ## D. Listening mode (recognition)
 
 Use songs with no chart first. Note Chrome version and the 캡처 tab "실행 방식" (wasm or webgpu).
 
-- [ ] Click the toolbar icon on a playing YouTube song. 캡처 tab: 인식 모델 "준비됨" within ~5 s.
+- [x] Click the toolbar icon on a playing YouTube song. 캡처 tab: 인식 모델 "준비됨" within ~5 s. (Agent, 2026-11-13, wasm.)
 - [ ] 듣기·캡처 tab: the "듣기 모드 · 인식 중" card shows a chord that changes with the music, about 1 s late.
-      With no chart the 연주 tab's empty state shows the heard percentage.
-      Note how often it is right for 3 songs you know (rough %).
+      With no chart the 연주 tab's empty state shows the heard percentage. (Do not rate how often it is right:
+      real-song accuracy is measured against public annotations, see F.)
 - [ ] Pause → card says "기록 멈춤: 일시정지"; seek ahead → coverage shows 2 ranges; 1.25x → "재생 속도"
       and no recording; ad → "광고 중".
-- [ ] Let one song play to the end (≥ 90 % heard): an auto chart appears in the play view with the badge
-      "자동 코드표 · 사람이 확인하지 않음". Note analysis seconds shown.
+- [x] Let one song play to the end (≥ 90 % heard): an auto chart appears in the play view with the badge
+      "자동 코드표 · 사람이 확인하지 않음". Note analysis seconds shown. (Agent, 2026-11-13: 107 chords, 2.5 s.)
 - [ ] Press "들은 구간으로 자동 코드표 만들기" after half a song: the play view shows chords only for the heard
       range and "—" after it.
-- [ ] On a song with a hand-made chart: let it build an auto chart. Your chart must stay in use; the card shows
+- [ ] Optional (needs a prepared or hand-made chart): on such a song let it build an auto chart. Your chart must stay in use; the card shows
       "직접 만든 코드표와의 일치율 …". Try "자동 코드표로 바꾸기" → confirm dialog; cancel keeps your chart.
 - [ ] 듣기·캡처 tab → open "정확도 모아 보기". With no comparable song it shows one sentence on how results
       appear. After the step above, that song is listed as 직접 만든 코드표 with overlap, 장·단 / 근음 / 7th
@@ -104,27 +113,35 @@ Use songs with no chart first. Note Chrome version and the 캡처 tab "실행 �
       lines and the summary.
 - [ ] Watch CPU in Chrome's task manager (offscreen document) during listening; record the % and whether the
       tab audio ever stutters.
-- [ ] Sync check: do auto-chart chord changes land on the audible change? Compare with the overview's suggested
-      싱크 오프셋 (shown after at least 5 matched changes); try that value in 설정 → 싱크 보정 while playing an auto chart.
+- [ ] Optional sync check: does the auto chart keep up with the song (see A, "Does the chart keep up?")? The
+      overview's suggested 싱크 오프셋 (after at least 5 matched changes) can be tried in 설정 → 싱크 보정.
 
 ### D2. Fixing one wrong chord (코드 고치기) — run in real Chrome
 
-Use an auto chart with at least one chord you know is wrong, ideally one only partly heard (a "—" gap).
+Use any auto chart, ideally one only partly heard (a "—" gap). You do not need to know which chord is right:
+pick any chord (a "?" stretch is a handy target) and check that the fix mechanics below work.
 
-- [ ] Play tab → "코드 고치기" (transport row): a panel opens at the chord under the playhead; that bar gets
-      a dashed outline and the header shows its time, name and "자동으로 들은 코드" (or "· 확실하지 않음").
-      ‹ › step to the previous/next chord and the player jumps there. Clicking a bar still only seeks.
+- [x] Play tab → "코드 고치기" (transport row): a panel opens at the chord under the playhead; every bar that
+      chord is drawn in gets a dashed outline and the header shows its time range ("0:06~0:13"), name and
+      "자동으로 들은 코드" (or "· 확실하지 않음"), plus "대안: X" when it holds a "?" stretch.
+      ‹ › step to the previous/next stop and the player jumps there: each chord's start and, while 불확실한 곳
+      표시 is on, every "?" stretch inside a chord (then only that stretch's bars are outlined and a fix changes
+      only that stretch). Clicking a bar still only seeks. (Agent, 2026-11-15: PR #51 in Aside, PR #52 hidden preview.)
+- [ ] 처음 코드로 되돌리기: after fixing a chord (or tapping a 대안 button), open 코드 고치기 on it again: it shows
+      "처음 들은 코드: X" and "처음 코드로 되돌리기"; one tap brings the first-recognized chord back (and its "?").
+      Do this on a real song, not the demo (the demo was checked 2026-11-15).
 - [ ] With 카포 0, pick a root and a kind, check the preview "G → Am", press "이 코드로 고치기". The status line
       says "고쳤어요: G → Am" with "되돌리기"; the grid and strip show the new chord at once.
 - [ ] Slash bass: open a "C/B" (walking bass); the bass row preselects "/B" (a plain chord preselects
       "베이스 없음"). Pick Am → preview "C/B → Am/B"; "베이스 없음" gives "Am"; with 카포 1 the bass is a shape name too.
-- [ ] Only that chord changed: the other chords, their bars and the "—" gaps look exactly as before.
+- [x] Only that chord changed: the other chords, their bars and the "—" gaps look exactly as before.
 - [ ] The badge now reads "자동 코드표 · 1곳 고침 · 나머지는 미확인" (narrow panel: "자동 · 일부 고침"); its
       explanation says how many chords you fixed and that the rest are unchecked.
 - [ ] Capo: set 카포 1 on a song in A♭ (shapes G, Em, C, D). The picker shows shape names only. Fix a G into
       Em: the grid shows Em; Edit tab → JSON 내보내기 stores the sounding chord "Fm" (not "E#m"/"Em").
       Turn on "실제 음 이름 보기": the picker header and preview add a small "실제 …" name.
-- [ ] "되돌리기" restores the previous chord and the badge "자동 코드표 · 사람이 확인하지 않음".
+      (Sounding chord stored with the capo: agent, 2026-11-13.)
+- [x] "되돌리기" restores the previous chord and the badge "자동 코드표 · 사람이 확인하지 않음".
 - [ ] Survives new analysis: fix a chord, then press "들은 구간으로 자동 코드표 만들기" (or let the song finish).
       Your fixed chart stays in use; the play tab notice says a new auto chart is ready. Reload the panel and
       the YouTube tab: the fix is still there.
@@ -141,22 +158,23 @@ Use an auto chart with at least one chord you know is wrong, ideally one only pa
 
 Use a song with a chart on www.youtube.com, then the same checks on music.youtube.com.
 
-- [ ] Speed: press 0.5×, then 0.75×, then 1× under the transport. The song slows down and speeds up, the
-      pressed button follows, and YouTube's own ⚙ speed menu shows the same rate. Chords and lyrics stay in
+- [x] Speed: press 0.5×, then 0.75×, then 1× under the transport. The song slows down and speeds up, the
+      pressed button follows, and YouTube's own ⚙ speed menu shows the same rate (agent, 2026-11-13, PR #23
+      build). Chords and lyrics stay in
       time at every speed.
 - [ ] Site menu: set 1.25× (or 0.25×) in YouTube's own speed menu. No button stays pressed and "1.25×" shows
       next to them; pick 1× in the site menu and the 1× button is pressed again.
 - [ ] Speed stays: pause, seek, play again: the speed is unchanged. Let the next video start (autoplay or
       a playlist): after its ad, if any, the speed goes back to 1×. Repeat on YouTube Music (next track).
-- [ ] Listening at a slow speed: 듣기·캡처 tab shows that audio is not stored ("재생 속도 0.5x (1x에서만 기록)");
+- [x] Listening at a slow speed: 듣기·캡처 tab shows that audio is not stored ("재생 속도 0.5x (1x에서만 기록)");
       at 1× it records again.
-- [ ] Loop: press "구간 반복", then a bar (A) and a later bar (B). The bars A…B are tinted green with A and B
+- [x] Loop: press "구간 반복", then a bar (A) and a later bar (B). The bars A…B are tinted green with A and B
       tags, playback moves to A, and the note says "N–M마디 반복 중". Press the bars in reverse order once
       too: same loop.
-- [ ] Loop boundaries: play through B several times at 1×, 0.75× and 0.5×. Each time it returns to the start
+- [x] Loop boundaries: play through B several times at 1×, 0.75× and 0.5×. Each time it returns to the start
       of A right after B ends (no stutter, no double jump to A, no repeated count-in). Note how far past B it
-      goes before jumping (should be well under one beat).
-- [ ] Plain bar presses still seek while the loop is on. Press a bar right after B: playback continues there
+      goes before jumping (should be well under one beat). (Agent, 2026-11-13: at most 15 ms at all three speeds.)
+- [x] Plain bar presses still seek while the loop is on. Press a bar right after B: playback continues there
       and does not snap back to A. Drag YouTube's own slider far past B: it plays on; drag into the loop: it
       loops again.
 - [ ] Count-in (설정 → 카운트인 1마디): with the loop on, pause outside the loop and press play: it counts in
@@ -181,9 +199,9 @@ Screenshots of the synthetic demo: [docs/screens/](screens/) (`node scripts/scre
       Diagrams are 120 px wide (shrinking to fit below ~400 px), and the lane below does not jump when a
       four-fret shape replaces a five-fret one. Settings → 이 곡에 나오는 코드 shows every shape at the same
       120 px. Light and dark (theme button) both readable.
-- [ ] Key spelling on a song in a flat key (e.g. Perfect, A♭ major, auto chart): the strip and grid show
+- [x] Key spelling on a song in a flat key (e.g. Perfect, A♭ major, auto chart): the strip and grid show
       A♭, Fm, D♭, E♭ (capo 0) or G, Em, C, D with sounding A♭… (capo 1) — never G#, D#.
-      설정 tab → 분석 정보 shows the estimated key.
+      설정 tab → 분석 정보 shows the estimated key. (Agent, 2026-11-13: Perfect Duet, flats only.)
 - [ ] Bar phase: chord changes sit at the start of grid cells (분석 정보 shows "마디 시작 보정 …" when the
       tracker's downbeat was moved and how many changes now land on bar starts).
 - [ ] 6/8 (or 12/8): the grid draws 2 (or 4) ticks per bar, the countdown counts big beats, and the count-in
@@ -191,12 +209,17 @@ Screenshots of the synthetic demo: [docs/screens/](screens/) (`node scripts/scre
 - [ ] Lyrics on (default): on a song with LRCLIB lyrics the pinned line shows chords over the words where they
       change, the sung word underlined, "다음 · …" below and "♪ 연주만 나와요" between sung parts; section labels
       (인트로 / N절 / 후렴 / 간주 / 아웃트로) come from the lyrics. 분석 정보 shows the lyric source and the
-      estimated offset (Perfect lyric video: about +0.45 s).
+      estimated offset (observed 2026-11-10 on the Perfect lyric video: about +0.45 s).
 - [ ] A song without lyrics on LRCLIB: no lyric line; sections are "1–8마디", "9–16마디", ….
 - [ ] Lyrics off: open a new song with "가사 가져오기" off. In the service worker's DevTools Network panel there
       is no request to lrclib.net. Turn it on: exactly one request (or get + search) for that recording;
       reopening the song makes no new request (cached).
 - [ ] Click a bar: the player jumps there. Scroll the grid by hand: "현재 위치로" appears and brings it back.
+- [ ] "?" marks on an auto chart (불확실한 곳, VGT-19): the lane shows only a small "?" after the chord name of an
+      uncertain stretch; a stretch heard as no chord shows the "?" on the empty "—" segment. 코드 고치기 on that
+      chord (or 코드 없음) shows "대안: X": a small button on the most uncertain tier (one tap replaces just that
+      stretch; the no-chord parts around it stay), plain text elsewhere. 설정 → 불확실한 곳 표시 off hides every "?",
+      on the phone too. Record only what you see and whether the marks help or distract.
 - [ ] "코드 고치기" panel (see D2): at 400 px the picker, the grid rows around the marked bar and the transport
       all fit; light and dark both readable.
 
@@ -230,15 +253,15 @@ home Wi-Fi only (the token is access control, not encryption).
 - [ ] Pause: the phone freezes (no status text; with control approved the play button shows ▶). Seek by clicking a bar, change speed to 0.5×
       and 0.75×, set a 구간 반복 loop: the phone follows the jumps, the slower countdown and the loop wrap.
 - [ ] An ad on YouTube: the phone shows "광고 중" and resumes after the ad.
-- [ ] Timing by eye with the phone next to the panel: chord changes look simultaneous. Optional, most exact:
+- [x] Timing by eye with the phone next to the panel: chord changes look simultaneous. Optional, most exact:
       film both screens in slow motion (240 fps ≈ 4.2 ms per frame) and count frames between the two changes
-      (target ≤ 100 ms).
+      (target ≤ 100 ms). (Agent, 2026-11-13, real iPhone: 40 changes, median 4 ms, max 111 ms.)
 - [ ] Recovery: Ctrl+C the relay while playing: the phone says it lost the Mac and keeps retrying; restart it
       and scan the new QR code (new token). Turn the phone's Wi-Fi off and on: it reconnects by itself (it drops
       a link that stays silent for 6 s). Close the side panel: the phone says the panel's switch is off; reopen it.
 - [ ] Two Chrome windows with the panel open: only one feeds the phone; the other's sheet says another
       window's panel is sending. Focusing that window takes over.
-- [ ] Second start: double-click the launcher again while the first window runs: the new window says the relay
+- [x] Second start: double-click the launcher again while the first window runs: the new window says the relay
       is already running and starts nothing (press Enter to close it); the first window keeps working.
 - [ ] Idle auto-stop: switch 휴대폰 악보대 off (or close the side panel) and leave the phone connected: about
       10 minutes later the window prints "패널이 10분 동안 연결되지 않아 중계기를 껐습니다" and the phone says it
@@ -276,7 +299,7 @@ Phone control (휴대폰에서 조작 허용, VGT-16):
       phone it wraps to two or three lines instead of being cut); click play on the Mac once and the phone works
       again.
 - [ ] Ads: during an ad every button answers "광고 중에는 조작할 수 없어요" and the ad is not affected.
-- [ ] Rapid taps: tap 재생/일시정지 five times quickly: the buttons stay disabled while a command is pending and
+- [x] Rapid taps: tap 재생/일시정지 five times quickly: the buttons stay disabled while a command is pending and
       excess taps are refused ("너무 빨리 눌렀어요" or ignored), never replayed later.
 - [ ] Revoke: press 승인 해제 in the sheet: the phone shows "조작 승인이 해제됐어요" and its code again. Approve
       again, then reload the phone page: it gets a new code and must be approved again. Switch 휴대폰에서 조작
@@ -284,6 +307,8 @@ Phone control (휴대폰에서 조작 허용, VGT-16):
 - [ ] Revoke mid-command: with a loop set and the playhead outside it (count-in on, then off), tap 재생 on the
       phone and press 승인 해제 at once: the video does not start (it may stay paused at the loop start).
 - [ ] Watching still works without approval: a phone that was refused (거절) keeps showing chords.
+- [ ] "?" on the phone (needs the relay started again after 2026-11-15): where the panel lane shows a "?", the
+      phone shows a small "?" after the current and next chord names; 불확실한 곳 표시 off removes it.
 
 Please note: phone model / browser, Mac on Wi-Fi or wired, how far apart the changes looked (or the slow-motion
 numbers), whether the screen stayed on, and whether arm's-length reading was comfortable.
@@ -291,10 +316,13 @@ numbers), whether the screen stayed on, and whether arm's-length reading was com
 ## F. Known limits to keep in mind while testing
 
 - Example charts have fake timings; use them only to try the UI.
-- Recognition accuracy was measured only on synthetic audio (docs/phase0-benchmark.md); real-song accuracy is
-  what section D and the 20-song evaluation should measure.
-- The capture-to-playback latency used to place audio on the timeline is a fixed 50 ms guess.
-- Apple Music support is experimental and may stop working when the site changes.
+- Real-song accuracy is measured against public annotations, not by ear: held-out Billboard songs, 18 scored
+  of 46, song-mean majmin 83.1% (2026-11-13, VGT-7); the shipped recognizer (VGT-18) gained +1.0 pp on 18 held-out
+  TEST songs (docs/recognition-candidates.md); a K-pop chord-order check (VGT-21, docs/kpop-eval-results.md) gave
+  no reason to fine-tune now. docs/phase0-benchmark.md is the earlier synthetic benchmark.
+- Capture placement uses a measured 0.128 s (docs/latency-probe.md, 2026-11-13); after a play, pause or seek each
+  new anchor can be off by tens of ms (VGT-22).
+- Apple Music web is one capability check (B): if DRM keeps its audio silent it is unsupported, with no workaround.
 - Section names are guessed from lyric repetition (repeated lines → 후렴); a pre-chorus or a verse with
   repeated lines can be labelled wrongly.
 - Lyrics depend on LRCLIB's timing for one release; the offset estimate fixes a constant shift only.
