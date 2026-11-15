@@ -198,28 +198,50 @@ describe('matching and statistics', () => {
  * t - trueLatency. AudioPlacer places it with the 0.05 s constant; the probe must report
  * a residual of trueLatency - 0.05 (plus the resampler's sub-millisecond edge).
  */
-function simulateSession(trueLatency: number, latencyUsed: number): ProbeSessionDump {
+interface SimOptions {
+  /**
+   * Startup model (VGT-22): for each start (0 = first play, 1 = resume after the pause, 2 = after
+   * the seek) the element already reports "playing" (its play / seeked event and the 250 ms ticks)
+   * while its clock and its audio stay at the start position for this long.
+   */
+  startupSec?: readonly number[];
+  /**
+   * Negative control: every report from this start on is off by this much (an offset per start
+   * that all anchors of the segment share), with no startup delay.
+   */
+  reportOffsetSec?: readonly number[];
+}
+
+function simulateSession(trueLatency: number, latencyUsed: number, opts: SimOptions = {}): ProbeSessionDump {
   const sr = 48000;
   const s = plan.session;
-  type Piece = { ctx: number; media: number; rate: number; playing: boolean };
+  /** playing: clock and audio advance; reported: the element says it is not paused; event: a media event reports here. */
+  type Piece = { ctx: number; media: number; rate: number; playing: boolean; reported: boolean; event: boolean; off: number };
   const pieces: Piece[] = [];
   let ctx = 0.5;
   let media = 0;
-  pieces.push({ ctx: 0, media: 0, rate: 1, playing: false });
-  const playTo = (to: number, rate: number) => {
-    pieces.push({ ctx, media, rate, playing: true });
+  let off = 0;
+  pieces.push({ ctx: 0, media: 0, rate: 1, playing: false, reported: false, event: true, off });
+  const playTo = (to: number, rate: number, start?: number) => {
+    if (start !== undefined) off = opts.reportOffsetSec?.[start] ?? 0;
+    const d = start !== undefined ? (opts.startupSec?.[start] ?? 0) : 0;
+    if (d > 0) {
+      pieces.push({ ctx, media, rate, playing: false, reported: true, event: true, off });
+      ctx += d;
+    }
+    pieces.push({ ctx, media, rate, playing: true, reported: true, event: d === 0, off });
     ctx += (to - media) / rate;
     media = to;
   };
-  playTo(s.pauseAtSec, 1);
-  pieces.push({ ctx, media, rate: 1, playing: false });
+  playTo(s.pauseAtSec, 1, 0);
+  pieces.push({ ctx, media, rate: 1, playing: false, reported: false, event: true, off });
   ctx += s.pauseForSec;
-  playTo(s.seekFromSec, 1);
+  playTo(s.seekFromSec, 1, 1);
   media = s.seekToSec;
-  playTo(s.rateFromSec, 1);
+  playTo(s.rateFromSec, 1, 2);
   playTo(s.rateToSec, s.rate);
   playTo(plan.durationSec, 1);
-  pieces.push({ ctx, media, rate: 1, playing: false });
+  pieces.push({ ctx, media, rate: 1, playing: false, reported: false, event: true, off });
   const endCtx = ctx + 1;
   const pieceAt = (t: number) => {
     let p = pieces[0];
@@ -236,11 +258,11 @@ function simulateSession(trueLatency: number, latencyUsed: number): ProbeSession
   const session = new ListeningSession(key, 0);
   const addAnchor = (t: number) => {
     const p = pieceAt(t);
-    const a: PlayerAnchor = { ctxTime: t, key, position: posAt(t), paused: !p.playing, rate: p.rate, isAd: false };
+    const a: PlayerAnchor = { ctxTime: t, key, position: posAt(t) + (p.reported ? p.off : 0), paused: !p.reported, rate: p.rate, isAd: false };
     placer.addAnchor(a);
   };
   for (let t = 0; t < endCtx; t += 0.25) addAnchor(t);
-  for (const p of pieces) addAnchor(p.ctx);
+  for (const p of pieces) if (p.event) addAnchor(p.ctx);
 
   const BLOCK = 4096;
   const total = Math.floor(endCtx * sr);
@@ -291,6 +313,34 @@ describe('end to end through AudioPlacer (simulated capture)', () => {
     expect(r.fit.medianResidualSec).toBeGreaterThan(-0.0315);
   });
 });
+
+/** Startup delays per start (first play, resume, after seek) for the three simulated sessions. */
+const STARTUPS: readonly (readonly number[])[] = [
+  [0.015, 0.075, 0.08],
+  [0.06, 0.02, 0.035],
+  [0.04, 0.07, 0.015],
+];
+
+/** Per session: max - min of the stored segments' median residuals (segments with clicks). */
+function segmentSpreads(r: ReturnType<typeof analyzeProbeDump>): number[] {
+  return r.sessions.map((s) => {
+    const m = s.segments.filter((g) => g.clicks > 0).map((g) => g.medianResidualSec);
+    return Math.max(...m) - Math.min(...m);
+  });
+}
+
+describe('VGT-22: per-anchor offset (simulated startup)', () => {
+  // Reproduction with the placement before the VGT-22 fix (the 2026-11-13 real-run pattern:
+  // segment medians 17.0, 80.5 and 82.5 ms in one session, flat inside each segment, p95 53 ms).
+  it('reproduces a per-segment offset of tens of ms, flat inside each segment, from a startup delay', () => {
+    const sessions = STARTUPS.map((d) => simulateSession(0.08, 0.05, { startupSec: d }));
+    const r = analyzeProbeDump({ tool: 'vibe-guitar latency probe', version: 1, createdAt: 'x', sessions });
+    for (const spread of segmentSpreads(r)) expect(spread).toBeGreaterThan(0.04);
+    expect(Math.abs(r.driftSecPerMin)).toBeLessThan(0.001);
+    expect(r.validation.p95AbsSec).toBeGreaterThan(0.05);
+  });
+});
+
 
 describe('probe build wiring', () => {
   it('the probe manifest only adds the 127.0.0.1 content script and a name suffix', () => {
