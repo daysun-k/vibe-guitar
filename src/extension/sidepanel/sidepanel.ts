@@ -1011,27 +1011,21 @@ function saveFix(event: EventRef, concert: string, names: { from: string; to: st
   );
 }
 
-let altBusy = false;
-
-/** 불확실한 곳 (VGT-19): plays model.uncertain[i] as its second choice, stored and undone like a fix. */
+/**
+ * 불확실한 곳 (VGT-19): plays model.uncertain[i] as its second choice ("대안: X" in 코드 고치기), stored
+ * and undone like a fix. Rejects when it was not stored (the status line says why).
+ */
 async function acceptAlt(i: number): Promise<void> {
   const u = model?.uncertain[i];
-  if (!model || !u || !u.replace || altBusy) return; // only replace-tier stretches offer the replacement
+  if (!model || !u || !u.replace) return; // only replace-tier stretches offer the replacement
   const mid = (u.fromSec + u.toSec) / 2;
   const shown = model.labels[model.arrangement.events.findIndex((e) => mid >= e.startSec && mid < e.endSec)]?.name ?? u.ref.chord;
-  altBusy = true;
-  try {
-    await storeChartChange(
-      (c) => acceptUncertainAlt(c, u.ref, u.span),
-      (r) => acceptChartAlt(r.source, r.id, u.ref, u.span),
-      `바꿨어요: ${shown} → ${u.alt}`,
-      '바꾸지 못했어요.',
-    );
-  } catch {
-    // the status line already says why
-  } finally {
-    altBusy = false;
-  }
+  await storeChartChange(
+    (c) => acceptUncertainAlt(c, u.ref, u.span),
+    (r) => acceptChartAlt(r.source, r.id, u.ref, u.span),
+    `바꿨어요: ${shown} → ${u.alt}`,
+    '바꾸지 못했어요.',
+  );
 }
 
 /**
@@ -1079,7 +1073,7 @@ async function undoFix(): Promise<void> {
       chart = restored;
     }
     lastFix = null;
-    fixNote = { key: fix.key, text: '되돌렸어요', undo: false, error: false };
+    fixNote = null; // undone: the status line just clears
     recompute();
     if (!demo) await refreshPendingAuto();
   } catch (e) {
@@ -1873,7 +1867,6 @@ async function main(): Promise<void> {
     togglePlay: () => void togglePlay(),
     setRate: (r) => void setRate(r),
     barClick: (k) => pickLoopBar(k),
-    acceptAlt: (i) => void acceptAlt(i),
   });
   $('loop-btn').onclick = onLoopButton;
   document.addEventListener('keydown', (e) => {
@@ -1886,6 +1879,7 @@ async function main(): Promise<void> {
     showSounding: () => settings.showSounding,
     mark: (sec) => screen.markFix(sec),
     save: saveFix,
+    acceptAlt,
   });
   $('fix-undo').onclick = () => void undoFix();
   if (hasChrome) {
