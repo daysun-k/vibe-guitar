@@ -18,8 +18,12 @@ interface Client {
   send(m: unknown): void;
   bye(): void;
   closed(): boolean;
-  /** Resolves with the first message (already received or later) matching `pred`. */
-  next(pred: (m: Record<string, unknown>) => boolean, ms?: number): Promise<Record<string, unknown>>;
+  /**
+   * Resolves with the first message (already received or later) matching `pred`, looking only at
+   * messages from index `from` of `msgs` on. Pass `msgs.length` taken before an action to wait for a
+   * state that action causes; with the default 0 an earlier message in the same state matches at once.
+   */
+  next(pred: (m: Record<string, unknown>) => boolean, ms?: number, from?: number): Promise<Record<string, unknown>>;
 }
 
 function connect(port: number, path: string, host: string, origin: string): Promise<Client> {
@@ -35,9 +39,9 @@ function connect(port: number, path: string, host: string, origin: string): Prom
       send: (m) => s.write(encodeFrame(OP_TEXT, new TextEncoder().encode(JSON.stringify(m)), randomBytes(4))),
       bye: () => s.end(Buffer.from(encodeFrame(OP_CLOSE, new Uint8Array([0x03, 0xe8]), randomBytes(4)))),
       closed: () => closed,
-      next: (pred, ms = 1500) =>
+      next: (pred, ms = 1500, from = 0) =>
         new Promise((done, fail) => {
-          const have = c.msgs.find(pred);
+          const have = c.msgs.slice(from).find(pred);
           if (have) return done(have);
           const timer = setTimeout(() => fail(new Error('no matching message')), ms);
           waiters.push({ pred, done: (m) => (clearTimeout(timer), done(m)) });
@@ -220,26 +224,30 @@ describe('relay: commands', () => {
 describe('relay: approval ends', () => {
   it('on 승인 해제', async () => {
     const h = await approvedSetup();
+    const from = h.ph.msgs.length;
     h.pub.send({ t: 'revoke' });
-    await h.ph.next((m) => m.t === 'pair' && m.state === 'pending');
+    await h.ph.next((m) => m.t === 'pair' && m.state === 'pending', undefined, from);
     h.cmd(h.ph, 1);
     expect(await h.resultFor(h.ph, 1)).toMatchObject({ code: 'not-approved' });
   });
 
   it('on switch-off', async () => {
     const h = await approvedSetup();
+    const from = h.ph.msgs.length;
     h.pub.send({ t: 'control', on: false });
-    await h.ph.next((m) => m.t === 'pair' && m.state === 'off');
+    await h.ph.next((m) => m.t === 'pair' && m.state === 'off', undefined, from);
+    const fromOn = h.ph.msgs.length;
     h.pub.send({ t: 'control', on: true });
-    await h.ph.next((m) => m.t === 'pair' && m.state === 'pending');
+    await h.ph.next((m) => m.t === 'pair' && m.state === 'pending', undefined, fromOn);
     h.cmd(h.ph, 1);
     expect(await h.resultFor(h.ph, 1)).toMatchObject({ code: 'not-approved' });
   });
 
   it('when the phone disconnects: the reconnected phone is a new, pending connection', async () => {
     const h = await approvedSetup();
+    const from = h.pub.msgs.length;
     h.ph.bye();
-    await h.pub.next((m) => m.t === 'phones' && (m.list as unknown[]).length === 0);
+    await h.pub.next((m) => m.t === 'phones' && (m.list as unknown[]).length === 0, undefined, from);
     const again = await h.phone();
     const code = await h.code(again);
     expect(code).not.toBe(h.codeText);
@@ -249,19 +257,22 @@ describe('relay: approval ends', () => {
 
   it('when the panel closes', async () => {
     const h = await approvedSetup();
+    const from = h.ph.msgs.length;
     h.pub.bye();
-    await h.ph.next((m) => m.t === 'pair' && m.state === 'off');
+    await h.ph.next((m) => m.t === 'pair' && m.state === 'off', undefined, from);
     h.cmd(h.ph, 1);
     expect(await h.resultFor(h.ph, 1)).toMatchObject({ code: 'no-panel' });
   });
 
   it('when another panel replaces it (control starts off for the new one)', async () => {
     const h = await approvedSetup();
+    const from = h.ph.msgs.length;
     const pub2 = await h.panel();
-    await h.ph.next((m) => m.t === 'pair' && m.state === 'off');
+    await h.ph.next((m) => m.t === 'pair' && m.state === 'off', undefined, from);
     for (const p of songParts(EMPTY_SONG, EPOCH, 2)!) pub2.send(p);
+    const fromOn = h.ph.msgs.length;
     pub2.send({ t: 'control', on: true });
-    await h.ph.next((m) => m.t === 'pair' && m.state === 'pending');
+    await h.ph.next((m) => m.t === 'pair' && m.state === 'pending', undefined, fromOn);
     h.cmd(h.ph, 1, { rev: 2 });
     expect(await h.resultFor(h.ph, 1)).toMatchObject({ code: 'not-approved' });
     expect(pub2.msgs.some((m) => m.t === 'cmd')).toBe(false);
