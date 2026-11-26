@@ -165,7 +165,7 @@ mean gain of roughly 3 pp; smaller real gains will often fail this confirmation.
 
 ## Shipping (only after a pass)
 The finalist becomes the default in a PR with `npm run bench`, `npm run typecheck`, `npm test` and
-independent review; after merge `/Users/ds/GitHub/vibe-guitar/dist` is rebuilt, and live charts
+independent review; after merge `<repo>/dist` is rebuilt, and live charts
 captured in Aside on DEV songs must reproduce the offline finalist charts (R1 rule).
 
 ## Training and public weights
