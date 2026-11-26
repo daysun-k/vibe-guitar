@@ -11,7 +11,7 @@ on a real browser or phone is needed. Commands come from `package.json`; the app
 | CI | `PR checks / typecheck + test` (`.github/workflows/pr-checks.yml`) | Success on the pull request head | Actions run URL and the head SHA it ran on |
 | Local, every change | `npm run typecheck && npm test` | Exit 0 | Test summary line in the receipt (files, tests passed, skipped) |
 | Local, extension build | `npm run fetch-models` (once) then `npm run build` | Exit 0, manifest reference check passes | Receipt output |
-| Optional, audio features | `uv run --with librosa==0.10.2.post1 --with numpy python scripts/verify-features.py`, then `npm test` | The two parity tests in `tests/features.test.ts` run (not skipped) and pass | Receipt output naming both tests |
+| Optional, audio features | `npm run fetch-models` (once, for `models/mel-filterbank.bin`), `uv run --with librosa==0.10.2.post1 --with numpy python scripts/verify-features.py`, then `npm test` | The two parity tests in `tests/features.test.ts` run (not skipped) and pass | Receipt output naming both tests |
 | Manual, browser | The extension loaded from `dist/` in desktop Chrome on a YouTube or YouTube Music song (README "Load and test") | The changed behaviour is seen as described | Receipt row with what was checked, build commit and date; screenshots under `docs/` only when needed |
 | Manual, phone | `npm run phone-check`, `npm run phone-layout`, then a real phone on the same Wi-Fi (README "Phone music stand") | Scripts exit 0; the phone shows the changed view | Receipt output plus what was seen on the phone |
 

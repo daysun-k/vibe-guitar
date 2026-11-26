@@ -27,8 +27,8 @@ jobs:
         with:
           node-version: 26
           cache: npm
-      # Install scripts are skipped, as a local npm 11 install does by default: no unit test loads
-      # onnxruntime-node, and typecheck/vitest need no postinstall step.
+      # Install scripts are skipped: no unit test loads onnxruntime-node, and typecheck/vitest need no
+      # postinstall step.
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm run typecheck
       - run: npm test
