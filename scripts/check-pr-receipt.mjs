@@ -61,6 +61,7 @@ export function checkReceipt(body) {
     const empty = row.map((c, j) => (c === '' ? header[j] || `column ${j + 1}` : null)).filter(Boolean);
     if (empty.length) problems.push(`row ${n}: empty cell(s): ${empty.join(', ')}`);
     const state = row[stateCol].replace(/`/g, '').trim();
+    if (!state && row[stateCol] !== '') problems.push(`row ${n}: the State cell has no state word`);
     if (state && !STATES.includes(state)) problems.push(`row ${n}: state "${state}" is not one of ${STATES.join(', ')}`);
     if (!SHA.test(line)) problems.push(`row ${n}: no commit SHA (7-40 hex characters)`);
   });

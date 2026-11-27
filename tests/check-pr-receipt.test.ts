@@ -39,6 +39,7 @@ describe('checkReceipt', () => {
   it('fails on missing status values and empty cells', () => {
     const p = checkReceipt(body([`| \`npm test\` ${SHA} | ok |  | output |`]));
     expect(p).toEqual(['row 1: empty cell(s): State']);
+    expect(checkReceipt(body([`| \`npm test\` ${SHA} | ok | \`\` | output |`]))).toEqual(['row 1: the State cell has no state word']);
   });
 
   it('fails on a state word outside the four', () => {
