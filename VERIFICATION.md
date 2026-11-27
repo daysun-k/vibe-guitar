@@ -16,6 +16,7 @@ on a real browser or phone is needed. Commands come from `package.json`; the app
 | Manual, phone | `npm run phone-check`, `npm run phone-layout`, then a real phone on the same Wi-Fi (README "Phone music stand") | Scripts exit 0; the phone shows the changed view | Receipt output plus what was seen on the phone |
 
 The CI job runs on every pull request with no path filter, so docs-only pull requests get a run too.
+On pull requests it also checks the `## 검증` receipt in the body (see "Merge rules").
 It does not build the extension: the build needs the pinned models (`models/`, gitignored, ~22 MB),
 which CI does not download. Two tests skip without local files: the mel filterbank test needs
 `models/mel-filterbank.bin` (from `npm run fetch-models`), and the CQT parity test needs
@@ -42,18 +43,22 @@ document consistency check; `README.md` describes the routes in prose.
 
 ## Merge rules
 
-- This is a private repository on GitHub Free, so branch protection and required checks are not
-  available. Nothing technically blocks a merge with a red or missing check: these rules are a
-  process contract. Merge only after the `PR checks` run on the current pull request head has
-  finished green.
-- Every pull request has a `## 검증` receipt with one row per check: the exact command or check
-  name, the observed result, `executed` or `skipped` with the reason, and the evidence (run URL with
-  head SHA, output, or a committed evidence path). Do not leave required evidence only in `/tmp`.
+- Branch protection on `main` requires the `typecheck + test` check (`PR checks`). Merge only after
+  that check on the current pull request head has finished green.
+- Every pull request has a `## 검증` receipt table, the same format as the other repositories:
+
+  | Command | Result | State | Evidence |
+  |---|---|---|---|
+  | Exact command or check name, and the exact commit SHA tested | Observed result, or the reason it did not run | `executed`, `cached`, `skipped`, or `unavailable` | Run URL for the exact head SHA, captured output, or a committed evidence path |
+
+  One row per check; no empty cells; only `executed` on the current revision proves a check. Every
+  row names a commit SHA (7 to 40 hex characters, not all digits). Do not leave required evidence only in `/tmp`.
+  The `typecheck + test` job checks this table with `scripts/check-pr-receipt.mjs` and fails when it
+  is missing or malformed; the job also runs on body edits, so fixing the body re-runs the check.
 - Re-read the head before merging and pass `--match-head-commit <current-head-sha>` to
   `gh pr merge`. A push after the green run needs a new green run.
 - Changes to this file, `.github/workflows/`, or agent instructions are control-plane changes: the
   pull request records the owner's original request, and a fresh independent review by a non-author
   session reads the diff and names the reviewed head before merge.
-- Getting enforced required checks would mean making the repository public or moving to a paid plan.
-  That is a decision for the owner alone; no agent changes repository visibility, plan, branch
-  protection or billing.
+- No agent changes repository visibility, plan, branch protection or billing; that is a decision for
+  the owner alone.
