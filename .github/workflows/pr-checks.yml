@@ -1,10 +1,13 @@
 # Runs the repository checks on every pull request and on pushes to main.
-# The repository is private on GitHub Free, so branch protection cannot require this check:
-# VERIFICATION.md asks for a green run on the PR head before merging.
+# Branch protection on main requires the `typecheck + test` job, which also checks the PR body's
+# `## 검증` receipt (VERIFICATION.md "Merge rules"). `edited` is listed so that editing the body re-runs
+# the job: a body edit re-runs the whole job, because a lighter run on the same head would replace the
+# required check's result without running the tests.
 name: PR checks
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, edited]
   push:
     branches: [main]
   workflow_dispatch:
@@ -32,3 +35,9 @@ jobs:
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm run typecheck
       - run: npm test
+      # Runs after the tests even when they fail, so both results show; skipped on push and dispatch runs.
+      - name: PR body receipt (## 검증)
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: node scripts/check-pr-receipt.mjs
